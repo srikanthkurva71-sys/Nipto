@@ -29,7 +29,7 @@ jobs:
 
       - name: Configure Android plugin repositories
         run: |
-          sed -i '/repositories {/a\        google()\n        mavenCentral()' android/settings.gradle.kts
+          python3 -c "from pathlib import Path; p=Path('android/settings.gradle.kts'); s=p.read_text(); s=s.replace('repositories {', 'repositories {\\n        google()\\n        mavenCentral()', 1); p.write_text(s)"
 
       - name: Resolve dependencies
         run: flutter pub get
