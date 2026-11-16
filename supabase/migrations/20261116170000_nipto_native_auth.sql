@@ -555,7 +555,7 @@ returns text
 language sql stable security definer set search_path=''
 as $
   select case
-    when c.status='pending' and c.expires_at<=pg_catalog.now() then 'expired'
+    when c.status in ('pending','approved') and c.expires_at<=pg_catalog.now() then 'expired'
     else c.status
   end
   from private.nipto_recovery_challenges c
