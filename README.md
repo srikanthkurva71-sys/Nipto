@@ -84,7 +84,7 @@ Nipto v1 is an Android app, not a web product. A browser preview at a `localhost
 
 The initial social schema and security migrations are applied to the connected Nipto Supabase project. See supabase/migrations/. The nipto-login Edge Function is deployed with JWT verification disabled because it is the unauthenticated sign-in endpoint; it has its own input validation and database-backed attempt limiting.
 
-New users register with a recovery email, a Nipto ID and a password. Supabase Auth verifies and stores credentials. The profile trigger stores only the public Nipto ID and display name. Login resolves the Nipto ID to the private Auth email on the server, then delegates password verification to Supabase Auth. The recovery email is never returned by the lookup function.
+New users register with a private account email, a Nipto ID and a password. The account email is used by Supabase Auth for verification and password resets; it is not the optional recovery Nipto account. A recovery Nipto account is optional and requires the other account's explicit approval. Supabase Auth verifies and stores credentials. The profile trigger stores only the public Nipto ID and display name. Login resolves the Nipto ID to the private Auth email on the server, then delegates password verification to Supabase Auth. The recovery email is never returned by the lookup function.
 
 ## Current implementation status
 
