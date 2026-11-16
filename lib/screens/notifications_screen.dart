@@ -130,6 +130,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
     if (payload['kind'] == 'recovery_request' ||
         payload['kind'] == 'recovery_accepted' ||
+        payload['kind'] == 'recovery_rejected' ||
         payload['kind'] == 'password_recovery_request') {
       if (!mounted) return;
       await Navigator.of(context).push(
