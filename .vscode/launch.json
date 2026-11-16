@@ -7,8 +7,7 @@
       "type": "dart",
       "program": "lib/main.dart",
       "args": [
-        "--dart-define=SUPABASE_URL=https://advmjribduqzyuwktkod.supabase.co",
-        "--dart-define=SUPABASE_PUBLISHABLE_KEY=sb_publishable_zxqki-GLfT6zi-BXT1h6zw_nWq9Nhye"
+        "--dart-define-from-file=config/dev.json"
       ]
     }
   ]
