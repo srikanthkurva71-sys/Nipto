@@ -34,8 +34,6 @@ class _StatusTrayState extends State<StatusTray> {
         .select('id, owner_id, status_type, text_content, media_path, background_color, visibility, expires_at, created_at')
         .gt('expires_at', now)
         .order('created_at', ascending: false)
-        .limit(120)
-        .order('created_at', ascending: false)
         .limit(120);
 
     final byOwner = <String, List<Map<String, dynamic>>>{};
