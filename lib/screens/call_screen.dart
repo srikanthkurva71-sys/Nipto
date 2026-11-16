@@ -35,6 +35,7 @@ class _CallScreenState extends State<CallScreen> {
   bool _renderersReady = false;
   String? _error;
   bool _ending = false;
+  bool _allowPop = false;
 
   @override
   void initState() {
@@ -126,7 +127,10 @@ class _CallScreenState extends State<CallScreen> {
     await _service.end(
       reason: _phase == NiptoCallPhase.failed ? 'failed' : 'hangup',
     );
-    if (mounted) Navigator.of(context).pop();
+    if (mounted) {
+      setState(() => _allowPop = true);
+      Navigator.of(context).pop();
+    }
   }
 
   @override
@@ -141,7 +145,12 @@ class _CallScreenState extends State<CallScreen> {
   Widget build(BuildContext context) {
     final isVideo = widget.mediaType == 'video';
     final connected = _phase == NiptoCallPhase.connected;
-    return Scaffold(
+    return PopScope<void>(
+      canPop: _allowPop,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) unawaited(_endCall());
+      },
+      child: Scaffold(
       backgroundColor: const Color(0xFF101323),
       appBar: AppBar(
         backgroundColor: const Color(0xFF101323),
@@ -277,7 +286,7 @@ class _CallScreenState extends State<CallScreen> {
           ],
         ),
       ),
-    );
+      ));
   }
 }
 
