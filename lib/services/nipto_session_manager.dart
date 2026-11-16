@@ -305,8 +305,21 @@ class NiptoSessionManager {
       'challenge_id': challengeId,
       'challenge_secret': challengeSecret,
     });
+    final status = response['status'];
+    if (status == 'rejected') {
+      throw const NiptoAuthException(
+        'Your trusted Nipto account declined the request. Contact them or choose another recovery account.',
+      );
+    }
+    if (status == 'expired') {
+      await _storage.delete(key: _recoveryIdKey);
+      await _storage.delete(key: _recoverySecretKey);
+      throw const NiptoAuthException(
+        'This recovery request expired. Start a new request.',
+      );
+    }
     final grant = response['reset_grant'] as String?;
-    if (response['status'] == 'approved' && grant != null) {
+    if (status == 'approved' && grant != null) {
       await _storage.write(key: _resetGrantKey, value: grant);
       return grant;
     }
