@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/nipto_theme.dart';
 import 'chats_screen.dart';
+import 'call_screen.dart';
 import 'home_feed_screen.dart';
 import 'profile_screen.dart';
 import 'shorts_screen.dart';
@@ -14,15 +17,24 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   late final PageController _pageController;
   int _index = 0;
   int _unreadCount = 0;
   RealtimeChannel? _notificationChannel;
+  Timer? _incomingCallTimer;
+  bool _incomingDialogOpen = false;
+  final Set<String> _handledIncomingCalls = <String>{};
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _incomingCallTimer = Timer.periodic(
+      const Duration(seconds: 4),
+      (_) => _pollIncomingCalls(),
+    );
+    unawaited(_pollIncomingCalls());
     _pageController = PageController(initialPage: _index);
     _loadUnreadCount();
     _notificationChannel = Supabase.instance.client
@@ -39,6 +51,76 @@ class _MainShellState extends State<MainShell> {
           callback: (_) => _loadUnreadCount(),
         )
         .subscribe();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_pollIncomingCalls());
+    }
+  }
+
+  Future<void> _pollIncomingCalls() async {
+    if (!mounted || _incomingDialogOpen ||
+        Supabase.instance.client.auth.currentUser == null) {
+      return;
+    }
+    try {
+      final result = await Supabase.instance.client.rpc('list_my_incoming_calls');
+      final calls = List<Map<String, dynamic>>.from(result as List);
+      for (final call in calls) {
+        final callId = call['call_id']?.toString();
+        if (callId == null || _handledIncomingCalls.contains(callId)) continue;
+        _handledIncomingCalls.add(callId);
+        _incomingDialogOpen = true;
+        if (!mounted) return;
+        final accepted = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(
+              call['media_type'] == 'video' ? 'Incoming video call' : 'Incoming voice call',
+            ),
+            content: Text(
+              (call['caller_display_name'] as String? ?? 'Nipto user') +
+                  ' is calling you.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Decline'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Accept'),
+              ),
+            ],
+          ),
+        );
+        _incomingDialogOpen = false;
+        if (!mounted) return;
+        if (accepted == true) {
+          await Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => CallScreen(
+                callId: callId,
+                mediaType: call['media_type'] as String? ?? 'audio',
+                isCaller: false,
+                peerTitle: call['caller_display_name'] as String? ?? 'Nipto user',
+              ),
+            ),
+          );
+        } else {
+          await Supabase.instance.client.rpc(
+            'decline_nipto_call',
+            params: {'p_call_id': callId},
+          );
+        }
+        return;
+      }
+    } catch (_) {
+      // Foreground call discovery is best-effort; push wake-up is a separate release gate.
+    }
   }
 
   Future<void> _loadUnreadCount() async {
@@ -59,6 +141,8 @@ class _MainShellState extends State<MainShell> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _incomingCallTimer?.cancel();
     _pageController.dispose();
     final channel = _notificationChannel;
     if (channel != null) {
