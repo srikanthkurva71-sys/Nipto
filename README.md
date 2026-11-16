@@ -74,6 +74,23 @@ The initial social schema and security migrations are applied to the connected N
 
 New users register with a recovery email, a Nipto ID and a password. Supabase Auth verifies and stores credentials. The profile trigger stores only the public Nipto ID and display name. Login resolves the Nipto ID to the private Auth email on the server, then delegates password verification to Supabase Auth. The recovery email is never returned by the lookup function.
 
-## Current implementation boundary
+## Current implementation status
 
-The schema and first authentication endpoint are provisioned. The Flutter screens are the initial app shell and interaction foundation; chat, status, Shorts publishing, push delivery, video processing, moderation operations, and production hardening still require end-to-end implementation and validation. Do not describe the product as production-ready until those checks pass.
+The repository now contains an implemented Flutter Android app foundation and a live Supabase schema. Implemented modules include Nipto ID registration/sign-in, profile editing and photo posts, Nipto ID discovery and follow requests, direct/group conversation flows, message attachments and read receipts, 24-hour statuses, Shorts publishing/feed interactions, in-app notifications, privacy controls, blocking/reporting, and private user feedback intake/history.
+
+The feedback subsystem is separate from abuse reports. Signed-in users can submit app-experience ratings, bug reports, feature ideas or support requests and view their own submission status. Feedback is protected by RLS and limited to five submissions per account per 24 hours. A trusted staff-only triage console and response workflow remain outstanding.
+
+GitHub Actions runs Dart formatting, static analysis, tests and an Android debug APK build. A passing CI run proves that the checked commit builds; it does not prove complete device-level or production readiness.
+
+## Remaining production gates
+
+- Verify the latest commit's full CI run and test critical flows on physical Android devices.
+- Configure and test verified email recovery, Android deep links and production Auth policies.
+- Implement push delivery and notification routing.
+- Implement video scanning/transcoding, thumbnails and resilient upload processing.
+- Build staff-only feedback triage, abuse-report review and content-moderation operations.
+- Complete account deletion, data export and retention workflows.
+- Add automated multi-user RLS/storage tests, accessibility checks, performance tests and independent security review.
+- Configure release signing, Play Console compliance and a production AAB.
+
+Do not describe Nipto as production-ready until these gates have passed.
