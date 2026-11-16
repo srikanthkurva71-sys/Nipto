@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/nipto_theme.dart';
 import 'status_screen.dart';
 import 'conversation_screen.dart';
+import 'notifications_screen.dart';
 
 class ChatsScreen extends StatefulWidget {
   const ChatsScreen({super.key});
@@ -342,7 +343,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     const Spacer(),
                     IconButton(
                       tooltip: 'Notifications',
-                      onPressed: () {},
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const NotificationsScreen(),
+                        ),
+                      ),
                       icon: const Icon(Icons.notifications_none_rounded),
                     ),
                     IconButton(
