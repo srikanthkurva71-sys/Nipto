@@ -112,11 +112,57 @@ function signingKey(): Promise<CryptoKey> {
   return signingKeyPromise;
 }
 
-function publicJwk(): Json {
+function publicJwkFromPrivate(): Json {
   const jwk = { ...privateJwk() };
   delete jwk.d;
   delete jwk.key_ops;
-  return { ...jwk, use: "sig", alg: "ES256", kid: keyId() };
+  return {
+    kty: "EC",
+    crv: "P-256",
+    x: jwk.x,
+    y: jwk.y,
+    use: "sig",
+    alg: "ES256",
+    kid: keyId(),
+  };
+}
+
+function publicJwkSet(): Json[] {
+  const raw = Deno.env.get("NIPTO_OIDC_PUBLIC_KEYS");
+  const configured = raw ? JSON.parse(raw) as unknown : [];
+  const result: Json[] = [];
+
+  if (Array.isArray(configured)) {
+    for (const value of configured) {
+      if (typeof value !== "object" || value === null) continue;
+      const jwk = value as Record<string, unknown>;
+      if (jwk.kty !== "EC" || jwk.crv !== "P-256"
+          || typeof jwk.x !== "string" || typeof jwk.y !== "string"
+          || typeof jwk.kid !== "string" || jwk.kid.length < 1
+          || jwk.kid.length > 80) {
+        continue;
+      }
+      result.push({
+        kty: "EC",
+        crv: "P-256",
+        x: jwk.x,
+        y: jwk.y,
+        use: "sig",
+        alg: "ES256",
+        kid: jwk.kid,
+      });
+    }
+  }
+
+  const current = publicJwkFromPrivate();
+  if (!result.some((jwk) => jwk.kid === keyId())) result.push(current);
+  return result;
+}
+
+function publicJwkFor(kid: string): JsonWebKey {
+  const jwk = publicJwkSet().find((candidate) => candidate.kid === kid);
+  if (!jwk) throw new ApiError("Invalid session signing key", 401);
+  return jwk as JsonWebKey;
 }
 
 async function signAccessToken(account: {
@@ -147,15 +193,20 @@ async function signAccessToken(account: {
   return header + "." + payload + "." + base64url(new Uint8Array(signature));
 }
 
-let verifyKeyPromise: Promise<CryptoKey> | undefined;
-function verifyKey(): Promise<CryptoKey> {
-  if (!verifyKeyPromise) {
-    const jwk = publicJwk();
-    verifyKeyPromise = crypto.subtle.importKey(
-      "jwk", jwk as JsonWebKey, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"],
+const verifyKeyPromises = new Map<string, Promise<CryptoKey>>();
+function verifyKeyFor(kid: string): Promise<CryptoKey> {
+  let promise = verifyKeyPromises.get(kid);
+  if (!promise) {
+    promise = crypto.subtle.importKey(
+      "jwk",
+      publicJwkFor(kid),
+      { name: "ECDSA", namedCurve: "P-256" },
+      false,
+      ["verify"],
     );
+    verifyKeyPromises.set(kid, promise);
   }
-  return verifyKeyPromise;
+  return promise;
 }
 
 async function verifyAccessToken(request: Request): Promise<Claims> {
@@ -166,10 +217,12 @@ async function verifyAccessToken(request: Request): Promise<Claims> {
   if (parts.length !== 3) throw new ApiError("Invalid session", 401);
   const header = JSON.parse(new TextDecoder().decode(fromBase64url(parts[0]))) as Json;
   const claims = JSON.parse(new TextDecoder().decode(fromBase64url(parts[1]))) as Claims;
-  if (header.alg !== "ES256" || header.kid !== keyId()) throw new ApiError("Invalid session", 401);
+  if (header.alg !== "ES256" || typeof header.kid !== "string") {
+    throw new ApiError("Invalid session", 401);
+  }
   const valid = await crypto.subtle.verify(
     { name: "ECDSA", hash: "SHA-256" },
-    await verifyKey(),
+    await verifyKeyFor(header.kid),
     fromBase64url(parts[2]),
     encoder.encode(parts[0] + "." + parts[1]),
   );
@@ -306,7 +359,7 @@ async function route(request: Request): Promise<Response> {
     });
   }
   if (path.endsWith("/jwks") && method === "GET") {
-    return json({ keys: [publicJwk()] });
+    return json({ keys: publicJwkSet() });
   }
   if (path.endsWith("/register") && method === "POST") {
     const input = await body(request);
