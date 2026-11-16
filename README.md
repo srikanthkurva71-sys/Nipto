@@ -50,7 +50,7 @@ The Android app must use a **publishable key only**. Never place a service-role/
 Install the Flutter stable SDK and Android SDK, then generate the Android platform folder if it is not present:
 
 ~~~bash
-flutter create --platforms=android --org app.nipto --project-name nipto .
+flutter create --platforms=android --org com.nipto --project-name nipto .
 flutter pub get
 flutter analyze
 flutter test
