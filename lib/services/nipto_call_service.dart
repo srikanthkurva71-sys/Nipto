@@ -33,6 +33,7 @@ class NiptoCallService {
   bool _remoteDescriptionSet = false;
   Future<void> _signalQueue = Future<void>.value();
   Timer? _ringTimeout;
+  Completer<void>? _remoteReady;
 
   static const Map<String, dynamic> _rtcConfiguration = {
     'sdpSemantics': 'unified-plan',
@@ -44,7 +45,9 @@ class NiptoCallService {
   Future<void> startOutgoing() async {
     try {
       onPhaseChanged(NiptoCallPhase.preparing);
+      _remoteReady = Completer<void>();
       await _prepareMediaAndChannel();
+      await _remoteReady!.future.timeout(const Duration(seconds: 20));
       final offer = await _peer!.createOffer({
         'offerToReceiveAudio': true,
         'offerToReceiveVideo': mediaType == 'video',
@@ -67,6 +70,7 @@ class NiptoCallService {
       onPhaseChanged(NiptoCallPhase.preparing);
       await _client.rpc('accept_nipto_call', params: {'p_call_id': callId});
       await _prepareMediaAndChannel();
+      await _sendSignal({'type': 'ready'});
       onPhaseChanged(NiptoCallPhase.connecting);
     } catch (error) {
       onError(_safeMessage(error));
@@ -155,7 +159,9 @@ class NiptoCallService {
     if (payload is! Map) return;
     try {
       final type = payload['type'];
-      if (type == 'offer' && !isCaller) {
+      if (type == 'ready' && isCaller) {
+        if (!(_remoteReady?.isCompleted ?? true)) _remoteReady!.complete();
+      } else if (type == 'offer' && !isCaller) {
         final sdp = payload['sdp'];
         final sdpType = payload['sdpType'];
         if (sdp is! String || sdpType is! String) return;
