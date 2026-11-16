@@ -69,6 +69,7 @@ class NiptoSessionManager {
   String? _legacyAccessToken;
   String? _legacyRefreshToken;
   DateTime? _legacyExpiresAt;
+  Map<String, dynamic>? _legacySessionData;
   String? _accessToken;
   String? _refreshToken;
   DateTime? _accessExpiresAt;
@@ -122,6 +123,7 @@ class NiptoSessionManager {
     try {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return;
+      _legacySessionData = Map<String, dynamic>.from(decoded);
       final access = decoded['access_token'];
       final refresh = decoded['refresh_token'];
       if (access is! String || refresh is! String || refresh.isEmpty) return;
@@ -135,7 +137,6 @@ class NiptoSessionManager {
       }
       await _storage.write(key: _legacyAccessKey, value: access);
       await _storage.write(key: _legacyRefreshKey, value: refresh);
-      await _legacyPreferences.remove(storageKey);
     } catch (_) {
       // Ignore malformed legacy session data; never infer identity from it.
     }
@@ -191,6 +192,15 @@ class NiptoSessionManager {
     _legacyExpiresAt = DateTime.now().add(Duration(seconds: expiresIn));
     await _storage.write(key: _legacyAccessKey, value: access);
     await _storage.write(key: _legacyRefreshKey, value: refresh);
+    final legacyData = _legacySessionData;
+    final storageKey = _legacyStorageKey;
+    if (legacyData != null && storageKey != null) {
+      legacyData['access_token'] = access;
+      legacyData['refresh_token'] = refresh;
+      legacyData['expires_in'] = expiresIn;
+      legacyData['expires_at'] = _legacyExpiresAt!.millisecondsSinceEpoch ~/ 1000;
+      await _legacyPreferences.setString(storageKey, jsonEncode(legacyData));
+    }
   }
 
   Future<NiptoSession> migrateLegacyAccount(String newPassword) async {
@@ -489,6 +499,7 @@ class NiptoSessionManager {
     _legacyAccessToken = null;
     _legacyRefreshToken = null;
     _legacyExpiresAt = null;
+    _legacySessionData = null;
     await _storage.delete(key: _legacyAccessKey);
     await _storage.delete(key: _legacyRefreshKey);
     final storageKey = _legacyStorageKey;
