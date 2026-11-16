@@ -8,6 +8,7 @@ import 'feedback_screen.dart';
 import 'close_friends_screen.dart';
 import 'staff_console_screen.dart';
 import 'recovery_contacts_screen.dart';
+import 'session_management_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -474,6 +475,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: const Text('Password and recovery'),
                     subtitle: const Text('Change your Nipto password or recover it through your trusted Nipto account.'),
                     onTap: _changePassword,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.devices_outlined),
+                    title: const Text('Devices and sessions'),
+                    subtitle: const Text('Review signed-in devices and revoke sessions you do not recognize.'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const SessionManagementScreen(),
+                      ),
+                    ),
                   ),
                   const Divider(height: 1),
                   const ListTile(
