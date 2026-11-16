@@ -267,7 +267,16 @@ class _AuthScreenState extends State<AuthScreen> {
                         validator: (value) {
                           final input = (value ?? '').trim().toLowerCase().replaceFirst(RegExp(r'^@'), '');
                           if (input.isEmpty) return null;
-                          if (!RegExp(r'^[a-z0-9_]{3,24}
+                          if (!RegExp(r'^[a-z0-9_]{3,24}$').hasMatch(input)) {
+                            return 'Enter a valid Nipto ID or leave this blank.';
+                          }
+                          if (input == _niptoId.text.trim().toLowerCase()) {
+                            return 'Choose a different Nipto account.';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 13),
                         keyboardType: TextInputType.emailAddress,
                         autocorrect: false,
                         decoration: const InputDecoration(
@@ -333,204 +342,6 @@ class _AuthScreenState extends State<AuthScreen> {
                         style: TextStyle(color: NiptoColors.muted, fontSize: 12, height: 1.4),
                       ),
 
-                    ],
-                    if (!_creatingAccount)
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: _busy ? null : _recoverPassword,
-                          child: const Text('Forgot password?'),
-                        ),
-                      ),
-                    if (_notice != null) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(13),
-                        decoration: BoxDecoration(
-                          color: _noticeIsError ? const Color(0xFFFFEEEE) : NiptoColors.violetSoft,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Text(
-                          _notice!,
-                          style: TextStyle(
-                            color: _noticeIsError ? NiptoColors.danger : NiptoColors.ink,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 22),
-                    FilledButton(
-                      onPressed: _busy ? null : _submit,
-                      child: _busy
-                          ? const SizedBox(
-                              height: 21,
-                              width: 21,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : Text(_creatingAccount ? 'Create Nipto account' : 'Sign in'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextButton(
-                      onPressed: _busy ? null : _toggleMode,
-                      child: Text(
-                        _creatingAccount
-                            ? 'Already have a Nipto ID? Sign in'
-                            : 'New to Nipto? Create an account',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-
-class NiptoLogoMark extends StatelessWidget {
-  const NiptoLogoMark({super.key, this.size = 72});
-
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: size,
-      height: size,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              gradient: NiptoBrand.markGradient,
-              borderRadius: BorderRadius.circular(size * 0.27),
-              boxShadow: [
-                BoxShadow(
-                  color: NiptoColors.violet.withValues(alpha: 0.18),
-                  blurRadius: size * 0.28,
-                  offset: Offset(0, size * 0.12),
-                ),
-              ],
-            ),
-          ),
-          Center(
-            child: Text(
-              'N',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: size * 0.73,
-                height: 1,
-                fontWeight: FontWeight.w900,
-                fontStyle: FontStyle.italic,
-                letterSpacing: -size * 0.09,
-              ),
-            ),
-          ),
-          Positioned(
-            right: -size * 0.12,
-            top: -size * 0.10,
-            child: Container(
-              width: size * 0.43,
-              height: size * 0.36,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFFF648D), NiptoColors.brandMagenta],
-                ),
-                borderRadius: BorderRadius.circular(size * 0.15),
-                border: Border.all(color: Colors.white, width: size * 0.025),
-              ),
-              child: Icon(
-                Icons.groups_rounded,
-                color: Colors.white,
-                size: size * 0.25,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-).hasMatch(input)) {
-                            return 'Enter a valid Nipto ID or leave this blank.';
-                          }
-                          if (input == _niptoId.text.trim().toLowerCase()) {
-                            return 'Choose a different Nipto account.';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 13),
-                      TextFormField(
-                        controller: _email,
-                        keyboardType: TextInputType.emailAddress,
-                        autocorrect: false,
-                        decoration: const InputDecoration(
-                          labelText: 'Recovery email',
-                          prefixIcon: Icon(Icons.alternate_email_rounded),
-                        ),
-                        validator: (value) {
-                          final input = (value ?? '').trim();
-                          if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(input)) {
-                            return 'Enter a valid email address.';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 13),
-                    ],
-                    TextFormField(
-                      controller: _niptoId,
-                      autocorrect: false,
-                      textCapitalization: TextCapitalization.none,
-                      decoration: const InputDecoration(
-                        labelText: 'Nipto ID',
-                        prefixIcon: Icon(Icons.alternate_email_rounded),
-                        hintText: 'yourname',
-                      ),
-                      validator: _validateNiptoId,
-                    ),
-                    const SizedBox(height: 13),
-                    TextFormField(
-                      controller: _password,
-                      obscureText: _hidePassword,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock_outline_rounded),
-                        suffixIcon: IconButton(
-                          tooltip: _hidePassword ? 'Show password' : 'Hide password',
-                          onPressed: () => setState(() => _hidePassword = !_hidePassword),
-                          icon: Icon(_hidePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                        ),
-                      ),
-                      validator: (value) {
-                        if ((value ?? '').length < 8) return 'Use at least 8 characters.';
-                        return null;
-                      },
-                    ),
-                    if (_creatingAccount) ...[
-                      const SizedBox(height: 13),
-                      TextFormField(
-                        controller: _confirmPassword,
-                        obscureText: _hidePassword,
-                        decoration: const InputDecoration(
-                          labelText: 'Confirm password',
-                          prefixIcon: Icon(Icons.verified_user_outlined),
-                        ),
-                        validator: (value) {
-                          if (value != _password.text) return 'Passwords do not match.';
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Your recovery email is used for verification and password recovery. It is not shown on your public profile.',
-                        style: TextStyle(color: NiptoColors.muted, fontSize: 12, height: 1.4),
-                      ),
                     ],
                     if (!_creatingAccount)
                       Align(
