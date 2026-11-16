@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/nipto_theme.dart';
@@ -22,6 +25,7 @@ class ConversationScreen extends StatefulWidget {
 class _ConversationScreenState extends State<ConversationScreen> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
+  final _picker = ImagePicker();
   bool _sending = false;
 
   SupabaseClient get _client => Supabase.instance.client;
@@ -31,6 +35,22 @@ class _ConversationScreenState extends State<ConversationScreen> {
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _markIncomingRead() async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      final now = DateTime.now().toUtc().toIso8601String();
+      await _client.from('message_receipts').update({
+        'delivered_at': now,
+        'read_at': now,
+      }).eq('conversation_id', widget.conversationId)
+        .eq('user_id', userId)
+        .isFilter('read_at', null);
+    } catch (_) {
+      // A read receipt failure should not prevent the conversation from working.
+    }
   }
 
   Future<void> _send() async {
@@ -52,6 +72,77 @@ class _ConversationScreenState extends State<ConversationScreen> {
       _controller.text = text;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Message not sent. Please try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _attachImage() async {
+    if (_sending) return;
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final file = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 88,
+      maxWidth: 1800,
+    );
+    if (file == null || !mounted) return;
+
+    final extension = file.name.split('.').last.toLowerCase();
+    const mimeTypes = {
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'webp': 'image/webp',
+    };
+    final contentType = mimeTypes[extension];
+    if (contentType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choose a JPG, PNG or WebP image.')),
+      );
+      return;
+    }
+
+    final fileSize = await file.length();
+    if (fileSize > 10 * 1024 * 1024) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choose an image smaller than 10 MB.')),
+      );
+      return;
+    }
+
+    final path = widget.conversationId + '/' + userId + '/' +
+        DateTime.now().microsecondsSinceEpoch.toString() + '.' + extension;
+
+    setState(() => _sending = true);
+    var uploaded = false;
+    try {
+      await _client.storage.from('chat-media').upload(
+        path,
+        File(file.path),
+        fileOptions: FileOptions(contentType: contentType, upsert: false),
+      );
+      uploaded = true;
+
+      await _client.from('messages').insert({
+        'conversation_id': widget.conversationId,
+        'sender_id': userId,
+        'message_type': 'image',
+        'media_path': path,
+      });
+    } catch (_) {
+      if (uploaded) {
+        try {
+          await _client.storage.from('chat-media').remove([path]);
+        } catch (_) {
+          // A failed cleanup leaves an inaccessible orphan, not a public file.
+        }
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Photo could not be sent. Check your connection and try again.')),
       );
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -114,6 +205,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 }
 
                 final messages = snapshot.data!;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _markIncomingRead();
+                  if (_scrollController.hasClients) {
+                    _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+                  }
+                });
+
                 if (messages.isEmpty) {
                   return Center(
                     child: Column(
@@ -129,12 +227,6 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   );
                 }
 
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (_scrollController.hasClients) {
-                    _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-                  }
-                });
-
                 return ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.fromLTRB(16, 18, 16, 20),
@@ -143,9 +235,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     final message = messages[index];
                     final mine = message['sender_id'] == currentUserId;
                     final deleted = message['deleted_at'] != null;
+                    final isImage = !deleted && message['message_type'] == 'image' &&
+                        message['media_path'] is String;
                     final body = deleted
                         ? 'Message deleted'
                         : (message['body'] as String? ?? 'Media message');
+
                     return Align(
                       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
                       child: Container(
@@ -153,7 +248,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
                           maxWidth: MediaQuery.sizeOf(context).width * 0.78,
                         ),
                         margin: const EdgeInsets.only(bottom: 9),
-                        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
+                        padding: isImage
+                            ? const EdgeInsets.all(5)
+                            : const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
                         decoration: BoxDecoration(
                           color: mine ? NiptoColors.violet : Colors.white,
                           borderRadius: BorderRadius.only(
@@ -164,13 +261,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
                           ),
                           border: mine ? null : Border.all(color: NiptoColors.border),
                         ),
-                        child: Text(
-                          body,
-                          style: TextStyle(
-                            color: mine ? Colors.white : NiptoColors.ink,
-                            fontStyle: deleted ? FontStyle.italic : FontStyle.normal,
-                          ),
-                        ),
+                        child: isImage
+                            ? _ChatImage(path: message['media_path'] as String)
+                            : Text(
+                                body,
+                                style: TextStyle(
+                                  color: mine ? Colors.white : NiptoColors.ink,
+                                  fontStyle: deleted ? FontStyle.italic : FontStyle.normal,
+                                ),
+                              ),
                       ),
                     );
                   },
@@ -185,11 +284,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
               child: Row(
                 children: [
                   IconButton(
-                    tooltip: 'Attach media',
-                    onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Media attachments are being added next.')),
-                    ),
-                    icon: const Icon(Icons.add_circle_outline_rounded, color: NiptoColors.violet),
+                    tooltip: 'Attach photo',
+                    onPressed: _sending ? null : _attachImage,
+                    icon: const Icon(Icons.image_outlined, color: NiptoColors.violet),
                   ),
                   Expanded(
                     child: TextField(
@@ -226,6 +323,68 @@ class _ConversationScreenState extends State<ConversationScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ChatImage extends StatefulWidget {
+  const _ChatImage({required this.path});
+
+  final String path;
+
+  @override
+  State<_ChatImage> createState() => _ChatImageState();
+}
+
+class _ChatImageState extends State<_ChatImage> {
+  late Future<String> _signedUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _signedUrl = _load();
+  }
+
+  Future<String> _load() {
+    return Supabase.instance.client.storage
+        .from('chat-media')
+        .createSignedUrl(widget.path, 1800);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String>(
+      future: _signedUrl,
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const SizedBox(
+            width: 180,
+            height: 120,
+            child: Center(child: Icon(Icons.broken_image_outlined, color: NiptoColors.muted)),
+          );
+        }
+        if (!snapshot.hasData) {
+          return const SizedBox(
+            width: 180,
+            height: 120,
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          );
+        }
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(14),
+          child: Image.network(
+            snapshot.data!,
+            width: 230,
+            height: 220,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const SizedBox(
+              width: 180,
+              height: 120,
+              child: Center(child: Icon(Icons.broken_image_outlined, color: NiptoColors.muted)),
+            ),
+          ),
+        );
+      },
     );
   }
 }
