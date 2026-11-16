@@ -45,9 +45,18 @@ Deno.serve(async (request: Request) => {
       ?? request.headers.get("x-real-ip")
       ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
       ?? "unknown";
-    const digest = await crypto.subtle.digest(
-      "SHA-256",
-      new TextEncoder().encode(forwarded + "\u0000" + niptoId),
+    const encoder = new TextEncoder();
+    const limiterKey = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(serviceRoleKey),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    const digest = await crypto.subtle.sign(
+      "HMAC",
+      limiterKey,
+      encoder.encode(forwarded + "\u0000" + niptoId),
     );
     const keyHash = hex(digest);
 
