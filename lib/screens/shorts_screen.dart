@@ -80,29 +80,47 @@ class _ShortsScreenState extends State<ShortsScreen> {
       return;
     }
 
+    var visibility = 'followers';
     final captionController = TextEditingController();
     final caption = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Caption your Short'),
-        content: TextField(
-          controller: captionController,
-          maxLength: 2200,
-          maxLines: 4,
-          decoration: const InputDecoration(
-            hintText: 'Add a caption…',
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Caption your Short'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: captionController,
+                maxLength: 2200,
+                maxLines: 4,
+                decoration: const InputDecoration(hintText: 'Add a caption…'),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                value: visibility,
+                decoration: const InputDecoration(labelText: 'Who can see this Short'),
+                items: const [
+                  DropdownMenuItem(value: 'followers', child: Text('Followers')),
+                  DropdownMenuItem(value: 'public', child: Text('Everyone')),
+                ],
+                onChanged: (value) {
+                  if (value != null) setDialogState(() => visibility = value);
+                },
+              ),
+            ],
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, captionController.text.trim()),
+              child: const Text('Continue'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, captionController.text.trim()),
-            child: const Text('Continue'),
-          ),
-        ],
       ),
     );
     captionController.dispose();
@@ -132,7 +150,7 @@ class _ShortsScreenState extends State<ShortsScreen> {
         'video_path': path,
         'caption': caption,
         'duration_seconds': duration,
-        'visibility': 'followers',
+        'visibility': visibility,
       });
 
       if (!mounted) return;
