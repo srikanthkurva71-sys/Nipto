@@ -283,6 +283,7 @@ class NiptoSessionManager {
   }
 
   Future<void> startPasswordRecovery(String niptoId) async {
+    if (await _storage.read(key: _resetGrantKey) != null) return;
     final response = await _post('recovery/start', {
       'nipto_id': niptoId.trim().replaceFirst(RegExp(r'^@'), ''),
     });
@@ -296,6 +297,8 @@ class NiptoSessionManager {
   }
 
   Future<String?> checkPasswordRecoveryApproval() async {
+    final existingGrant = await _storage.read(key: _resetGrantKey);
+    if (existingGrant != null) return existingGrant;
     final challengeId = await _storage.read(key: _recoveryIdKey);
     final challengeSecret = await _storage.read(key: _recoverySecretKey);
     if (challengeId == null || challengeSecret == null) {
@@ -330,10 +333,19 @@ class NiptoSessionManager {
     required String resetGrant,
     required String newPassword,
   }) async {
-    await _post('recovery/reset', {
-      'reset_grant': resetGrant,
-      'new_password': newPassword,
-    });
+    try {
+      await _post('recovery/reset', {
+        'reset_grant': resetGrant,
+        'new_password': newPassword,
+      });
+    } on NiptoAuthException catch (error) {
+      if (error.statusCode == 400) {
+        await _storage.delete(key: _recoveryIdKey);
+        await _storage.delete(key: _recoverySecretKey);
+        await _storage.delete(key: _resetGrantKey);
+      }
+      rethrow;
+    }
     await _storage.delete(key: _recoveryIdKey);
     await _storage.delete(key: _recoverySecretKey);
     await _storage.delete(key: _resetGrantKey);
