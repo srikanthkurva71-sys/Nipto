@@ -1,4 +1,5 @@
 import { argon2id, argon2Verify } from "npm:hash-wasm@4.13.0";
+import { isValidNiptoId, isValidPassword } from "./validation.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,10 +14,6 @@ const ARGON2 = { parallelism: 1, iterations: 3, memorySize: 65_536, hashLength: 
 const ACCESS_TOKEN_SECONDS = 600;
 const REFRESH_TOKEN_DAYS = 30;
 const MAX_BODY_BYTES = 8_192;
-const RESERVED_IDS = new Set([
-  "admin", "administrator", "support", "help", "nipto",
-  "official", "security", "moderator",
-]);
 
 type Json = Record<string, unknown>;
 type Claims = {
@@ -163,7 +160,7 @@ async function verifyAccessToken(request: Request): Promise<Claims> {
       || claims.role !== "authenticated"
       || !/^[0-9a-f-]{36}$/i.test(claims.sub)
       || !/^[0-9a-f-]{36}$/i.test(claims.sid)
-      || !validNiptoId(claims.nipto_id)
+      || !isValidNiptoId(claims.nipto_id)
       || typeof claims.display_name !== "string" || claims.display_name.length < 1
       || claims.display_name.length > 50
       || typeof claims.exp !== "number" || claims.exp <= now
@@ -203,14 +200,6 @@ async function body(request: Request): Promise<Json> {
 
 function stringField(value: unknown, max: number): string {
   return typeof value === "string" && value.length <= max ? value : "";
-}
-
-function validNiptoId(value: string): boolean {
-  return /^[a-z0-9_]{3,24}$/.test(value) && !RESERVED_IDS.has(value);
-}
-
-function validPassword(value: string): boolean {
-  return value.length >= 12 && value.length <= 128;
 }
 
 async function hashPassword(password: string): Promise<string> {
@@ -294,8 +283,8 @@ async function route(request: Request): Promise<Response> {
     const displayName = stringField(input.display_name, 50).trim();
     const password = stringField(input.password, 128);
     const recoveryId = stringField(input.recovery_nipto_id, 24).trim().toLowerCase().replace(/^@/, "");
-    if (!validNiptoId(niptoId) || displayName.length < 1 || !validPassword(password)
-        || (recoveryId && (!validNiptoId(recoveryId) || recoveryId === niptoId))) {
+    if (!isValidNiptoId(niptoId) || displayName.length < 1 || !isValidPassword(password)
+        || (recoveryId && (!isValidNiptoId(recoveryId) || recoveryId === niptoId))) {
       return json({ error: "Check your Nipto ID, name and password requirements." }, 400);
     }
     await enforceRateLimit(request, "register:" + niptoId);
@@ -317,7 +306,7 @@ async function route(request: Request): Promise<Response> {
   if (path.endsWith("/migrate") && method === "POST") {
     const input = await body(request);
     const newPassword = stringField(input.new_password, 128);
-    if (!validPassword(newPassword)) {
+    if (!isValidPassword(newPassword)) {
       return json({ error: "Use at least 12 characters for your new Nipto password." }, 400);
     }
     const legacyAuthorization = request.headers.get("authorization") ?? "";
@@ -374,7 +363,7 @@ async function route(request: Request): Promise<Response> {
     const input = await body(request);
     const niptoId = stringField(input.nipto_id, 24).trim().toLowerCase().replace(/^@/, "");
     const password = stringField(input.password, 128);
-    if (!validNiptoId(niptoId) || password.length < 1) return json({ error: "Invalid Nipto ID or password." }, 400);
+    if (!isValidNiptoId(niptoId) || password.length < 1) return json({ error: "Invalid Nipto ID or password." }, 400);
     await enforceRateLimit(request, niptoId);
     const account = await accountRecord(niptoId);
     const dummy = await dummyHash();
@@ -427,10 +416,10 @@ async function route(request: Request): Promise<Response> {
   if (path.endsWith("/recovery/start") && method === "POST") {
     const input = await body(request);
     const niptoId = stringField(input.nipto_id, 24).trim().toLowerCase().replace(/^@/, "");
-    await enforceRateLimit(request, "recovery-start:" + (validNiptoId(niptoId) ? niptoId : "unknown"));
+    await enforceRateLimit(request, "recovery-start:" + (isValidNiptoId(niptoId) ? niptoId : "unknown"));
     const challengeSecret = randomToken(32);
     const challengeHash = await sha256Hex(challengeSecret);
-    const rows = validNiptoId(niptoId)
+    const rows = isValidNiptoId(niptoId)
       ? await rpc("nipto_native_start_recovery", {
           p_nipto_id: niptoId,
           p_challenge_hash: challengeHash,
@@ -465,7 +454,7 @@ async function route(request: Request): Promise<Response> {
     const input = await body(request);
     const grant = stringField(input.reset_grant, 128);
     const password = stringField(input.new_password, 128);
-    if (grant.length < 40 || !validPassword(password)) {
+    if (grant.length < 40 || !isValidPassword(password)) {
       return json({ error: "The recovery request is invalid or expired." }, 400);
     }
     const userId = await rpc("nipto_native_consume_reset_grant", {
@@ -485,7 +474,7 @@ async function route(request: Request): Promise<Response> {
     const input = await body(request);
     const recoveryId = stringField(input.recovery_nipto_id, 24).trim().toLowerCase().replace(/^@/, "");
     await enforceRateLimit(request, "recovery-link:" + claims.nipto_id);
-    if (!validNiptoId(recoveryId) || recoveryId === claims.nipto_id) {
+    if (!isValidNiptoId(recoveryId) || recoveryId === claims.nipto_id) {
       return json({ error: "Enter another valid Nipto ID." }, 400);
     }
     const requestId = await rpc("nipto_native_request_recovery_contact", {
@@ -529,7 +518,7 @@ async function route(request: Request): Promise<Response> {
     const currentPassword = stringField(input.current_password, 128);
     const newPassword = stringField(input.new_password, 128);
     await enforceRateLimit(request, "password-change:" + claims.nipto_id);
-    if (!validPassword(newPassword)) return json({ error: "Use at least 12 characters for your new password." }, 400);
+    if (!isValidPassword(newPassword)) return json({ error: "Use at least 12 characters for your new password." }, 400);
     const account = await accountRecord(claims.nipto_id);
     if (!account || account.user_id !== claims.sub
         || !(await verifyPassword(currentPassword, account.password_hash))) {
