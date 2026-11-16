@@ -548,6 +548,23 @@ $$;
 revoke all on function public.nipto_native_respond_password_recovery(uuid,uuid,boolean) from public, anon, authenticated;
 grant execute on function public.nipto_native_respond_password_recovery(uuid,uuid,boolean) to service_role;
 
+create or replace function public.nipto_native_recovery_status(
+  p_challenge_id uuid, p_challenge_hash text
+)
+returns text
+language sql stable security definer set search_path=''
+as $
+  select case
+    when c.status='pending' and c.expires_at<=pg_catalog.now() then 'expired'
+    else c.status
+  end
+  from private.nipto_recovery_challenges c
+  where c.id=p_challenge_id and c.challenge_hash=p_challenge_hash
+  limit 1;
+$;
+revoke all on function public.nipto_native_recovery_status(uuid,text) from public, anon, authenticated;
+grant execute on function public.nipto_native_recovery_status(uuid,text) to service_role;
+
 create or replace function public.nipto_native_claim_reset_grant(
   p_challenge_id uuid, p_challenge_hash text, p_grant_hash text
 )
