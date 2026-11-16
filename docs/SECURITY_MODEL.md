@@ -52,7 +52,7 @@ Storage object paths are documented in the core migration. Access checks join ob
 - Configure Supabase Auth account-email verification/reset templates and the Android redirect/deep-link allow-list. Keep the optional recovery Nipto account workflow separate from Auth email delivery.
 - Review Auth password policy, email confirmation, captcha/abuse controls and session lifetime in Supabase Dashboard.
 - Add push provider credentials as Edge Function secrets only.
-- Enable Supabase Auth leaked-password protection and verify the configured password policy in the Dashboard.
+- Implement Argon2id password hashing, password policy, rate limits, abuse monitoring and credential/session revocation in the Nipto OIDC provider.
 - Add a media scanning/transcoding pipeline and human moderation tools.
 - Add account deletion that removes Auth identity, database data and Storage objects according to a documented retention policy.
 - Complete E2E tests for cross-user RLS isolation, private accounts, blocks, group invites, message membership, recovery-contact RPCs and storage access.
