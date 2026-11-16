@@ -141,6 +141,30 @@ begin
 end;
 $;
 
+-- The one-time migration bridge verifies only the old Supabase Auth issuer
+-- and returns the caller's UUID. It never reads or returns email or user metadata.
+create or replace function public.nipto_native_verify_legacy_session()
+returns uuid
+language plpgsql
+security definer
+set search_path=''
+as $
+declare
+  v_user_id uuid;
+begin
+  if auth.jwt()->>'iss' <> 'https://advmjribduqzyuwktkod.supabase.co/auth/v1' then
+    raise exception 'Legacy account migration session required';
+  end if;
+  v_user_id := auth.uid();
+  if v_user_id is null then
+    raise exception 'Legacy account migration session required';
+  end if;
+  return v_user_id;
+end;
+$;
+revoke all on function public.nipto_native_verify_legacy_session() from public, anon;
+grant execute on function public.nipto_native_verify_legacy_session() to authenticated;
+
 -- Apply an issuer guard as a restrictive policy to every public table with RLS.
 -- Existing permissive ownership/visibility policies remain in place and are
 -- ANDed with this issuer requirement.
