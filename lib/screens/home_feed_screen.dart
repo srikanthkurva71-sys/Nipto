@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:video_player/video_player.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/nipto_theme.dart';
@@ -242,27 +243,7 @@ class _FeedPostCardState extends State<_FeedPostCard> {
           if (snapshot.hasError) return Container(height: 250, color: NiptoColors.violetSoft, child: const Center(child: Icon(Icons.broken_image_outlined, color: NiptoColors.violet)));
           if (!snapshot.hasData) return Container(height: 250, color: NiptoColors.violetSoft, child: const Center(child: CircularProgressIndicator(strokeWidth: 2)));
           if (widget.post['media_type'] == 'video') {
-            return Container(
-              height: 330,
-              color: const Color(0xFF101C50),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Image.network(
-                    snapshot.data!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(color: NiptoColors.violetSoft),
-                  ),
-                  const Center(
-                    child: CircleAvatar(
-                      radius: 30,
-                      backgroundColor: Color(0x99000000),
-                      child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 38),
-                    ),
-                  ),
-                ],
-              ),
-            );
+            return _FeedVideoPlayer(url: snapshot.data!);
           }
           return Image.network(
             snapshot.data!,
@@ -361,5 +342,130 @@ class _PostCommentsSheetState extends State<_PostCommentsSheet> {
         ]),
       ])),
     ));
+  }
+}
+
+class _FeedVideoPlayer extends StatefulWidget {
+  const _FeedVideoPlayer({required this.url});
+
+  final String url;
+
+  @override
+  State<_FeedVideoPlayer> createState() => _FeedVideoPlayerState();
+}
+
+class _FeedVideoPlayerState extends State<_FeedVideoPlayer>
+    with WidgetsBindingObserver {
+  VideoPlayerController? _controller;
+  bool _loading = true;
+  bool _failed = false;
+  bool _playing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    try {
+      final controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+      _controller = controller;
+      await controller.initialize();
+      await controller.setLooping(false);
+      if (mounted) setState(() => _loading = false);
+    } catch (_) {
+      if (mounted) setState(() {
+        _loading = false;
+        _failed = true;
+      });
+    }
+  }
+
+  Future<void> _togglePlayback() async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) return;
+    try {
+      if (controller.value.isPlaying) {
+        await controller.pause();
+      } else {
+        if (controller.value.position >= controller.value.duration) {
+          await controller.seekTo(Duration.zero);
+        }
+        await controller.play();
+      }
+      if (mounted) setState(() => _playing = controller.value.isPlaying);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Video playback failed.')),
+      );
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed && _controller?.value.isPlaying == true) {
+      _controller?.pause();
+      if (mounted) setState(() => _playing = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = _controller;
+    return GestureDetector(
+      onTap: _togglePlayback,
+      child: Container(
+        height: 330,
+        width: double.infinity,
+        color: const Color(0xFF101C50),
+        child: _loading
+            ? const Center(child: CircularProgressIndicator(color: Colors.white))
+            : _failed || controller == null
+                ? const Center(
+                    child: Icon(Icons.videocam_off_rounded, color: Colors.white70, size: 40),
+                  )
+                : Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Center(
+                        child: AspectRatio(
+                          aspectRatio: controller.value.aspectRatio,
+                          child: VideoPlayer(controller),
+                        ),
+                      ),
+                      if (!_playing)
+                        const CircleAvatar(
+                          radius: 30,
+                          backgroundColor: Color(0x99000000),
+                          child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 38),
+                        ),
+                      Positioned(
+                        left: 12,
+                        right: 12,
+                        bottom: 10,
+                        child: VideoProgressIndicator(
+                          controller,
+                          allowScrubbing: true,
+                          colors: const VideoProgressColors(
+                            playedColor: NiptoColors.coral,
+                            bufferedColor: Colors.white54,
+                            backgroundColor: Colors.white24,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+      ),
+    );
   }
 }
