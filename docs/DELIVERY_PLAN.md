@@ -25,7 +25,8 @@
 - [x] Realtime text messages, image attachments and basic read receipts.
 - [x] Batch conversation read-receipt updates through a membership-checked server RPC; avoid per-message client update loops.
 - [x] Private chat media and signed access.
-- [ ] Complete message requests, retries, pagination, audio/video/file attachments and multi-device delivery.
+- [x] Add newest-first 50-message conversation loading with cursor-based older-page retrieval while retaining the live latest-message stream.
+- [ ] Complete message requests, retries, audio/video/file attachments and multi-device delivery.
 
 ## Phase 3 — Status
 - [x] Text/image/video status publishing.
