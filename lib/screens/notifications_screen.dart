@@ -39,6 +39,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       await _client.from('notifications').update({
         'read_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', item['id']);
+      if (mounted) {
+        // Refresh the shared Chats badge after the notification is acknowledged.
+        await _refresh();
+      }
     } catch (_) {
       // Keep the notification visible if marking it read fails.
     }
