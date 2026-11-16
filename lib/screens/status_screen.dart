@@ -18,6 +18,7 @@ class _StatusTrayState extends State<StatusTray> {
   late Future<List<_StatusGroup>> _groups;
   final _picker = ImagePicker();
   bool _uploading = false;
+  String _statusVisibility = 'followers';
 
   SupabaseClient get _client => Supabase.instance.client;
 
@@ -85,7 +86,28 @@ class _StatusTrayState extends State<StatusTray> {
               const Text('Share a status', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
               const SizedBox(height: 6),
               const Text('A status disappears after 24 hours.', style: TextStyle(color: NiptoColors.muted)),
-              const SizedBox(height: 14),
+              const SizedBox(height: 8),
+              StatefulBuilder(
+                builder: (context, setSheetState) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.visibility_outlined, color: NiptoColors.violet),
+                  title: const Text('Audience'),
+                  subtitle: Text(_statusVisibility == 'close_friends' ? 'Close Friends' : 'Followers'),
+                  trailing: DropdownButton<String>(
+                    value: _statusVisibility,
+                    underline: const SizedBox.shrink(),
+                    items: const [
+                      DropdownMenuItem(value: 'followers', child: Text('Followers')),
+                      DropdownMenuItem(value: 'close_friends', child: Text('Close Friends')),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setSheetState(() => _statusVisibility = value);
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
               ListTile(
                 leading: const Icon(Icons.text_fields_rounded, color: NiptoColors.violet),
                 title: const Text('Text status'),
@@ -147,7 +169,7 @@ class _StatusTrayState extends State<StatusTray> {
         'owner_id': userId,
         'status_type': 'text',
         'text_content': text,
-        'visibility': 'followers',
+        'visibility': _statusVisibility,
         'background_color': '#6657E8',
       });
       await _refresh();
@@ -201,7 +223,7 @@ class _StatusTrayState extends State<StatusTray> {
         'owner_id': userId,
         'status_type': isVideo ? 'video' : 'image',
         'media_path': path,
-        'visibility': 'followers',
+        'visibility': _statusVisibility,
       });
       await _refresh();
       if (!mounted) return;
