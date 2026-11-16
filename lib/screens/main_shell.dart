@@ -24,6 +24,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   RealtimeChannel? _notificationChannel;
   Timer? _incomingCallTimer;
   bool _incomingDialogOpen = false;
+  bool _pollingIncomingCalls = false;
   final Set<String> _handledIncomingCalls = <String>{};
 
   @override
@@ -61,10 +62,11 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   }
 
   Future<void> _pollIncomingCalls() async {
-    if (!mounted || _incomingDialogOpen ||
+    if (!mounted || _incomingDialogOpen || _pollingIncomingCalls ||
         Supabase.instance.client.auth.currentUser == null) {
       return;
     }
+    _pollingIncomingCalls = true;
     try {
       final result = await Supabase.instance.client.rpc('list_my_incoming_calls');
       final calls = List<Map<String, dynamic>>.from(result as List);
@@ -120,6 +122,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       }
     } catch (_) {
       // Foreground call discovery is best-effort; push wake-up is a separate release gate.
+    } finally {
+      _pollingIncomingCalls = false;
     }
   }
 
