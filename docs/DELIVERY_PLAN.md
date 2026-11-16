@@ -17,7 +17,8 @@
 - [x] Profile editing, unique handle validation and prefix search.
 - [x] Follow requests, private profiles, blocks and profile visibility.
 - [x] Message privacy and notification preference controls.
-- [ ] Verify account recovery deep links and per-device session inventory.
+- [x] Add optional trusted Recovery Nipto ID at signup and consent-based recovery-contact management in Settings; recovery requests and approvals notify both accounts.
+- [ ] Complete verified-email password recovery deep-link acceptance and per-device session inventory.
 - [x] Add a user-confirmed global sign-out action that revokes refresh sessions; current access tokens may remain valid until expiry.
 
 ## Phase 2 — Messaging
@@ -50,6 +51,7 @@
 - [x] User-facing feedback responses and report/content status notifications.
 - [x] Validate the role-gated staff console through formatting, static analysis, unit/widget tests and Android debug APK CI; production staff-session acceptance testing remains an operational gate.
 - [x] Test staff RPCs fail closed for identities without staff roles; moderator/admin acceptance testing remains an operational gate.
+- [x] In-app notifications for trusted recovery-contact requests and approvals, with navigation to the recovery-contact manager.
 - [ ] Push delivery and notification deep links.
 - [x] Role-gated staff review UI for feedback, abuse reports and pending content; backend authorization and audit logging are deployed.
 - Privacy export/deletion workflows.
