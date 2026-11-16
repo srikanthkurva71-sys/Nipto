@@ -14,9 +14,10 @@ This repository is the first implementation of Nipto Social. The former ride-hai
 
 ## Main navigation
 
-1. **Chats** — inbox, Nipto ID search, discovery, following, direct/group chats and 24-hour statuses.
-2. **Shorts** — a vertical, swipe-first short-video feed with likes, comments and creator profiles.
-3. **You** — personal profile, followers/following, posts, settings, privacy and security.
+1. **Home** — paginated feed of approved posts, likes and comments from accounts visible to the signed-in user.
+2. **Chats** — inbox, Nipto ID search, discovery, following, direct/group chats, 24-hour statuses and activity notifications.
+3. **Shorts** — a vertical, swipe-first short-video feed with likes, comments and creator profiles.
+4. **You** — personal profile, followers/following, photo posts, settings, privacy and security.
 
 ## Technology
 
@@ -76,9 +77,11 @@ New users register with a recovery email, a Nipto ID and a password. Supabase Au
 
 ## Current implementation status
 
-The repository now contains an implemented Flutter Android app foundation and a live Supabase schema. Implemented modules include Nipto ID registration/sign-in, profile editing and photo posts, Nipto ID discovery and follow requests, direct/group conversation flows, message attachments and read receipts, 24-hour statuses, Shorts publishing/feed interactions, in-app notifications, privacy controls, blocking/reporting, and private user feedback intake/history.
+The repository contains a Flutter Android app foundation and a live Supabase schema. Implemented app areas include Nipto ID registration/sign-in, profile editing and avatar uploads, photo posts, Nipto ID discovery and follow requests, direct/group conversation flows, text messages and basic media attachments, 24-hour statuses, Shorts upload/feed interactions, Home feed, in-app notifications, privacy controls, blocking/reporting, and private user feedback intake/history. Some flows still need deeper end-to-end, device and moderation validation.
 
 The feedback subsystem is separate from abuse reports. Signed-in users can submit app-experience ratings, bug reports, feature ideas or support requests and view their own submission status. Feedback is protected by RLS and limited to five submissions per account per 24 hours. A trusted staff-only triage console and response workflow remain outstanding.
+
+All 21 public application tables currently have Row Level Security enabled. Anonymous table privileges were revoked and client writes were narrowed. Nine intentionally exposed SECURITY DEFINER RPCs remain authenticated-only and are monitored by the Supabase security advisor.
 
 GitHub Actions runs Dart formatting, static analysis, tests and an Android debug APK build. A passing CI run proves that the checked commit builds; it does not prove complete device-level or production readiness.
 
