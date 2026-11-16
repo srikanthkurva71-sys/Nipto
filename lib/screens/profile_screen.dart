@@ -167,9 +167,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _changeAvatar() async {
+    final file = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 88,
+      maxWidth: 1200,
+    );
+    if (file == null || !mounted) return;
+
+    final extension = file.name.split('.').last.toLowerCase();
+    const mimeTypes = {
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'webp': 'image/webp',
+    };
+    final contentType = mimeTypes[extension];
+    if (contentType == null || await file.length() > 8 * 1024 * 1024) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choose a JPG, PNG or WebP image smaller than 8 MB.')),
+      );
+      return;
+    }
+
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return;
+    final path = userId + '/avatar.' + extension;
+    try {
+      await _client.storage.from('avatars').upload(
+        path,
+        File(file.path),
+        fileOptions: FileOptions(contentType: contentType, upsert: true),
+      );
+      await _client.from('profiles').update({'avatar_path': path}).eq('id', userId);
+      if (mounted) setState(() => _profile = _loadProfile());
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile photo could not be updated.')),
+      );
+    }
+  }
+
   Future<void> _editProfile(_ProfileData data) async {
-    final nameController = TextEditingController(text: data.profile['display_name'] as String? ?? '');
-    final bioController = TextEditingController(text: data.profile['bio'] as String? ?? '');
+    final nameController = TextEditingController(
+      text: data.profile['display_name'] as String? ?? '',
+    );
+    final bioController = TextEditingController(
+      text: data.profile['bio'] as String? ?? '',
+    );
     final result = await showDialog<Map<String, String>>(
       context: context,
       builder: (context) => AlertDialog(
@@ -192,7 +238,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(context, {
               'display_name': nameController.text.trim(),
@@ -214,7 +263,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     try {
-      await _client.from('profiles').update(result).eq('id', _client.auth.currentUser!.id);
+      await _client.from('profiles').update(result).eq(
+        'id',
+        _client.auth.currentUser!.id,
+      );
       if (mounted) setState(() => _profile = _loadProfile());
     } catch (_) {
       if (!mounted) return;
@@ -281,16 +333,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 sliver: SliverToBoxAdapter(
                   child: Column(
                     children: [
-                      CircleAvatar(
-                        radius: 48,
-                        backgroundColor: NiptoColors.violetSoft,
-                        backgroundImage: data.avatarUrl == null ? null : NetworkImage(data.avatarUrl!),
-                        child: data.avatarUrl == null
-                            ? Text(
-                                displayName.isEmpty ? 'N' : displayName.substring(0, 1).toUpperCase(),
-                                style: const TextStyle(color: NiptoColors.violet, fontSize: 28, fontWeight: FontWeight.w800),
-                              )
-                            : null,
+                      GestureDetector(
+                        onTap: _changeAvatar,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            CircleAvatar(
+                              radius: 48,
+                              backgroundColor: NiptoColors.violetSoft,
+                              backgroundImage: data.avatarUrl == null
+                                  ? null
+                                  : NetworkImage(data.avatarUrl!),
+                              child: data.avatarUrl == null
+                                  ? Text(
+                                      displayName.isEmpty
+                                          ? 'N'
+                                          : displayName.substring(0, 1).toUpperCase(),
+                                      style: const TextStyle(
+                                        color: NiptoColors.violet,
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            Positioned(
+                              right: -2,
+                              bottom: -2,
+                              child: Container(
+                                width: 30,
+                                height: 30,
+                                decoration: BoxDecoration(
+                                  color: NiptoColors.violet,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.white, width: 2),
+                                ),
+                                child: const Icon(
+                                  Icons.camera_alt_rounded,
+                                  color: Colors.white,
+                                  size: 15,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 14),
                       Text(displayName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
