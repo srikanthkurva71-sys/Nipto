@@ -314,6 +314,62 @@ async function route(request: Request): Promise<Response> {
       display_name: displayName,
     }, stringField(input.device_label, 80)));
   }
+  if (path.endsWith("/migrate") && method === "POST") {
+    const input = await body(request);
+    const newPassword = stringField(input.new_password, 128);
+    if (!validPassword(newPassword)) {
+      return json({ error: "Use at least 12 characters for your new Nipto password." }, 400);
+    }
+    const legacyAuthorization = request.headers.get("authorization") ?? "";
+    if (!/^Bearer [A-Za-z0-9._-]+$/.test(legacyAuthorization)) {
+      return json({ error: "An existing signed-in session is required to migrate this account." }, 401);
+    }
+
+    const authResponse = await fetch(
+      env("SUPABASE_URL").replace(/\/$/, "") + "/auth/v1/user",
+      {
+        headers: {
+          apikey: env("SUPABASE_ANON_KEY"),
+          Authorization: legacyAuthorization,
+        },
+      },
+    );
+    if (!authResponse.ok) {
+      return json({ error: "Your previous session expired. Open the previous Nipto version and sign in before migrating." }, 401);
+    }
+    const legacyUser = await authResponse.json();
+    const userId = typeof legacyUser.id === "string" ? legacyUser.id : "";
+    if (!/^[0-9a-f-]{36}$/i.test(userId)) {
+      return json({ error: "The existing account could not be verified." }, 401);
+    }
+    await enforceRateLimit(request, "migration:" + userId);
+    const profile = await fetchProfile(userId);
+    const passwordHash = await hashPassword(newPassword);
+    await rpc("nipto_native_migrate_account", {
+      p_user_id: userId,
+      p_password_hash: passwordHash,
+    });
+
+    // Remove the legacy Auth identity only after the Nipto credential has been
+    // committed. The migration SQL first removes profiles.id -> auth.users.id;
+    // all social records continue to reference the preserved profile UUID.
+    const deleteResponse = await fetch(
+      env("SUPABASE_URL").replace(/\/$/, "") + "/auth/v1/admin/users/" + userId,
+      {
+        method: "DELETE",
+        headers: {
+          apikey: env("SUPABASE_SERVICE_ROLE_KEY"),
+          Authorization: "Bearer " + env("SUPABASE_SERVICE_ROLE_KEY"),
+        },
+      },
+    );
+    if (!deleteResponse.ok && deleteResponse.status !== 404) {
+      return json({
+        error: "Your Nipto password was created, but legacy account cleanup is still pending. Retry migration while this device remains signed in.",
+      }, 503);
+    }
+    return json(await createSession(profile, stringField(input.device_label, 80)));
+  }
   if (path.endsWith("/login") && method === "POST") {
     const input = await body(request);
     const niptoId = stringField(input.nipto_id, 24).trim().toLowerCase().replace(/^@/, "");
