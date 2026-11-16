@@ -429,10 +429,11 @@ begin
   if v_owner is null then return null; end if;
 
   insert into private.nipto_password_reset_grants(
-    challenge_id, owner_id, grant_hash, expires_at
+    challenge_id, owner_id, grant_hash, expires_at, delivered_at
   )
   values (
-    p_challenge_id, v_owner, p_grant_hash, pg_catalog.now() + interval '10 minutes'
+    p_challenge_id, v_owner, p_grant_hash,
+    pg_catalog.now() + interval '10 minutes', pg_catalog.now()
   )
   on conflict (challenge_id) do nothing;
 
