@@ -7,38 +7,40 @@
 - [x] Enable RLS and private media buckets.
 - [x] Add Nipto ID-to-Auth lookup restricted to service role.
 - [x] Add Nipto ID login Edge Function and attempt limiting.
-- [ ] Finish Flutter app shell and auth UX.
+- [x] Implement four-destination Flutter app shell (Home, Chats, Shorts, You) and initial Nipto ID auth UX.
 - [x] Add Android platform scaffolding and verify debug build in CI.
 - [x] Add private feedback intake schema and user feedback screen.
 - [x] Align design tokens with Nipto logo palette.
 
 ## Phase 1 — Identity and discovery
-- Registration, email confirmation, Nipto ID login and recovery.
-- Profile editing, unique handle checks and search.
-- Follow requests, private profiles, blocks and profile visibility.
-- Session management and notification preferences.
+- [x] Registration, email confirmation and Nipto ID sign-in endpoint.
+- [x] Profile editing, unique handle validation and prefix search.
+- [x] Follow requests, private profiles, blocks and profile visibility.
+- [x] Message privacy and notification preference controls.
+- [ ] Verify account recovery deep links and session/device management.
 
 ## Phase 2 — Messaging
-- Inbox, direct conversations and group invitations.
-- Realtime messages, retries, pagination and receipts.
-- Private attachments, upload progress and signed access.
-- Message request/unsolicited message settings.
+- [x] Inbox, direct conversations and group invitations.
+- [x] Realtime text messages, image attachments and basic read receipts.
+- [x] Private chat media and signed access.
+- [ ] Complete message requests, retries, pagination, audio/video/file attachments and multi-device delivery.
 
 ## Phase 3 — Status
-- Text/image/video status publishing.
-- 24-hour expiry and cleanup.
-- Audience controls, close friends and viewer list.
+- [x] Text/image/video status publishing.
+- [x] 24-hour visibility expiry filtering and viewer inserts.
+- [x] Follower-only audience default.
+- [ ] Add cleanup job, close-friends audience UI and complete viewer-list screen.
 
 ## Phase 4 — Shorts and posts
-- Video/image picker and upload validation.
-- Thumbnail generation, transcoding and moderation.
-- Vertical feed, playback lifecycle, likes and comments.
-- Profile posts grid.
+- [x] Image post picker, caption, visibility choice and private upload.
+- [x] Vertical Shorts feed, MP4 upload validation, playback lifecycle, likes and comments.
+- [x] Home feed, likes/comments and profile post grid.
+- [ ] Build trusted review/moderation operations, thumbnail/transcoding pipeline, video post playback and robust upload resume.
 
 ## Phase 5 — Feedback, safety operations and production readiness
-- Feedback intake, user-owned history and trusted status workflow.
-- Staff-only feedback triage and abuse-report review console (not yet implemented).
-- Moderation queues and auditable decisions for user-generated content.
+- [x] Feedback intake and user-owned history (separate from abuse reports).
+- [ ] Staff-only feedback triage, report review console and audited moderation status transitions.
+- [ ] Moderation queues and auditable decisions for user-generated content.
 - Push delivery and deep links.
 - Abuse/report review tools and moderation operations.
 - Privacy export/deletion workflows.
