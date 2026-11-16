@@ -310,13 +310,16 @@ function renderAuthorizePage(input: {
   transactionId: string; csrfToken: string; screen: string; error?: string; switchUrl: string;
 }): string {
   const isRegister = input.screen === "register";
+  const isLink = input.screen === "link";
   const error = input.error ? `<p class="error">${htmlEscape(input.error)}</p>` : "";
   const fields = isRegister
     ? `<label>Display name<input name="display_name" maxlength="50" autocomplete="name" required></label>
        <label>Recovery Nipto account <span>(optional)</span><input name="recovery_nipto_id" maxlength="24" autocomplete="off" placeholder="Nipto ID"></label>`
+    : isLink
+    ? `<label>Recovery Nipto account <span>(optional)</span><input name="recovery_nipto_id" maxlength="24" autocomplete="off" placeholder="Nipto ID"></label>`
     : "";
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>${isRegister ? "Create your Nipto account" : "Sign in to Nipto"}</title>
+    <title>${isRegister ? "Create your Nipto account" : isLink ? "Set your Nipto password" : "Sign in to Nipto"}</title>
     <style>
       *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#f6f5fc;color:#19172b;font:16px system-ui,-apple-system,sans-serif;display:grid;place-items:center;padding:24px}
       main{width:100%;max-width:420px;background:#fff;border:1px solid #e8e5f2;border-radius:22px;padding:30px;box-shadow:0 18px 50px #24164a12}
@@ -329,19 +332,19 @@ function renderAuthorizePage(input: {
       .error{background:#fff0f0;color:#a22;padding:10px;border-radius:10px;text-align:left}
       .hint{font-size:13px}
     </style></head><body><main><div class="brand">NIPTO</div>
-    <h1>${isRegister ? "Create your Nipto account" : "Welcome back"}</h1>
-    <p>${isRegister ? "Choose your Nipto ID and password. No email or phone number is required." : "Sign in with your Nipto ID and password. No email is required."}</p>
+    <h1>${isRegister ? "Create your Nipto account" : isLink ? "Set your Nipto password" : "Welcome back"}</h1>
+    <p>${isRegister ? "Choose your Nipto ID and password. No email or phone number is required." : isLink ? "Create a Nipto password for the account already signed in on this device. No email is required." : "Sign in with your Nipto ID and password. No email is required."}</p>
     ${error}
     <form method="post" action="${issuer()}/authorize">
       <input type="hidden" name="transaction_id" value="${htmlEscape(input.transactionId)}">
       <input type="hidden" name="csrf_token" value="${htmlEscape(input.csrfToken)}">
-      <input type="hidden" name="action" value="${isRegister ? "register" : "login"}">
+      <input type="hidden" name="action" value="${isRegister ? "register" : isLink ? "link" : "login"}">
       ${fields}
-      <label>Nipto ID<input name="nipto_id" maxlength="24" autocomplete="username" autocapitalize="none" required></label>
-      <label>Password<input name="password" type="password" minlength="12" maxlength="128" autocomplete="${isRegister ? "new-password" : "current-password"}" required></label>
-      <button type="submit">${isRegister ? "Create account" : "Sign in"}</button>
+      ${isLink ? "" : `<label>Nipto ID<input name="nipto_id" maxlength="24" autocomplete="username" autocapitalize="none" required></label>`}
+      <label>Password<input name="password" type="password" minlength="12" maxlength="128" autocomplete="${isRegister || isLink ? "new-password" : "current-password"}" required></label>
+      <button type="submit">${isRegister ? "Create account" : isLink ? "Link Nipto account" : "Sign in"}</button>
     </form>
-    <a href="${input.switchUrl}">${isRegister ? "Already have a Nipto account? Sign in" : "New to Nipto? Create an account"}</a>
+    ${isLink ? "" : `<a href="${input.switchUrl}">${isRegister ? "Already have a Nipto account? Sign in" : "New to Nipto? Create an account"}</a>`}
     <p class="hint">Your Nipto password is handled by Nipto. It is never sent to an email provider.</p>
     </main></body></html>`;
 }
@@ -363,6 +366,12 @@ async function authorizeGet(request: Request): Promise<Response> {
     throw new ApiError("Invalid Nipto authorization request", 400);
   }
   const csrf = randomToken(32);
+  const requestedScreen = url.searchParams.get("screen");
+  const screen = requestedScreen === "register" ? "register" : requestedScreen === "link" ? "link" : "login";
+  const migrationTicket = url.searchParams.get("migration_ticket");
+  if (screen === "link" && (!migrationTicket || !/^[A-Za-z0-9_-]{43,128}$/.test(migrationTicket))) {
+    throw new ApiError("This account-link request is invalid. Return to Nipto and try again.", 400);
+  }
   const transactionId = await rpc("nipto_oidc_create_transaction", {
     p_client_id: client,
     p_redirect_uri: redirectUri,
@@ -371,13 +380,13 @@ async function authorizeGet(request: Request): Promise<Response> {
     p_nonce: nonce,
     p_code_challenge: challenge,
     p_csrf_hash: await sha256Hex(csrf),
+    p_migration_ticket_hash: migrationTicket ? await sha256Hex(migrationTicket) : null,
   });
-  const screen = url.searchParams.get("screen") === "register" ? "register" : "login";
   return html(renderAuthorizePage({
     transactionId: String(transactionId),
     csrfToken: csrf,
     screen,
-    switchUrl: buildSwitchUrl(url, screen === "register" ? "login" : "register"),
+    switchUrl: screen === "link" ? "" : buildSwitchUrl(url, screen === "register" ? "login" : "register"),
   }));
 }
 async function authorizePost(request: Request): Promise<Response> {
@@ -395,8 +404,8 @@ async function authorizePost(request: Request): Promise<Response> {
   });
   const tx = firstRow(txRows);
   if (!tx) throw new ApiError("This sign-in request expired. Return to Nipto and try again.", 410);
-  const screen = action === "register" ? "register" : "login";
-  const switchUrl = buildSwitchUrl(new URL(
+  const screen = action === "register" ? "register" : action === "link" ? "link" : "login";
+  const switchUrl = screen === "link" ? "" : buildSwitchUrl(new URL(
     issuer() + "/authorize?" + new URLSearchParams({
       client_id: String(tx.client_id),
       redirect_uri: String(tx.redirect_uri),
@@ -410,13 +419,33 @@ async function authorizePost(request: Request): Promise<Response> {
   ), screen === "register" ? "login" : "register");
 
   try {
-    if (!/^[a-z0-9_]{3,24}$/.test(niptoId) || password.length < 12 || password.length > 128) {
+    if (password.length < 12 || password.length > 128
+      || (action !== "link" && !/^[a-z0-9_]{3,24}$/.test(niptoId))) {
       throw new ApiError("Check your Nipto ID and password.", 400);
     }
-    await enforceRateLimit(request, "oidc:" + niptoId);
+    await enforceRateLimit(request, "oidc:" + (niptoId || transactionId));
     let identityId: string;
 
-    if (action === "register") {
+    if (action === "link") {
+      const ticketHash = String(tx.migration_ticket_hash ?? "");
+      if (!/^[a-f0-9]{64}$/.test(ticketHash)) {
+        throw new ApiError("This account-link request expired. Return to Nipto and try again.", 410);
+      }
+      const migration = firstRow(await rpc("nipto_oidc_consume_migration_ticket", {
+        p_ticket_hash: ticketHash,
+      }));
+      if (!migration) throw new ApiError("This account-link request expired. Return to Nipto and try again.", 410);
+      const passwordHash = await hashPassword(password);
+      const created = await rpc("nipto_oidc_register_legacy", {
+        p_user_id: migration.user_id,
+        p_nipto_id: migration.nipto_id,
+        p_display_name: migration.display_name,
+        p_password_hash: passwordHash,
+        p_recovery_nipto_id: recoveryNiptoId || null,
+      });
+      if (typeof created !== "string") throw new ApiError("Nipto account could not be linked.", 409);
+      identityId = created;
+    } else if (action === "register") {
       if (displayName.length < 1 || displayName.length > 50) {
         throw new ApiError("Enter a display name between 1 and 50 characters.", 400);
       }
