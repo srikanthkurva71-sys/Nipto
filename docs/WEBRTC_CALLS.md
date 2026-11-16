@@ -52,7 +52,7 @@ Nipto will support real-time voice and video calls from direct conversations. Th
 - Flutter dependency: `flutter_webrtc: ^1.6.3`.
 - Android manifest generation in CI includes microphone, camera and network permissions; camera hardware is optional so voice-only devices remain eligible.
 - Direct conversation UI exposes voice/video call entry points; group conversations hide those controls.
-- Call service handles local media, peer connection, SDP, trickled ICE, serialized signaling, mute, camera enable/disable, camera switching, speaker/earpiece routing, ringing/connection/disconnect timeouts and cleanup.
+- Call service handles local media, peer connection, SDP, trickled ICE, serialized signaling, mute, camera enable/disable, camera switching, speaker/earpiece routing, ringing/connection/disconnect timeouts and cleanup. Signaling payload sizes and queued ICE candidates are bounded. Backend termination is attempted independently of realtime hang-up delivery, and local media teardown continues even if one native cleanup operation fails.
 - Incoming calls are surfaced through authenticated foreground polling in the app shell, with accept/decline UI. This does not wake a terminated or backgrounded app.
 - The current development ICE configuration uses a public STUN server only. It is not a production NAT-traversal solution; TURN credentials must be provisioned server-side before release.
 - CI has passed static analysis and tests on the call UI integration commit, and the Android APK build completed successfully on that commit. Later small changes remain subject to their own CI runs.
