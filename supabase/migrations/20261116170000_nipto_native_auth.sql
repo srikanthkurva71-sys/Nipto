@@ -163,6 +163,8 @@ begin
   if nullif(trim(coalesce(p_recovery_nipto_id, '')), '') is not null then
     select p.id into v_recovery_id
     from public.profiles p
+    join private.nipto_accounts recovery_account
+      on recovery_account.user_id = p.id and recovery_account.status = 'active'
     where p.nipto_id = lower(trim(p_recovery_nipto_id))
       and p.account_state = 'active';
 
@@ -359,8 +361,12 @@ set search_path = ''
 as $$
 declare v_target uuid; v_id uuid;
 begin
-  select p.id into v_target from public.profiles p
-  where p.nipto_id=lower(trim(coalesce(p_nipto_id,''))) and p.account_state='active';
+  select p.id into v_target
+  from public.profiles p
+  join private.nipto_accounts target_account
+    on target_account.user_id=p.id and target_account.status='active'
+  where p.nipto_id=lower(trim(coalesce(p_nipto_id,'')))
+    and p.account_state='active';
   if v_target is null or v_target=p_owner_id
      or not exists(select 1 from private.nipto_accounts a where a.user_id=p_owner_id and a.status='active')
      or private.is_blocked_between(p_owner_id,v_target) then
@@ -420,6 +426,8 @@ begin
       select 1 from private.nipto_accounts a
       join public.profiles op on op.id=a.user_id
       join public.profiles rp on rp.id=rc.recovery_user_id
+      join private.nipto_accounts recovery_account
+        on recovery_account.user_id=rp.id and recovery_account.status='active'
       where a.user_id=rc.owner_id and a.status='active'
         and op.account_state='active' and rp.account_state='active'
         and not private.is_blocked_between(rc.owner_id,rc.recovery_user_id)
@@ -452,6 +460,8 @@ begin
   select rc.recovery_user_id into v_recovery
   from public.account_recovery_contacts rc
   join public.profiles rp on rp.id=rc.recovery_user_id
+  join private.nipto_accounts recovery_account
+    on recovery_account.user_id=rp.id and recovery_account.status='active'
   where rc.owner_id=v_owner and rc.status='accepted'
     and rp.account_state='active'
     and not private.is_blocked_between(v_owner,rc.recovery_user_id)
@@ -515,6 +525,8 @@ begin
       join public.profiles op on op.id=rc.owner_id
       join public.profiles rp on rp.id=rc.recovery_user_id
       join private.nipto_accounts a on a.user_id=rc.owner_id
+      join private.nipto_accounts recovery_account
+        on recovery_account.user_id=rp.id and recovery_account.status='active'
       where rc.owner_id=c.owner_id and rc.recovery_user_id=c.recovery_user_id
         and rc.status='accepted' and op.account_state='active'
         and rp.account_state='active' and a.status='active'
