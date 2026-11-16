@@ -42,7 +42,7 @@
 - [x] Private staff-role model, fail-closed access checks and audited staff action log.
 - [x] Backend RPCs for feedback triage, user-report review and pending post/Short moderation.
 - [x] User-facing feedback responses and report/content status notifications.
-- [ ] Role-gated staff console for an appropriately staffed adult operations team.
+- [x] Role-gated staff console for feedback, report and pending-content queues; server authorization remains the security boundary.
 - [ ] Test staff RPCs as no-role, moderator and admin identities.
 - Push delivery and deep links.
 - Abuse/report review tools and moderation operations.
