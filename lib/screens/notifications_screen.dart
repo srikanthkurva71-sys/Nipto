@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/nipto_theme.dart';
 import 'conversation_screen.dart';
+import 'recovery_contacts_screen.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -125,6 +126,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         : <String, dynamic>{};
     final kind = item['notification_type'] as String? ?? '';
 
+    if (payload['kind'] == 'recovery_request' ||
+        payload['kind'] == 'recovery_accepted') {
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const RecoveryContactsScreen(),
+        ),
+      );
+      if (mounted) setState(() => _notifications = _load());
+      return;
+    }
     if (kind == 'message') {
       final conversationId = payload['conversation_id'] as String?;
       if (conversationId == null || !mounted) return;
@@ -181,6 +193,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           final type = payload['content_type']?.toString() ?? 'content';
           final decision = payload['decision']?.toString() ?? 'reviewed';
           return 'Your $type was $decision.';
+        }
+        if (payload['kind'] == 'recovery_request') {
+          return '$name asked to be your trusted recovery Nipto account.';
+        }
+        if (payload['kind'] == 'recovery_accepted') {
+          return '$name accepted your recovery-contact request.';
         }
         if (payload['kind'] == 'report_update') {
           final status = payload['status']?.toString() ?? 'updated';
