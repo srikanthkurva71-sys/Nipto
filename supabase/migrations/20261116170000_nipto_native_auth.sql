@@ -563,6 +563,8 @@ begin
       from public.account_recovery_contacts rc
       join public.profiles op on op.id=rc.owner_id
       join public.profiles rp on rp.id=rc.recovery_user_id
+      join private.nipto_accounts recovery_account
+        on recovery_account.user_id=rp.id and recovery_account.status='active'
       where rc.owner_id=c.owner_id and rc.recovery_user_id=c.recovery_user_id
         and rc.status='accepted' and op.account_state='active'
         and rp.account_state='active'
