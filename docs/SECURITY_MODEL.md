@@ -15,6 +15,7 @@
 - Nipto ID resolution is server-side. resolve_nipto_login is executable only by service_role.
 - nipto-login returns session tokens only after Supabase Auth accepts the password.
 - The Edge Function applies a digest-keyed 15-minute attempt limit. It returns the same authentication error for unknown IDs and wrong passwords.
+- `private.nipto_auth_attempts` has RLS enabled with no client policies or `anon`/`authenticated` table privileges. The `service_role`-only `consume_nipto_login_attempt` SECURITY DEFINER RPC is the controlled write/read path; it uses an empty search path.
 - The Flutter client uses only the Supabase publishable key. Never embed service_role, secret, database password or JWT signing keys in the app.
 
 ## Authorization
@@ -51,9 +52,11 @@ Storage object paths are documented in the core migration. Access checks join ob
 - Configure verified recovery email templates and Android redirect/deep-link allow-list.
 - Review Auth password policy, email confirmation, captcha/abuse controls and session lifetime in Supabase Dashboard.
 - Add push provider credentials as Edge Function secrets only.
+- Enable Supabase Auth leaked-password protection and verify the configured password policy in the Dashboard.
 - Add a media scanning/transcoding pipeline and human moderation tools.
 - Add account deletion that removes Auth identity, database data and Storage objects according to a documented retention policy.
-- Complete E2E tests for cross-user RLS isolation, private accounts, blocks, group invites, message membership and storage access.
+- Complete E2E tests for cross-user RLS isolation, private accounts, blocks, group invites, message membership, recovery-contact RPCs and storage access.
+- Review every authenticated SECURITY DEFINER RPC against its caller authorization checks; Supabase's advisor currently reports 22 such functions, which are not automatically vulnerabilities but require function-by-function review.
 - Complete independent security review before production launch.
 
 ## Security advisory interpretation
