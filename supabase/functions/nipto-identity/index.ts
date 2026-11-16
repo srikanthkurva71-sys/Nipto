@@ -407,21 +407,23 @@ async function route(request: Request): Promise<Response> {
       return json({ error: "An existing signed-in session is required to migrate this account." }, 401);
     }
 
-    const authResponse = await fetch(
-      env("SUPABASE_URL").replace(/\/$/, "") + "/auth/v1/user",
+    const legacyIdentityResponse = await fetch(
+      env("SUPABASE_URL").replace(/\/$/, "") + "/rest/v1/rpc/nipto_native_verify_legacy_session",
       {
+        method: "POST",
         headers: {
           apikey: env("SUPABASE_ANON_KEY"),
           Authorization: legacyAuthorization,
+          "Content-Type": "application/json",
         },
+        body: "{}",
       },
     );
-    if (!authResponse.ok) {
+    if (!legacyIdentityResponse.ok) {
       return json({ error: "Your previous session expired. Open the previous Nipto version and sign in before migrating." }, 401);
     }
-    const legacyUser = await authResponse.json();
-    const userId = typeof legacyUser.id === "string" ? legacyUser.id : "";
-    if (!/^[0-9a-f-]{36}$/i.test(userId)) {
+    const userId = await legacyIdentityResponse.json();
+    if (typeof userId !== "string" || !/^[0-9a-f-]{36}$/i.test(userId)) {
       return json({ error: "The existing account could not be verified." }, 401);
     }
     await enforceRateLimit(request, "migration:" + userId);
