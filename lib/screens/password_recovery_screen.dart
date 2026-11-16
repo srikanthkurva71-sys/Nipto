@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/nipto_session_manager.dart';
 import '../theme/nipto_theme.dart';
 import 'auth_screen.dart';
 
 class PasswordRecoveryScreen extends StatefulWidget {
-  const PasswordRecoveryScreen({super.key, required this.onComplete});
+  const PasswordRecoveryScreen({
+    super.key,
+    required this.resetGrant,
+    required this.onComplete,
+  });
 
+  final String resetGrant;
   final VoidCallback onComplete;
 
   @override
@@ -35,17 +40,18 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
       _error = null;
     });
     try {
-      await Supabase.instance.client.auth.updateUser(
-        UserAttributes(password: _password.text),
+      await NiptoSessionManager.instance.resetPassword(
+        resetGrant: widget.resetGrant,
+        newPassword: _password.text,
       );
       if (!mounted) return;
       widget.onComplete();
-    } on AuthException catch (error) {
+    } on NiptoAuthException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.message);
     } catch (_) {
       if (!mounted) return;
-      setState(() => _error = 'Your password could not be updated. Please reopen the recovery link and try again.');
+      setState(() => _error = 'Your password could not be updated. Please try again.');
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -54,6 +60,7 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(title: const Text('Set a new password')),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -70,7 +77,7 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                     Text('Create a new password', style: Theme.of(context).textTheme.headlineSmall),
                     const SizedBox(height: 8),
                     const Text(
-                      'Choose a new password for your Nipto account.',
+                      'Your trusted Nipto account approved this request. Choose a new password to secure your account.',
                       style: TextStyle(color: NiptoColors.muted),
                     ),
                     const SizedBox(height: 24),
@@ -87,7 +94,7 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                         ),
                       ),
                       validator: (value) {
-                        if ((value ?? '').length < 8) return 'Use at least 8 characters.';
+                        if ((value ?? '').length < 12) return 'Use at least 12 characters.';
                         return null;
                       },
                     ),
