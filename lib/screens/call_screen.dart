@@ -36,6 +36,9 @@ class _CallScreenState extends State<CallScreen> {
   String? _error;
   bool _ending = false;
   bool _allowPop = false;
+  Timer? _durationTicker;
+  DateTime? _connectedAt;
+  Duration _callDuration = Duration.zero;
 
   @override
   void initState() {
@@ -46,7 +49,18 @@ class _CallScreenState extends State<CallScreen> {
       mediaType: widget.mediaType,
       isCaller: widget.isCaller,
       onPhaseChanged: (phase) {
-        if (mounted) setState(() => _phase = phase);
+        if (!mounted) return;
+        if (phase == NiptoCallPhase.connected && _connectedAt == null) {
+          _connectedAt = DateTime.now();
+          _durationTicker = Timer.periodic(const Duration(seconds: 1), (_) {
+            if (!mounted || _connectedAt == null) return;
+            setState(() => _callDuration = DateTime.now().difference(_connectedAt!));
+          });
+        }
+        if (phase == NiptoCallPhase.ended || phase == NiptoCallPhase.failed) {
+          _durationTicker?.cancel();
+        }
+        setState(() => _phase = phase);
       },
       onRemoteStream: (stream) {
         _remoteRenderer.srcObject = stream;
@@ -84,6 +98,12 @@ class _CallScreenState extends State<CallScreen> {
       }
       await _service.dispose();
     }
+  }
+
+  String get _durationLabel {
+    final minutes = _callDuration.inMinutes.toString().padLeft(2, '0');
+    final seconds = (_callDuration.inSeconds % 60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
   }
 
   String get _phaseLabel {
@@ -136,6 +156,7 @@ class _CallScreenState extends State<CallScreen> {
 
   @override
   void dispose() {
+    _durationTicker?.cancel();
     unawaited(_service.dispose());
     _localRenderer.dispose();
     _remoteRenderer.dispose();
@@ -248,7 +269,7 @@ class _CallScreenState extends State<CallScreen> {
               child: Column(
                 children: [
                   Text(
-                    connected ? 'Call in progress' : _phaseLabel,
+                    connected ? _durationLabel : _phaseLabel,
                     style: const TextStyle(color: Colors.white70, fontSize: 14),
                   ),
                   const SizedBox(height: 22),
