@@ -663,9 +663,9 @@ revoke all on function public.nipto_native_consume_reset_grant(text,text) from p
 grant execute on function public.nipto_native_consume_reset_grant(text,text) to service_role;
 
 create or replace function public.nipto_native_list_sessions(p_user_id uuid)
-returns table(session_id uuid,created_at timestamptz,last_active_at timestamptz,user_agent text)
+returns table(session_id uuid,created_at timestamptz,last_used_at timestamptz,device_label text)
 language sql stable security definer set search_path=''
-as $$
+as $
   select s.id,s.created_at,coalesce(s.refreshed_at,s.created_at),left(coalesce(s.user_agent,''),180)
   from auth.sessions s
   where s.user_id=p_user_id
