@@ -312,6 +312,25 @@ $$;
 revoke all on function public.nipto_native_rotate_session(text,text,timestamptz) from public, anon, authenticated;
 grant execute on function public.nipto_native_rotate_session(text,text,timestamptz) to service_role;
 
+create or replace function public.nipto_native_is_session_active(
+  p_user_id uuid, p_session_id uuid
+)
+returns boolean
+language sql stable security definer set search_path=''
+as $
+  select exists (
+    select 1
+    from private.nipto_sessions s
+    join private.nipto_accounts a on a.user_id=s.user_id
+    join public.profiles p on p.id=s.user_id
+    where s.id=p_session_id and s.user_id=p_user_id
+      and s.revoked_at is null and s.expires_at>pg_catalog.now()
+      and a.status='active' and p.account_state='active'
+  );
+$;
+revoke all on function public.nipto_native_is_session_active(uuid,uuid) from public, anon, authenticated;
+grant execute on function public.nipto_native_is_session_active(uuid,uuid) to service_role;
+
 create or replace function public.nipto_native_list_sessions(p_user_id uuid)
 returns table(
   session_id uuid,
