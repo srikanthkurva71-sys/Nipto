@@ -76,8 +76,12 @@ class NiptoSessionManager {
     if (_refreshToken != null) {
       try {
         await _refreshSession();
+      } on NiptoAuthException catch (error) {
+        if (error.statusCode == 401 || error.statusCode == 400) {
+          await _clearSession();
+        }
       } catch (_) {
-        await _clearSession();
+        // Preserve the encrypted refresh token during transient network errors.
       }
     }
   }
@@ -91,8 +95,17 @@ class NiptoSessionManager {
       if (_refreshToken == null) return null;
       try {
         await _refreshSession();
-      } catch (_) {
-        await _clearSession();
+      } catch (error) {
+        if (error is NiptoAuthException &&
+            (error.statusCode == 401 || error.statusCode == 400)) {
+          await _clearSession();
+        }
+        final currentExpiry = _accessExpiresAt;
+        if (_accessToken != null &&
+            currentExpiry != null &&
+            currentExpiry.isAfter(DateTime.now())) {
+          return _accessToken;
+        }
         return null;
       }
     }
@@ -162,7 +175,7 @@ class NiptoSessionManager {
     await _storage.write(key: _recoverySecretKey, value: challengeSecret);
   }
 
-  Future<bool> checkPasswordRecoveryApproval() async {
+  Future<String?> checkPasswordRecoveryApproval() async {
     final challengeId = await _storage.read(key: _recoveryIdKey);
     final challengeSecret = await _storage.read(key: _recoverySecretKey);
     if (challengeId == null || challengeSecret == null) {
@@ -175,9 +188,9 @@ class NiptoSessionManager {
     final grant = response['reset_grant'] as String?;
     if (response['status'] == 'approved' && grant != null) {
       await _storage.write(key: _resetGrantKey, value: grant);
-      return true;
+      return grant;
     }
-    return false;
+    return null;
   }
 
   Future<void> resetPassword({
