@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -190,9 +192,9 @@ class _StatusTrayState extends State<StatusTray> {
     try {
       final userId = _client.auth.currentUser!.id;
       final path = userId + '/' + DateTime.now().microsecondsSinceEpoch.toString() + '.' + extension;
-      await _client.storage.from('statuses').uploadBinary(
+      await _client.storage.from('statuses').upload(
         path,
-        await file.readAsBytes(),
+        File(file.path),
         fileOptions: FileOptions(contentType: contentType, upsert: false),
       );
       await _client.from('statuses').insert({
