@@ -8,7 +8,7 @@ This repository is the first implementation of Nipto Social. The former ride-hai
 
 - **One identity:** people register with a unique Nipto ID and sign in with that ID and their password.
 - **Private by default where it matters:** private accounts, message membership checks, blocked-user enforcement and private media buckets.
-- **Fast and calm:** three primary destinations, lightweight chat lists, paginated feeds and lazy video playback.
+- **Fast and calm:** four primary destinations, lightweight chat lists, paginated feeds and lazy video playback.
 - **Creator-friendly:** simple status and short-video publishing, with content moderation before public distribution.
 - **Android first:** Flutter + Dart. No web product is planned for v1.
 
@@ -79,21 +79,23 @@ New users register with a recovery email, a Nipto ID and a password. Supabase Au
 
 The repository contains a Flutter Android app foundation and a live Supabase schema. Implemented app areas include Nipto ID registration/sign-in, profile editing and avatar uploads, photo posts, Nipto ID discovery and follow requests, direct/group conversation flows, text messages and basic media attachments, 24-hour statuses, Shorts upload/feed interactions, Home feed, in-app notifications, privacy controls, blocking/reporting, and private user feedback intake/history. Some flows still need deeper end-to-end, device and moderation validation.
 
-The feedback subsystem is separate from abuse reports. Signed-in users can submit app-experience ratings, bug reports, feature ideas or support requests and view their own submission status. Feedback is protected by RLS and limited to five submissions per account per 24 hours. A trusted staff-only triage console and response workflow remain outstanding.
+The feedback subsystem is separate from abuse reports. Signed-in users can submit app-experience ratings, bug reports, feature ideas or support requests and view their own submission status. Feedback is protected by RLS and limited to five submissions per account per 24 hours. A trusted staff-role backend, moderation queues, audit logging and user response notifications are implemented. A role-gated staff console and tests using provisioned adult moderator/admin accounts remain outstanding.
 
-All 21 public application tables currently have Row Level Security enabled. Anonymous table privileges were revoked and client writes were narrowed. Nine intentionally exposed SECURITY DEFINER RPCs remain authenticated-only and are monitored by the Supabase security advisor.
+All 21 public application tables currently have Row Level Security enabled. Anonymous table privileges were revoked and client writes were narrowed. Authenticated application and moderation SECURITY DEFINER RPCs are explicitly granted to signed-in users and validate access server-side; private policy helpers and staff tables are not client-readable. The Supabase advisor continues to report these authenticated RPCs for manual review.
 
 GitHub Actions runs Dart formatting, static analysis, tests and an Android debug APK build. A passing CI run proves that the checked commit builds; it does not prove complete device-level or production readiness.
 
 ## Remaining production gates
 
 - Verify the latest commit's full CI run and test critical flows on physical Android devices.
+- Verify secure encrypted session persistence against the exact Supabase Flutter SDK API; the attempted adapter was reverted after CI exposed an API mismatch.
 - Configure and test verified email recovery, Android deep links and production Auth policies.
 - Implement push delivery and notification routing.
 - Implement video scanning/transcoding, thumbnails and resilient upload processing.
-- Build staff-only feedback triage, abuse-report review and content-moderation operations.
+- Build the role-gated staff console for an appropriately staffed adult operations team; the staff backend, audit log, review RPCs and user notifications are already provisioned.
 - Complete account deletion, data export and retention workflows.
 - Add automated multi-user RLS/storage tests, accessibility checks, performance tests and independent security review.
+- Add the original logo PNG as repository assets and generate the real Android launcher/splash artwork; the current login mark is a vector approximation.
 - Configure release signing, Play Console compliance and a production AAB.
 
 Do not describe Nipto as production-ready until these gates have passed.
