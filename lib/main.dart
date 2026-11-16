@@ -21,14 +21,13 @@ Future<void> main() async {
     return;
   }
 
-  await NiptoSessionManager.instance.initialize(_supabaseUrl, _supabasePublishableKey);
-
   await Supabase.initialize(
     url: _supabaseUrl,
     publishableKey: _supabasePublishableKey,
-    accessToken: NiptoSessionManager.instance.accessToken,
     debug: false,
   );
+
+  await NiptoSessionManager.instance.initialize(_supabaseUrl, _supabasePublishableKey);
 
   runApp(const NiptoApp());
 }
