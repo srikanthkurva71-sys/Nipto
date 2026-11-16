@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/nipto_session_manager.dart';
 import '../theme/nipto_theme.dart';
-import 'auth_screen.dart';
+import '../widgets/nipto_logo_mark.dart';
 
 class PasswordRecoveryScreen extends StatefulWidget {
   const PasswordRecoveryScreen({
