@@ -170,6 +170,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           final title = payload['title']?.toString() ?? 'a group';
           return '$name invited you to $title.';
         }
+        if (payload['kind'] == 'feedback_update') {
+          final status = payload['status']?.toString() ?? 'updated';
+          final response = payload['response']?.toString();
+          return response == null || response.trim().isEmpty
+              ? 'Your feedback is now $status.'
+              : 'Your feedback is now $status: $response';
+        }
+        if (payload['kind'] == 'content_moderation') {
+          final type = payload['content_type']?.toString() ?? 'content';
+          final decision = payload['decision']?.toString() ?? 'reviewed';
+          return 'Your $type was $decision.';
+        }
+        if (payload['kind'] == 'report_update') {
+          final status = payload['status']?.toString() ?? 'updated';
+          return 'Your report is now $status.';
+        }
         return 'You have a Nipto update.';
     }
   }
