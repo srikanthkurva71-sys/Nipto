@@ -74,9 +74,10 @@ jobs:
         shell: bash
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          printf 'y\\n' | "$SDKMANAGER" --licenses >/dev/null
           for attempt in 1 2 3; do
-            if yes | "$SDKMANAGER" --install "ndk;28.2.13676358"; then
-              exit 0
+            if "$SDKMANAGER" --install "ndk;28.2.13676358"; then
+              test -x "$ANDROID_HOME/ndk/28.2.13676358/ndk-build" && exit 0
             fi
             echo "NDK installation attempt $attempt failed; retrying after cleanup."
             rm -rf "$ANDROID_HOME/ndk/28.2.13676358"
