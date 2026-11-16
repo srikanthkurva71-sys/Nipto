@@ -97,16 +97,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
+    var visibility = 'followers';
     final captionController = TextEditingController();
     final caption = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
         title: const Text('Add a caption'),
-        content: TextField(
-          controller: captionController,
-          maxLength: 2200,
-          maxLines: 4,
-          decoration: const InputDecoration(hintText: 'Write something about this photo…'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: captionController,
+              maxLength: 2200,
+              maxLines: 4,
+              decoration: const InputDecoration(hintText: 'Write something about this photo…'),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: visibility,
+              decoration: const InputDecoration(labelText: 'Who can see this post'),
+              items: const [
+                DropdownMenuItem(value: 'followers', child: Text('Followers')),
+                DropdownMenuItem(value: 'public', child: Text('Everyone')),
+              ],
+              onChanged: (value) {
+                if (value != null) setDialogState(() => visibility = value);
+              },
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -142,7 +161,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'caption': caption,
         'media_path': path,
         'media_type': 'image',
-        'visibility': 'followers',
+        'visibility': visibility,
       });
 
       if (!mounted) return;
