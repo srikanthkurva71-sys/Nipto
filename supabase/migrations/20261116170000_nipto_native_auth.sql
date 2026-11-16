@@ -548,8 +548,20 @@ as $$
   select c.id,c.owner_id,p.nipto_id,p.display_name,c.created_at,c.expires_at
   from private.nipto_recovery_challenges c
   join public.profiles p on p.id=c.owner_id
+  join private.nipto_accounts owner_account
+    on owner_account.user_id=c.owner_id and owner_account.status='active'
+  join public.account_recovery_contacts rc
+    on rc.owner_id=c.owner_id
+    and rc.recovery_user_id=c.recovery_user_id
+    and rc.status='accepted'
+  join public.profiles recovery_profile
+    on recovery_profile.id=c.recovery_user_id
+  join private.nipto_accounts recovery_account
+    on recovery_account.user_id=c.recovery_user_id and recovery_account.status='active'
   where c.recovery_user_id=p_recovery_user_id
     and c.status='pending' and c.expires_at>pg_catalog.now()
+    and p.account_state='active' and recovery_profile.account_state='active'
+    and not private.is_blocked_between(c.owner_id,c.recovery_user_id)
   order by c.created_at desc limit 10;
 $$;
 revoke all on function public.nipto_native_list_recovery_requests(uuid) from public, anon, authenticated;
