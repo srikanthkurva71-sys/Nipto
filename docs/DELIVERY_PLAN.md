@@ -29,7 +29,8 @@
 - [x] Text/image/video status publishing.
 - [x] 24-hour visibility expiry filtering and viewer inserts.
 - [x] Follower-only audience default.
-- [ ] Add cleanup job, close-friends audience UI and complete viewer-list screen.
+- [x] Add owner-only status viewer list with RLS-protected viewer identities.
+- [ ] Add expiry cleanup job and close-friends audience UI.
 
 ## Phase 4 — Shorts and posts
 - [x] Image post picker, caption, visibility choice and private upload.
