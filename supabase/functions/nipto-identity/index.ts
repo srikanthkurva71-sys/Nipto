@@ -51,6 +51,12 @@ function base64url(bytes: Uint8Array): string {
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
+function base64Standard(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
 function fromBase64url(value: string): Uint8Array {
   const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
   const binary = atob(normalized + "=".repeat((4 - normalized.length % 4) % 4));
@@ -457,6 +463,47 @@ async function route(request: Request): Promise<Response> {
     const claims = await verifyAccessToken(request);
     await rpc("nipto_native_revoke_all_sessions", { p_user_id: claims.sub });
     return json({ ok: true });
+  }
+  if (path.endsWith("/turn-credentials") && method === "GET") {
+    const claims = await verifyAccessToken(request);
+    await enforceRateLimit(request, "turn-credentials:" + claims.nipto_id);
+    const sharedSecret = Deno.env.get("TURN_SHARED_SECRET");
+    const turnUrls = (Deno.env.get("TURN_URLS") ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter((value) => value.startsWith("turn:") || value.startsWith("turns:"));
+    const stunUrl = Deno.env.get("TURN_STUN_URL") ?? "";
+    const iceServers: Json[] = [];
+    if (stunUrl.startsWith("stun:")) iceServers.push({ urls: stunUrl });
+
+    let expiresAt: number | null = null;
+    if (sharedSecret && turnUrls.length > 0) {
+      expiresAt = Math.floor(Date.now() / 1000) + 3_600;
+      const username = expiresAt + ":" + claims.sub;
+      const key = await crypto.subtle.importKey(
+        "raw",
+        encoder.encode(sharedSecret),
+        { name: "HMAC", hash: "SHA-1" },
+        false,
+        ["sign"],
+      );
+      const signature = await crypto.subtle.sign(
+        "HMAC",
+        key,
+        encoder.encode(username),
+      );
+      iceServers.push({
+        urls: turnUrls,
+        username,
+        credential: base64Standard(new Uint8Array(signature)),
+        credentialType: "password",
+      });
+    }
+    return json({
+      ice_servers: iceServers,
+      turn_available: Boolean(sharedSecret && turnUrls.length > 0),
+      expires_at: expiresAt,
+    });
   }
   if (path.endsWith("/userinfo") && method === "GET") {
     const claims = await verifyAccessToken(request);
