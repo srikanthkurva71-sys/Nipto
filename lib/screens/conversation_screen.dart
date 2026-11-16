@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,7 +5,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/nipto_theme.dart';
-import 'call_screen.dart';
 
 class ConversationScreen extends StatefulWidget {
   const ConversationScreen({
@@ -37,20 +35,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
   bool _markReadAgain = false;
   String? _lastObservedNewestMessageId;
   late final Stream<List<Map<String, dynamic>>> _messagesStream;
-  Timer? _incomingCallTimer;
-  bool _incomingDialogOpen = false;
-  final Set<String> _handledIncomingCalls = <String>{};
 
   SupabaseClient get _client => Supabase.instance.client;
 
   @override
   void initState() {
     super.initState();
-    _incomingCallTimer = Timer.periodic(
-      const Duration(seconds: 5),
-      (_) => _pollIncomingCalls(),
-    );
-    unawaited(_pollIncomingCalls());
     _messagesStream = _client
         .from('messages')
         .stream(primaryKey: ['id'])
@@ -62,7 +52,6 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   @override
   void dispose() {
-    _incomingCallTimer?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -309,67 +298,6 @@ class _ConversationScreenState extends State<ConversationScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message)),
       );
-    }
-  }
-
-  Future<void> _pollIncomingCalls() async {
-    if (!mounted || _incomingDialogOpen || _client.auth.currentUser == null) return;
-    try {
-      final result = await _client.rpc('list_my_incoming_calls');
-      final calls = List<Map<String, dynamic>>.from(result as List);
-      for (final call in calls) {
-        final callId = call['call_id']?.toString();
-        if (call['conversation_id']?.toString() != widget.conversationId ||
-            callId == null ||
-            _handledIncomingCalls.contains(callId)) {
-          continue;
-        }
-        _handledIncomingCalls.add(callId);
-        _incomingDialogOpen = true;
-        if (!mounted) return;
-        final accepted = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (dialogContext) => AlertDialog(
-            title: Text(
-              call['media_type'] == 'video' ? 'Incoming video call' : 'Incoming voice call',
-            ),
-            content: Text(
-              (call['caller_display_name'] as String? ?? 'Nipto user') +
-                  ' is calling you.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Decline'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Accept'),
-              ),
-            ],
-          ),
-        );
-        _incomingDialogOpen = false;
-        if (!mounted) return;
-        if (accepted == true) {
-          await Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => CallScreen(
-                callId: callId,
-                mediaType: call['media_type'] as String? ?? 'audio',
-                isCaller: false,
-                peerTitle: call['caller_display_name'] as String? ?? 'Nipto user',
-              ),
-            ),
-          );
-        } else {
-          await _client.rpc('decline_nipto_call', params: {'p_call_id': callId});
-        }
-        return;
-      }
-    } catch (_) {
-      // Incoming-call polling is best-effort while this conversation is open.
     }
   }
 
