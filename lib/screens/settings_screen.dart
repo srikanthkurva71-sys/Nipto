@@ -173,6 +173,98 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _changePassword() async {
+    final current = TextEditingController();
+    final next = TextEditingController();
+    final confirm = TextEditingController();
+    String? error;
+    var saving = false;
+    final changed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Change Nipto password'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: current,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'Current password'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: next,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'New password (12+ characters)'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: confirm,
+                  obscureText: true,
+                  decoration: const InputDecoration(labelText: 'Confirm new password'),
+                ),
+                if (error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(error!, style: const TextStyle(color: NiptoColors.danger)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: saving
+                  ? null
+                  : () async {
+                      if (next.text.length < 12) {
+                        setDialogState(() => error = 'Use at least 12 characters.');
+                        return;
+                      }
+                      if (next.text != confirm.text) {
+                        setDialogState(() => error = 'The new passwords do not match.');
+                        return;
+                      }
+                      setDialogState(() {
+                        saving = true;
+                        error = null;
+                      });
+                      try {
+                        await NiptoSessionManager.instance.changePassword(
+                          currentPassword: current.text,
+                          newPassword: next.text,
+                        );
+                        if (dialogContext.mounted) Navigator.pop(dialogContext, true);
+                      } on NiptoAuthException catch (exception) {
+                        setDialogState(() => error = exception.message);
+                      } catch (_) {
+                        setDialogState(() => error = 'Could not change your password. Try again.');
+                      } finally {
+                        if (dialogContext.mounted) setDialogState(() => saving = false);
+                      }
+                    },
+              child: saving
+                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Update password'),
+            ),
+          ],
+        ),
+      ),
+    );
+    current.dispose();
+    next.dispose();
+    confirm.dispose();
+    if (changed == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password changed. Sign in again on this device.')),
+      );
+    }
+  }
+
   Future<void> _signOut() async {
     final shouldSignOut = await showDialog<bool>(
       context: context,
@@ -380,16 +472,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ListTile(
                     leading: const Icon(Icons.lock_reset_rounded),
                     title: const Text('Password and recovery'),
-                    subtitle: const Text('Use the private account email registered with Supabase Auth to reset your password.'),
-                    onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Use Forgot password on the sign-in screen to reset your password.')),
-                    ),
+                    subtitle: const Text('Change your Nipto password or recover it through your trusted Nipto account.'),
+                    onTap: _changePassword,
                   ),
                   const Divider(height: 1),
                   const ListTile(
                     leading: Icon(Icons.verified_user_outlined),
                     title: Text('Secure sign-in'),
-                    subtitle: Text('Nipto uses Supabase Auth sessions and server-verified passwords.'),
+                    subtitle: Text('Nipto ID and password are verified by Nipto. Sessions use signed, short-lived tokens.'),
                   ),
                   const Divider(height: 1),
                   ListTile(
