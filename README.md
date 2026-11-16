@@ -70,6 +70,12 @@ flutter build apk --release --dart-define=SUPABASE_URL=https://advmjribduqzyuwkt
 
 The publishable key is intended for client applications; RLS is the security boundary. Secret/service-role keys are backend-only.
 
+## Run from VS Code
+
+Open this repository folder in VS Code, install the Flutter and Dart extensions, connect an Android phone with USB debugging enabled (or start an Android emulator), and select that Android device in the VS Code device picker. Open Run and Debug and choose **Nipto (Android)**, then press F5. The checked-in `.vscode/launch.json` supplies the Supabase project URL and its client-safe publishable key through Dart defines.
+
+Nipto v1 is an Android app, not a web product. A browser preview at a `localhost` address is not the supported release target; use an Android emulator or physical Android device for feature and plugin testing. Never replace the publishable key with a Supabase secret or service-role key.
+
 ## Supabase state
 
 The initial social schema and security migrations are applied to the connected Nipto Supabase project. See supabase/migrations/. The nipto-login Edge Function is deployed with JWT verification disabled because it is the unauthenticated sign-in endpoint; it has its own input validation and database-backed attempt limiting.
