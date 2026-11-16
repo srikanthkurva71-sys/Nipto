@@ -28,6 +28,19 @@
 - Public feed visibility also respects private-account state.
 - User content is pending moderation by default; client roles cannot approve content.
 
+## Column-level write permissions
+
+Client roles receive column-scoped write grants in addition to RLS:
+- Profile edits are limited to display name, bio, avatar path and privacy choice; Nipto ID and account state are not client-editable.
+- Follow requests can create only the follower/following pair; the database trigger controls pending versus accepted state.
+- Post and Short creators can edit captions and visibility, but cannot change ownership, media object paths or moderation state.
+- Statuses are immutable after creation; owners can delete them.
+- Message updates cannot change sender, conversation, message type or media path.
+- Feedback clients can submit and read their own records but cannot change workflow status or delete submissions.
+- Report clients can submit and read their own reports but cannot alter report ownership or contents later.
+
+These grants prevent a valid row owner from changing server-controlled metadata merely because an RLS policy permits access to that row.
+
 ## Media
 
 Private buckets: avatars, chat-media, statuses, posts and shorts.
