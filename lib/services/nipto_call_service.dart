@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'nipto_call_signal_validator.dart';
+
 enum NiptoCallPhase { preparing, ringing, connecting, connected, ended, failed }
 
 class NiptoCallService {
@@ -213,7 +215,7 @@ class NiptoCallService {
       } else if (type == 'offer' && !isCaller) {
         final sdp = payload['sdp'];
         final sdpType = payload['sdpType'];
-        if (sdp is! String || sdp.isEmpty || sdp.length > 65536 || sdpType != 'offer') return;
+        if (!NiptoCallSignalValidator.isDescriptionPayload(payload, 'offer')) return;
         await _peer!.setRemoteDescription(RTCSessionDescription(sdp, sdpType));
         _remoteDescriptionSet = true;
         await _flushCandidates();
@@ -228,7 +230,7 @@ class NiptoCallService {
       } else if (type == 'answer' && isCaller) {
         final sdp = payload['sdp'];
         final sdpType = payload['sdpType'];
-        if (sdp is! String || sdp.isEmpty || sdp.length > 65536 || sdpType != 'answer') return;
+        if (!NiptoCallSignalValidator.isDescriptionPayload(payload, 'answer')) return;
         await _peer!.setRemoteDescription(RTCSessionDescription(sdp, sdpType));
         _remoteDescriptionSet = true;
         await _flushCandidates();
@@ -237,8 +239,9 @@ class NiptoCallService {
         onPhaseChanged(NiptoCallPhase.connecting);
       } else if (type == 'ice') {
         final candidate = payload['candidate'];
-        if (candidate is! String || candidate.isEmpty || candidate.length > 4096) return;
-        if (!_remoteDescriptionSet && _pendingCandidates.length >= 256) return;
+        if (!NiptoCallSignalValidator.isIceCandidatePayload(payload)) return;
+        if (!_remoteDescriptionSet &&
+            !NiptoCallSignalValidator.canQueueIceCandidate(_pendingCandidates.length)) return;
         final index = payload['sdpMLineIndex'];
         final ice = RTCIceCandidate(
           candidate,
