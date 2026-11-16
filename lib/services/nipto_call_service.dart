@@ -233,6 +233,10 @@ class NiptoCallService {
     }
   }
 
+  Future<void> setSpeakerphoneEnabled(bool enabled) async {
+    await Helper.setSpeakerphoneOn(enabled);
+  }
+
   Future<void> switchCamera() async {
     final tracks = _localStream?.getVideoTracks() ?? <MediaStreamTrack>[];
     if (tracks.isNotEmpty) await Helper.switchCamera(tracks.first);
@@ -272,6 +276,11 @@ class NiptoCallService {
         await track.stop();
       }
       await stream.dispose();
+    }
+    try {
+      await Helper.clearAndroidCommunicationDevice();
+    } catch (_) {
+      // Audio routing cleanup is best-effort across supported Android versions.
     }
   }
 
