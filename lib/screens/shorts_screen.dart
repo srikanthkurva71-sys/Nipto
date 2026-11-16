@@ -80,6 +80,34 @@ class _ShortsScreenState extends State<ShortsScreen> {
       return;
     }
 
+    final captionController = TextEditingController();
+    final caption = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Caption your Short'),
+        content: TextField(
+          controller: captionController,
+          maxLength: 2200,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            hintText: 'Add a caption…',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, captionController.text.trim()),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    captionController.dispose();
+    if (caption == null || !mounted) return;
+
     setState(() => _uploading = true);
     VideoPlayerController? preview;
     try {
@@ -102,7 +130,7 @@ class _ShortsScreenState extends State<ShortsScreen> {
       await _client.from('shorts').insert({
         'creator_id': userId,
         'video_path': path,
-        'caption': '',
+        'caption': caption,
         'duration_seconds': duration,
         'visibility': 'followers',
       });
