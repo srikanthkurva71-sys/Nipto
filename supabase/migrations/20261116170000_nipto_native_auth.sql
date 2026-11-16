@@ -97,6 +97,88 @@ alter table public.shorts alter column visibility set default 'followers';
 
 -- Retire the legacy Nipto-ID-to-email lookup used by the old login function.
 drop function if exists public.resolve_nipto_login(text);
+
+-- Supabase still has its own Auth issuer enabled. Restrict every application
+-- identity check to the Nipto issuer so a legacy Supabase Auth JWT cannot pass
+-- application RLS or SECURITY DEFINER RPCs during the migration window.
+create or replace function private.nipto_uid()
+returns uuid
+language sql
+stable
+security invoker
+set search_path=''
+as $
+  select case
+    when auth.jwt()->>'iss' = 'https://advmjribduqzyuwktkod.supabase.co/functions/v1/nipto-identity'
+    then auth.uid()
+    else null
+  end;
+$;
+revoke all on function private.nipto_uid() from public, anon;
+grant execute on function private.nipto_uid() to authenticated, service_role;
+
+-- Replace auth.uid() with the issuer-checked helper in every existing public
+-- SECURITY DEFINER function that accepts authenticated callers. This preserves
+-- function behavior for Nipto JWTs while rejecting legacy Supabase Auth tokens.
+do $
+declare
+  v_function record;
+  v_definition text;
+begin
+  for v_function in
+    select p.oid
+    from pg_proc p
+    join pg_namespace n on n.oid=p.pronamespace
+    where n.nspname='public'
+      and p.prosecdef
+      and has_function_privilege('authenticated',p.oid,'EXECUTE')
+      and position('auth.uid()' in lower(pg_catalog.pg_get_functiondef(p.oid))) > 0
+  loop
+    v_definition := pg_catalog.pg_get_functiondef(v_function.oid);
+    v_definition := replace(v_definition, 'auth.uid()', 'private.nipto_uid()');
+    execute v_definition;
+  end loop;
+end;
+$;
+
+-- Apply an issuer guard as a restrictive policy to every public table with RLS.
+-- Existing permissive ownership/visibility policies remain in place and are
+-- ANDed with this issuer requirement.
+do $
+declare
+  v_table record;
+begin
+  for v_table in
+    select schemaname, tablename
+    from pg_tables
+    where schemaname='public' and rowsecurity
+  loop
+    execute format(
+      'drop policy if exists nipto_issuer_guard on %I.%I',
+      v_table.schemaname, v_table.tablename
+    );
+    execute format(
+      'create policy nipto_issuer_guard on %I.%I as restrictive for all to authenticated using (private.nipto_uid() is not null) with check (private.nipto_uid() is not null)',
+      v_table.schemaname, v_table.tablename
+    );
+  end loop;
+end;
+$;
+
+-- Storage and Realtime also accept third-party JWTs; constrain their
+-- authenticated policies to the same Nipto issuer.
+do $
+begin
+  if to_regclass('storage.objects') is not null then
+    execute 'drop policy if exists nipto_issuer_guard on storage.objects';
+    execute 'create policy nipto_issuer_guard on storage.objects as restrictive for all to authenticated using (private.nipto_uid() is not null) with check (private.nipto_uid() is not null)';
+  end if;
+  if to_regclass('realtime.messages') is not null then
+    execute 'drop policy if exists nipto_issuer_guard on realtime.messages';
+    execute 'create policy nipto_issuer_guard on realtime.messages as restrictive for all to authenticated using (private.nipto_uid() is not null) with check (private.nipto_uid() is not null)';
+  end if;
+end;
+$;
 revoke all on function public.request_recovery_contact(text) from public, anon, authenticated;
 revoke all on function public.respond_recovery_contact(uuid, boolean) from public, anon, authenticated;
 
