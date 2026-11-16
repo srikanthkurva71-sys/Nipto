@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'screens/account_migration_screen.dart';
 import 'screens/auth_screen.dart';
 import 'screens/main_shell.dart';
 import 'services/nipto_session_manager.dart';
@@ -29,9 +30,9 @@ class AuthGate extends StatelessWidget {
       stream: sessions.changes,
       initialData: sessions.currentSession,
       builder: (context, snapshot) {
-        return snapshot.data == null
-            ? const AuthScreen()
-            : const MainShell();
+        if (snapshot.data != null) return const MainShell();
+        if (sessions.hasLegacySession) return const AccountMigrationScreen();
+        return const AuthScreen();
       },
     );
   }
