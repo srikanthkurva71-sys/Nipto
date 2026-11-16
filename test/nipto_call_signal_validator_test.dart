@@ -31,7 +31,7 @@ void main() {
       expect(
         NiptoCallSignalValidator.isDescriptionPayload(
           {
-            'sdp': 'x' * (NiptoCallSignalValidator.maxSdpLength + 1),
+            'sdp': List<String>.filled(NiptoCallSignalValidator.maxSdpLength + 1, 'x').join(),
             'sdpType': 'offer',
           },
           'offer',
@@ -65,7 +65,7 @@ void main() {
       );
       expect(
         NiptoCallSignalValidator.isIceCandidatePayload({
-          'candidate': 'x' * (NiptoCallSignalValidator.maxIceCandidateLength + 1),
+          'candidate': List<String>.filled(NiptoCallSignalValidator.maxIceCandidateLength + 1, 'x').join(),
         }),
         isFalse,
       );
@@ -79,7 +79,7 @@ void main() {
       expect(
         NiptoCallSignalValidator.isIceCandidatePayload({
           'candidate': 'candidate:1',
-          'sdpMid': 'x' * (NiptoCallSignalValidator.maxSdpMidLength + 1),
+          'sdpMid': List<String>.filled(NiptoCallSignalValidator.maxSdpMidLength + 1, 'x').join(),
         }),
         isFalse,
       );
