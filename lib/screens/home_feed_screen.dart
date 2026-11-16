@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/nipto_theme.dart';
@@ -288,7 +289,18 @@ class _FeedPostCardState extends State<_FeedPostCard> {
           IconButton(tooltip: 'Comments', onPressed: widget.onComments, icon: const Icon(Icons.mode_comment_outlined)),
           Text(comments.toString(), style: const TextStyle(fontSize: 12, color: NiptoColors.muted)),
           const Spacer(),
-          const Icon(Icons.share_outlined, color: NiptoColors.muted),
+          IconButton(
+            tooltip: 'Copy post ID',
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: widget.post['id'] as String));
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Post ID copied.')),
+                );
+              }
+            },
+            icon: const Icon(Icons.link_rounded),
+          ),
           const SizedBox(width: 8),
         ]),
       ),
