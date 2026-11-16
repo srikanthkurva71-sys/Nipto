@@ -89,6 +89,11 @@ revoke all on private.nipto_accounts, private.nipto_sessions,
 -- Existing profiles used auth.users as their UUID source. Native Nipto identities
 -- create profile UUIDs directly; keep old auth.users rows untouched.
 alter table public.profiles drop constraint if exists profiles_id_fkey;
+-- Safer defaults for newly created accounts and media. Existing explicit
+-- visibility choices are preserved.
+alter table public.profiles alter column is_private set default true;
+alter table public.posts alter column visibility set default 'followers';
+alter table public.shorts alter column visibility set default 'followers';
 
 -- Retire the legacy Nipto-ID-to-email lookup used by the old login function.
 drop function if exists public.resolve_nipto_login(text);
