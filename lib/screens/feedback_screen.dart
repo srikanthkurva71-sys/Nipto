@@ -57,7 +57,6 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         'subject': _subject.text.trim(),
         'message': _message.text.trim(),
         'platform': 'android',
-        'status': 'received',
       });
       if (!mounted) return;
       _subject.clear();
