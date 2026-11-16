@@ -21,11 +21,19 @@ type Claims = {
   sid: string;
   nipto_id: string;
   display_name: string;
+  iat: number;
   exp: number;
+  jti: string;
   iss: string;
   aud: string;
   role: string;
 };
+
+class ApiError extends Error {
+  constructor(message: string, readonly statusCode: number) {
+    super(message);
+  }
+}
 
 function env(name: string): string {
   const value = Deno.env.get(name);
@@ -143,12 +151,12 @@ function verifyKey(): Promise<CryptoKey> {
 async function verifyAccessToken(request: Request): Promise<Claims> {
   const authorization = request.headers.get("authorization") ?? "";
   const match = /^Bearer ([A-Za-z0-9._-]+)$/.exec(authorization);
-  if (!match) throw new Error("Authentication required");
+  if (!match) throw new ApiError("Authentication required", 401);
   const parts = match[1].split(".");
-  if (parts.length !== 3) throw new Error("Invalid session");
+  if (parts.length !== 3) throw new ApiError("Invalid session", 401);
   const header = JSON.parse(new TextDecoder().decode(fromBase64url(parts[0]))) as Json;
   const claims = JSON.parse(new TextDecoder().decode(fromBase64url(parts[1]))) as Claims;
-  if (header.alg !== "ES256" || header.kid !== keyId()) throw new Error("Invalid session");
+  if (header.alg !== "ES256" || header.kid !== keyId()) throw new ApiError("Invalid session", 401);
   const valid = await crypto.subtle.verify(
     { name: "ECDSA", hash: "SHA-256" },
     await verifyKey(),
@@ -163,9 +171,12 @@ async function verifyAccessToken(request: Request): Promise<Claims> {
       || !isValidNiptoId(claims.nipto_id)
       || typeof claims.display_name !== "string" || claims.display_name.length < 1
       || claims.display_name.length > 50
+      || typeof claims.iat !== "number" || claims.iat > now + 30
+      || claims.iat < now - ACCESS_TOKEN_SECONDS - 60
+      || typeof claims.jti !== "string" || claims.jti.length < 20
       || typeof claims.exp !== "number" || claims.exp <= now
       || claims.exp > now + ACCESS_TOKEN_SECONDS + 60) {
-    throw new Error("Invalid or expired session");
+    throw new ApiError("Invalid or expired session", 401);
   }
   return claims;
 }
@@ -221,9 +232,11 @@ async function verifyPassword(password: string, hash: string): Promise<boolean> 
 }
 
 async function enforceRateLimit(request: Request, identifier: string): Promise<void> {
+  const forwarded = request.headers.get("x-forwarded-for");
+  const trustedForwardedIp = forwarded?.split(",").at(-1)?.trim();
   const ip = request.headers.get("cf-connecting-ip")
     ?? request.headers.get("x-real-ip")
-    ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+    ?? trustedForwardedIp
     ?? "unknown";
   const keyHash = await hmacHex(env("SUPABASE_SERVICE_ROLE_KEY"), ip + "\u0000" + identifier);
   const allowed = await rpc("consume_nipto_login_attempt", { p_key_hash: keyHash });
@@ -573,6 +586,7 @@ Deno.serve(async (request: Request) => {
     const response = await route(request);
     return response;
   } catch (error) {
+    if (error instanceof ApiError) return json({ error: error.message }, error.statusCode);
     if (error instanceof SyntaxError) return json({ error: "Invalid request." }, 400);
     if (error instanceof Error && error.message === "RATE_LIMITED") {
       return new Response(JSON.stringify({ error: "Too many attempts. Try again later." }), {
