@@ -203,6 +203,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         if (payload['kind'] == 'recovery_accepted') {
           return '$name accepted your recovery-contact request.';
         }
+        if (payload['kind'] == 'recovery_rejected') {
+          return '$name declined your recovery-contact request.';
+        }
         if (payload['kind'] == 'password_recovery_request') {
           return '$name asked you to approve a password reset. Review it in Recovery Nipto account settings.';
         }
