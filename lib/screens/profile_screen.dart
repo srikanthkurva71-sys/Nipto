@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/nipto_theme.dart';
 import 'settings_screen.dart';
+import 'connections_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -196,9 +197,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          _Count(label: 'Followers', count: data.followers),
+                          _Count(
+                            label: 'Followers',
+                            count: data.followers,
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const ConnectionsScreen(direction: 'followers'),
+                              ),
+                            ),
+                          ),
                           const SizedBox(width: 42),
-                          _Count(label: 'Following', count: data.following),
+                          _Count(
+                            label: 'Following',
+                            count: data.following,
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const ConnectionsScreen(direction: 'following'),
+                              ),
+                            ),
+                          ),
                           const SizedBox(width: 42),
                           _Count(label: 'Posts', count: data.posts.length),
                         ],
@@ -298,22 +315,30 @@ class _ProfileData {
 }
 
 class _Count extends StatelessWidget {
-  const _Count({required this.label, required this.count});
+  const _Count({required this.label, required this.count, this.onTap});
 
   final String label;
   final int count;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Text(
-          count.toString(),
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Column(
+          children: [
+            Text(
+              count.toString(),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 2),
+            Text(label, style: const TextStyle(color: NiptoColors.muted, fontSize: 12)),
+          ],
         ),
-        const SizedBox(height: 2),
-        Text(label, style: const TextStyle(color: NiptoColors.muted, fontSize: 12)),
-      ],
+      ),
     );
   }
 }
