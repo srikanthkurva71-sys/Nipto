@@ -34,6 +34,7 @@ class NiptoCallService {
   Future<void> _signalQueue = Future<void>.value();
   Timer? _ringTimeout;
   Timer? _connectTimeout;
+  Timer? _disconnectTimeout;
   Completer<void>? _remoteReady;
 
   static const Map<String, dynamic> _rtcConfiguration = {
@@ -120,6 +121,7 @@ class NiptoCallService {
       if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
         _ringTimeout?.cancel();
         _connectTimeout?.cancel();
+        _disconnectTimeout?.cancel();
         onPhaseChanged(NiptoCallPhase.connected);
       } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
         onError('The call connection failed. Check your network and try again.');
@@ -127,6 +129,14 @@ class NiptoCallService {
         unawaited(end(reason: 'connection_lost'));
       } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
         onPhaseChanged(NiptoCallPhase.connecting);
+        _disconnectTimeout?.cancel();
+        _disconnectTimeout = Timer(const Duration(seconds: 10), () {
+          if (!_closed && !isConnected) {
+            onError('The call lost its network connection.');
+            onPhaseChanged(NiptoCallPhase.failed);
+            unawaited(end(reason: 'connection_lost'));
+          }
+        });
       }
     };
 
@@ -271,6 +281,7 @@ class NiptoCallService {
     if (_closed) return;
     _ringTimeout?.cancel();
     _connectTimeout?.cancel();
+    _disconnectTimeout?.cancel();
     try {
       await _sendSignal({'type': 'hangup'});
       await _client.rpc('end_nipto_call', params: {
@@ -290,6 +301,7 @@ class NiptoCallService {
     _closed = true;
     _ringTimeout?.cancel();
     _connectTimeout?.cancel();
+    _disconnectTimeout?.cancel();
     final channel = _channel;
     _channel = null;
     if (channel != null) await _client.removeChannel(channel);
