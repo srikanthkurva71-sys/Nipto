@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
+import '../services/nipto_session_manager.dart';
 import '../theme/nipto_theme.dart';
+import 'password_recovery_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -14,7 +14,6 @@ class _AuthScreenState extends State<AuthScreen> {
   final _formKey = GlobalKey<FormState>();
   final _niptoId = TextEditingController();
   final _displayName = TextEditingController();
-  final _accountEmail = TextEditingController();
   final _password = TextEditingController();
   final _confirmPassword = TextEditingController();
   final _recoveryNiptoId = TextEditingController();
@@ -25,13 +24,10 @@ class _AuthScreenState extends State<AuthScreen> {
   String? _notice;
   bool _noticeIsError = false;
 
-  SupabaseClient get _client => Supabase.instance.client;
-
   @override
   void dispose() {
     _niptoId.dispose();
     _displayName.dispose();
-    _accountEmail.dispose();
     _password.dispose();
     _confirmPassword.dispose();
     _recoveryNiptoId.dispose();
@@ -50,91 +46,37 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate() || _busy) return;
     setState(() {
       _busy = true;
       _notice = null;
     });
 
     try {
-      final handle = _niptoId.text.trim().toLowerCase();
+      final handle = _niptoId.text.trim().toLowerCase().replaceFirst(RegExp(r'^@'), '');
+      final sessions = NiptoSessionManager.instance;
       if (_creatingAccount) {
-        final response = await _client.auth.signUp(
-          email: _accountEmail.text.trim(),
+        await sessions.register(
+          niptoId: handle,
+          displayName: _displayName.text.trim(),
           password: _password.text,
-          data: {
-            'nipto_id': handle,
-            'display_name': _displayName.text.trim(),
-          },
+          recoveryNiptoId: _recoveryNiptoId.text.trim().isEmpty
+              ? null
+              : _recoveryNiptoId.text.trim().toLowerCase().replaceFirst(RegExp(r'^@'), ''),
         );
-
-        final recoveryId = _recoveryNiptoId.text.trim().toLowerCase().replaceFirst(RegExp(r'^@'), '');
-        var recoveryRequestFailed = false;
-        if (response.session != null && recoveryId.isNotEmpty) {
-          try {
-            await _client.rpc(
-              'request_recovery_contact',
-              params: {'p_nipto_id': recoveryId},
-            );
-          } catch (_) {
-            recoveryRequestFailed = true;
-          }
-        }
-
-        if (!mounted) return;
-        if (response.session == null) {
-          setState(() {
-            _notice = 'Account created. Verify your email, then open Settings → Security → Recovery Nipto account to add your trusted contact.';
-            _noticeIsError = false;
-          });
-        } else if (recoveryRequestFailed) {
-          setState(() {
-            _notice = 'Account created, but the recovery request could not be sent. You can retry it in Settings → Security → Recovery Nipto account.';
-            _noticeIsError = true;
-          });
-        } else if (recoveryId.isNotEmpty) {
-          setState(() {
-            _notice = 'Account created. Your recovery-contact request has been sent for approval.';
-            _noticeIsError = false;
-          });
-        }
       } else {
-        final response = await _client.functions.invoke(
-          'nipto-login',
-          body: {
-            'nipto_id': handle,
-            'password': _password.text,
-          },
-        );
-
-        final data = response.data;
-        if (data is! Map || data['refresh_token'] is! String) {
-          throw const FormatException('The sign-in service returned an invalid response.');
-        }
-        await _client.auth.setSession(data['refresh_token'] as String);
+        await sessions.signIn(niptoId: handle, password: _password.text);
       }
-    } on AuthException catch (error) {
+    } on NiptoAuthException catch (error) {
       if (!mounted) return;
       setState(() {
         _notice = error.message;
         _noticeIsError = true;
       });
-    } on FunctionException catch (error) {
-      if (!mounted) return;
-      final details = error.details;
-      final message = details is Map && details['error'] is String
-          ? details['error'] as String
-          : 'Could not sign in. Check your connection and try again.';
-      setState(() {
-        _notice = message;
-        _noticeIsError = true;
-      });
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
-        _notice = error is FormatException
-            ? error.message
-            : 'Something went wrong. Please try again.';
+        _notice = 'Nipto could not complete your request. Check your connection and try again.';
         _noticeIsError = true;
       });
     } finally {
@@ -143,48 +85,105 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _recoverPassword() async {
-    final accountEmailController = TextEditingController(text: _accountEmail.text.trim());
-    final accountEmail = await showDialog<String>(
+    final niptoIdController = TextEditingController();
+    final niptoId = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Reset your password'),
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Recover your Nipto account'),
         content: TextField(
-          controller: accountEmailController,
-          keyboardType: TextInputType.emailAddress,
-          decoration: const InputDecoration(
-            labelText: 'Account email',
-            hintText: 'you@example.com',
-          ),
+          controller: niptoIdController,
+          autocorrect: false,
+          textCapitalization: TextCapitalization.none,
+          decoration: const InputDecoration(labelText: 'Your Nipto ID', prefixText: '@'),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
           FilledButton(
-            onPressed: () => Navigator.pop(context, accountEmailController.text.trim()),
-            child: const Text('Send link'),
+            onPressed: () => Navigator.pop(dialogContext, niptoIdController.text.trim()),
+            child: const Text('Continue'),
           ),
         ],
       ),
     );
-    accountEmailController.dispose();
-    if (accountEmail == null || accountEmail.isEmpty || !mounted) return;
+    niptoIdController.dispose();
+    if (niptoId == null || niptoId.trim().isEmpty || !mounted) return;
 
     try {
-      await _client.auth.resetPasswordForEmail(
-        accountEmail,
-        redirectTo: 'nipto://auth-callback',
+      await NiptoSessionManager.instance.startPasswordRecovery(niptoId);
+      if (!mounted) return;
+      final grant = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          var checking = false;
+          var message = 'If this account has an accepted recovery Nipto account, it will receive an in-app request. After approval, check here to continue.';
+          return StatefulBuilder(
+            builder: (context, setDialogState) => AlertDialog(
+              title: const Text('Waiting for recovery approval'),
+              content: Text(message),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Close'),
+                ),
+                FilledButton(
+                  onPressed: checking
+                      ? null
+                      : () async {
+                          setDialogState(() => checking = true);
+                          try {
+                            final approved = await NiptoSessionManager.instance.checkPasswordRecoveryApproval();
+                            if (approved != null && dialogContext.mounted) {
+                              Navigator.pop(dialogContext, approved);
+                            } else {
+                              setDialogState(() {
+                                message = 'No approval has arrived yet. Ask your trusted Nipto contact to review the request, then check again.';
+                              });
+                            }
+                          } on NiptoAuthException catch (error) {
+                            setDialogState(() => message = error.message);
+                          } catch (_) {
+                            setDialogState(() => message = 'Could not check the request. Try again when your connection is available.');
+                          } finally {
+                            if (dialogContext.mounted) setDialogState(() => checking = false);
+                          }
+                        },
+                  child: checking
+                      ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Check approval'),
+                ),
+              ],
+            ),
+          );
+        },
       );
+      if (grant == null || !mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => PasswordRecoveryScreen(
+            resetGrant: grant,
+            onComplete: () {
+              Navigator.of(context).pop();
+              if (mounted) {
+                setState(() {
+                  _notice = 'Your password has been updated. Sign in with your new password.';
+                  _noticeIsError = false;
+                });
+              }
+            },
+          ),
+        ),
+      );
+    } on NiptoAuthException catch (error) {
       if (!mounted) return;
       setState(() {
-        _notice = 'If that account email belongs to a Nipto account, a reset link will arrive shortly.';
-        _noticeIsError = false;
+        _notice = error.message;
+        _noticeIsError = true;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _notice = 'Could not send the reset link. Please try again.';
+        _notice = 'Could not start account recovery. Please try again.';
         _noticeIsError = true;
       });
     }
@@ -277,23 +276,6 @@ class _AuthScreenState extends State<AuthScreen> {
                         },
                       ),
                       const SizedBox(height: 13),
-                      TextFormField(
-                        controller: _accountEmail,
-                        keyboardType: TextInputType.emailAddress,
-                        autocorrect: false,
-                        decoration: const InputDecoration(
-                          labelText: 'Account email',
-                          prefixIcon: Icon(Icons.alternate_email_rounded),
-                        ),
-                        validator: (value) {
-                          final input = (value ?? '').trim();
-                          if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(input)) {
-                            return 'Enter a valid email address.';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 13),
                     ],
                     TextFormField(
                       controller: _niptoId,
@@ -320,7 +302,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         ),
                       ),
                       validator: (value) {
-                        if ((value ?? '').length < 8) return 'Use at least 8 characters.';
+                        if ((value ?? '').length < 12) return 'Use at least 12 characters.';
                         return null;
                       },
                     ),
@@ -340,7 +322,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                       const SizedBox(height: 12),
                       const Text(
-                        'Your account email is used by Supabase Auth for verification and password resets. Your recovery Nipto account is optional; the other account must accept your request. You can add or change it later in Settings → Security.',
+                        'Your Nipto ID and password are your account credentials. A recovery Nipto account is optional; you can add one now or later in Settings → Security. The other account must accept your request.',
                         style: TextStyle(color: NiptoColors.muted, fontSize: 12, height: 1.4),
                       ),
 
