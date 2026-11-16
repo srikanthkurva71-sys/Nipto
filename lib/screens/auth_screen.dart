@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/nipto_theme.dart';
-import 'recovery_contacts_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
