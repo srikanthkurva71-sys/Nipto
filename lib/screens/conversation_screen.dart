@@ -27,6 +27,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
   final _scrollController = ScrollController();
   final _picker = ImagePicker();
   bool _sending = false;
+  bool _markReadInFlight = false;
+  bool _markReadAgain = false;
+  int? _lastObservedMessageCount;
 
   SupabaseClient get _client => Supabase.instance.client;
 
@@ -39,13 +42,26 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   Future<void> _markIncomingRead() async {
     if (_client.auth.currentUser == null) return;
+    if (_markReadInFlight) {
+      _markReadAgain = true;
+      return;
+    }
+
+    _markReadInFlight = true;
     try {
-      await _client.rpc(
-        'mark_conversation_read',
-        params: {'p_conversation_id': widget.conversationId},
-      );
-    } catch (_) {
-      // A read receipt failure should not prevent the conversation from working.
+      do {
+        _markReadAgain = false;
+        try {
+          await _client.rpc(
+            'mark_conversation_read',
+            params: {'p_conversation_id': widget.conversationId},
+          );
+        } catch (_) {
+          // A read receipt failure should not prevent the conversation from working.
+        }
+      } while (_markReadAgain && mounted);
+    } finally {
+      _markReadInFlight = false;
     }
   }
 
@@ -201,12 +217,23 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 }
 
                 final messages = snapshot.data!;
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _markIncomingRead();
-                  if (_scrollController.hasClients) {
-                    _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-                  }
-                });
+                final messageCount = messages.length;
+                if (_lastObservedMessageCount != messageCount) {
+                  _lastObservedMessageCount = messageCount;
+                  final shouldStayAtBottom = !_scrollController.hasClients ||
+                      _scrollController.position.maxScrollExtent -
+                              _scrollController.position.pixels <=
+                          120;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) return;
+                    _markIncomingRead();
+                    if (shouldStayAtBottom && _scrollController.hasClients) {
+                      _scrollController.jumpTo(
+                        _scrollController.position.maxScrollExtent,
+                      );
+                    }
+                  });
+                }
 
                 if (messages.isEmpty) {
                   return Center(
