@@ -30,6 +30,9 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get
 
+      - name: Remove generated sample test
+        run: rm -f test/widget_test.dart
+
       - name: Format Dart sources
         run: dart format lib test
 
@@ -42,7 +45,8 @@ jobs:
       - name: Build debug APK
         run: |
           flutter build apk --debug \
-            --dart-define=SUPABASE_URL=https://advmjribduqzyuwktkod.supabase.co
+            --dart-define=SUPABASE_URL=https://advmjribduqzyuwktkod.supabase.co \
+            --dart-define=SUPABASE_PUBLISHABLE_KEY=sb_publishable_zxqki-GLfT6zi-BXT1h6zw_nWq9Nhye
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
