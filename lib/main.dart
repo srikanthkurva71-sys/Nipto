@@ -21,7 +21,7 @@ Future<void> main() async {
     return;
   }
 
-  await NiptoSessionManager.instance.initialize(_supabaseUrl);
+  await NiptoSessionManager.instance.initialize(_supabaseUrl, _supabasePublishableKey);
 
   await Supabase.initialize(
     url: _supabaseUrl,
