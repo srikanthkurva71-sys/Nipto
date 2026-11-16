@@ -665,3 +665,189 @@ end;
 $$;
 revoke all on function public.nipto_native_revoke_session(uuid,uuid) from public,anon,authenticated;
 grant execute on function public.nipto_native_revoke_session(uuid,uuid) to service_role;
+
+
+create or replace function public.nipto_native_account_for_user(p_user_id uuid)
+returns table(identity_id uuid,nipto_id text,display_name text,password_hash text,status text)
+language sql stable security definer set search_path=''
+as $$
+  select a.identity_id,a.nipto_id,a.display_name,a.password_hash,a.status
+  from private.nipto_accounts a
+  where a.supabase_user_id=p_user_id and a.status='active'
+  limit 1;
+$$;
+revoke all on function public.nipto_native_account_for_user(uuid) from public,anon,authenticated;
+grant execute on function public.nipto_native_account_for_user(uuid) to service_role;
+
+create or replace function public.nipto_native_change_password(
+  p_identity_id uuid,p_password_hash text
+)
+returns boolean
+language plpgsql security definer set search_path=''
+as $$
+declare v_user_id uuid; v_count integer;
+begin
+  if p_password_hash is null or p_password_hash not like '$argon2id$%'
+     or char_length(p_password_hash) not between 32 and 512 then
+    raise exception 'Invalid password hash';
+  end if;
+  update private.nipto_accounts
+  set password_hash=p_password_hash,password_changed_at=pg_catalog.now(),updated_at=pg_catalog.now()
+  where identity_id=p_identity_id and status='active'
+  returning supabase_user_id into v_user_id;
+  get diagnostics v_count=row_count;
+  if v_count<>1 then return false; end if;
+  delete from auth.sessions where user_id=v_user_id;
+  insert into private.nipto_security_events(identity_id,event_type)
+  values(p_identity_id,'password_changed');
+  return true;
+end;
+$$;
+revoke all on function public.nipto_native_change_password(uuid,text) from public,anon,authenticated;
+grant execute on function public.nipto_native_change_password(uuid,text) to service_role;
+
+create or replace function public.nipto_native_list_recovery_contacts(p_user_id uuid)
+returns table(
+  request_id uuid,owner_id uuid,owner_nipto_id text,owner_display_name text,
+  recovery_user_id uuid,recovery_nipto_id text,recovery_display_name text,
+  status text,created_at timestamptz
+)
+language sql stable security definer set search_path=''
+as $$
+  select rc.id,rc.owner_id,op.nipto_id,op.display_name,
+         rc.recovery_user_id,rp.nipto_id,rp.display_name,rc.status,rc.created_at
+  from public.account_recovery_contacts rc
+  join public.profiles op on op.id=rc.owner_id
+  join public.profiles rp on rp.id=rc.recovery_user_id
+  where rc.owner_id=p_user_id or rc.recovery_user_id=p_user_id
+  order by rc.created_at desc limit 20;
+$$;
+revoke all on function public.nipto_native_list_recovery_contacts(uuid) from public,anon,authenticated;
+grant execute on function public.nipto_native_list_recovery_contacts(uuid) to service_role;
+
+create or replace function public.nipto_native_request_recovery_contact(
+  p_owner_user_id uuid,p_nipto_id text
+)
+returns uuid
+language plpgsql security definer set search_path=''
+as $$
+declare v_target uuid; v_id uuid;
+begin
+  if not exists (
+    select 1 from private.nipto_accounts a
+    join public.profiles p on p.id=a.supabase_user_id
+    where a.supabase_user_id=p_owner_user_id and a.status='active' and p.account_state='active'
+  ) then raise exception 'Nipto account unavailable'; end if;
+
+  if p_nipto_id is null or p_nipto_id !~ '^[a-z0-9_]{3,24}$' then
+    raise exception 'Enter a valid Nipto ID';
+  end if;
+
+  select p.id into v_target
+  from public.profiles p
+  join private.nipto_accounts a on a.supabase_user_id=p.id and a.status='active'
+  where p.nipto_id=p_nipto_id and p.account_state='active';
+
+  if v_target is null or v_target=p_owner_user_id then
+    raise exception 'That Nipto account cannot be selected';
+  end if;
+  if private.is_blocked_between(p_owner_user_id,v_target) then
+    raise exception 'That Nipto account cannot be selected';
+  end if;
+  if exists (
+    select 1 from public.account_recovery_contacts rc
+    where rc.owner_id=p_owner_user_id and rc.status in ('pending','accepted')
+      and rc.recovery_user_id<>v_target
+  ) then
+    raise exception 'Remove your current recovery account before choosing another';
+  end if;
+  if exists (
+    select 1 from public.account_recovery_contacts rc
+    where rc.owner_id=p_owner_user_id and rc.recovery_user_id=v_target and rc.status='accepted'
+  ) then raise exception 'This is already your recovery account'; end if;
+
+  insert into public.account_recovery_contacts(owner_id,recovery_user_id)
+  values(p_owner_user_id,v_target)
+  on conflict(owner_id,recovery_user_id) do update
+    set status='pending',updated_at=pg_catalog.now()
+  returning id into v_id;
+  return v_id;
+end;
+$$;
+revoke all on function public.nipto_native_request_recovery_contact(uuid,text) from public,anon,authenticated;
+grant execute on function public.nipto_native_request_recovery_contact(uuid,text) to service_role;
+
+create or replace function public.nipto_native_respond_recovery_contact(
+  p_request_id uuid,p_recovery_user_id uuid,p_accept boolean
+)
+returns boolean
+language plpgsql security definer set search_path=''
+as $$
+declare v_count integer;
+begin
+  update public.account_recovery_contacts rc
+  set status=case when p_accept then 'accepted' else 'rejected' end,
+      updated_at=pg_catalog.now()
+  where rc.id=p_request_id and rc.recovery_user_id=p_recovery_user_id
+    and rc.status='pending'
+    and exists (
+      select 1 from private.nipto_accounts a
+      where a.supabase_user_id=p_recovery_user_id and a.status='active'
+    );
+  get diagnostics v_count=row_count;
+  return v_count=1;
+end;
+$$;
+revoke all on function public.nipto_native_respond_recovery_contact(uuid,uuid,boolean) from public,anon,authenticated;
+grant execute on function public.nipto_native_respond_recovery_contact(uuid,uuid,boolean) to service_role;
+
+create or replace function public.nipto_native_remove_recovery_contact(
+  p_user_id uuid,p_request_id uuid
+)
+returns boolean
+language plpgsql security definer set search_path=''
+as $$
+declare v_count integer;
+begin
+  delete from public.account_recovery_contacts
+  where id=p_request_id and (owner_id=p_user_id or recovery_user_id=p_user_id);
+  get diagnostics v_count=row_count;
+  return v_count=1;
+end;
+$$;
+revoke all on function public.nipto_native_remove_recovery_contact(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.nipto_native_remove_recovery_contact(uuid,uuid) to service_role;
+
+create or replace function public.nipto_native_revoke_all_sessions(p_user_id uuid)
+returns integer
+language plpgsql security definer set search_path=''
+as $$
+declare v_count integer;
+begin
+  delete from auth.sessions where user_id=p_user_id;
+  get diagnostics v_count=row_count;
+  return v_count;
+end;
+$$;
+revoke all on function public.nipto_native_revoke_all_sessions(uuid) from public,anon,authenticated;
+grant execute on function public.nipto_native_revoke_all_sessions(uuid) to service_role;
+
+create or replace function private.notify_recovery_contact_response()
+returns trigger
+language plpgsql security definer set search_path=''
+as $$
+begin
+  if old.status='pending' and new.status in ('accepted','rejected') then
+    insert into public.notifications(recipient_id,actor_id,notification_type,payload)
+    values(
+      new.owner_id,new.recovery_user_id,'system',
+      jsonb_build_object(
+        'kind',case when new.status='accepted' then 'recovery_accepted' else 'recovery_rejected' end,
+        'request_id',new.id
+      )
+    );
+  end if;
+  return new;
+end;
+$$;
+revoke all on function private.notify_recovery_contact_response() from public,anon,authenticated;
