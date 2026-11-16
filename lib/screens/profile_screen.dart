@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/nipto_theme.dart';
 import 'settings_screen.dart';
 import 'connections_screen.dart';
+import 'notifications_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -335,6 +336,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     children: [
                       Text('Your space', style: Theme.of(context).textTheme.headlineSmall),
                       const Spacer(),
+                      IconButton(
+                        tooltip: 'Notifications',
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()),
+                        ),
+                        icon: const Icon(Icons.notifications_none_rounded),
+                      ),
                       IconButton(
                         tooltip: 'Settings',
                         onPressed: () => Navigator.of(context).push(
