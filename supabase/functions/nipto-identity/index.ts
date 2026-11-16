@@ -160,8 +160,13 @@ async function verifyAccessToken(request: Request): Promise<Claims> {
   );
   const now = Math.floor(Date.now() / 1000);
   if (!valid || claims.iss !== issuer() || claims.aud !== "authenticated"
-      || claims.role !== "authenticated" || !claims.sub || !claims.sid
-      || !claims.nipto_id || !claims.display_name || claims.exp <= now
+      || claims.role !== "authenticated"
+      || !/^[0-9a-f-]{36}$/i.test(claims.sub)
+      || !/^[0-9a-f-]{36}$/i.test(claims.sid)
+      || !validNiptoId(claims.nipto_id)
+      || typeof claims.display_name !== "string" || claims.display_name.length < 1
+      || claims.display_name.length > 50
+      || typeof claims.exp !== "number" || claims.exp <= now
       || claims.exp > now + ACCESS_TOKEN_SECONDS + 60) {
     throw new Error("Invalid or expired session");
   }
@@ -366,6 +371,7 @@ async function route(request: Request): Promise<Response> {
   if (path.endsWith("/recovery/start") && method === "POST") {
     const input = await body(request);
     const niptoId = stringField(input.nipto_id, 24).trim().toLowerCase().replace(/^@/, "");
+    await enforceRateLimit(request, "recovery-start:" + (validNiptoId(niptoId) ? niptoId : "unknown"));
     const challengeSecret = randomToken(32);
     const challengeHash = await sha256Hex(challengeSecret);
     const rows = validNiptoId(niptoId)
@@ -388,6 +394,7 @@ async function route(request: Request): Promise<Response> {
     if (!/^[0-9a-f-]{36}$/i.test(challengeId) || challengeSecret.length < 40) {
       return json({ status: "pending" });
     }
+    await enforceRateLimit(request, "recovery-claim:" + challengeId);
     const grantSecret = randomToken(32);
     const ownerId = await rpc("nipto_native_claim_reset_grant", {
       p_challenge_id: challengeId,
@@ -421,6 +428,7 @@ async function route(request: Request): Promise<Response> {
     const claims = await verifyAccessToken(request);
     const input = await body(request);
     const recoveryId = stringField(input.recovery_nipto_id, 24).trim().toLowerCase().replace(/^@/, "");
+    await enforceRateLimit(request, "recovery-link:" + claims.nipto_id);
     if (!validNiptoId(recoveryId) || recoveryId === claims.nipto_id) {
       return json({ error: "Enter another valid Nipto ID." }, 400);
     }
@@ -433,6 +441,7 @@ async function route(request: Request): Promise<Response> {
   if (path.endsWith("/recovery/contact-response") && method === "POST") {
     const claims = await verifyAccessToken(request);
     const input = await body(request);
+    await enforceRateLimit(request, "recovery-contact-response:" + claims.nipto_id);
     const ok = await rpc("nipto_native_respond_recovery_contact", {
       p_request_id: stringField(input.request_id, 36),
       p_recovery_user_id: claims.sub,
@@ -450,6 +459,7 @@ async function route(request: Request): Promise<Response> {
   if (path.endsWith("/recovery/respond") && method === "POST") {
     const claims = await verifyAccessToken(request);
     const input = await body(request);
+    await enforceRateLimit(request, "recovery-response:" + claims.nipto_id);
     const ok = await rpc("nipto_native_respond_password_recovery", {
       p_challenge_id: stringField(input.challenge_id, 36),
       p_recovery_user_id: claims.sub,
@@ -462,6 +472,7 @@ async function route(request: Request): Promise<Response> {
     const input = await body(request);
     const currentPassword = stringField(input.current_password, 128);
     const newPassword = stringField(input.new_password, 128);
+    await enforceRateLimit(request, "password-change:" + claims.nipto_id);
     if (!validPassword(newPassword)) return json({ error: "Use at least 12 characters for your new password." }, 400);
     const account = await accountRecord(claims.nipto_id);
     if (!account || account.user_id !== claims.sub
