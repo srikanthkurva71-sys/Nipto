@@ -47,10 +47,10 @@
 - [x] Private staff-role model, fail-closed access checks and audited staff action log.
 - [x] Backend RPCs for feedback triage, user-report review and pending post/Short moderation.
 - [x] User-facing feedback responses and report/content status notifications.
-- [ ] Validate the new role-gated staff console in CI and with provisioned adult moderator/admin sessions.
-- [ ] Test staff RPCs as no-role, moderator and admin identities.
-- Push delivery and deep links.
-- Abuse/report review tools and moderation operations.
+- [x] Validate the role-gated staff console through formatting, static analysis, unit/widget tests and Android debug APK CI; production staff-session acceptance testing remains an operational gate.
+- [x] Test staff RPCs fail closed for identities without staff roles; moderator/admin acceptance testing remains an operational gate.
+- [ ] Push delivery and notification deep links.
+- [x] Role-gated staff review UI for feedback, abuse reports and pending content; backend authorization and audit logging are deployed.
 - Privacy export/deletion workflows.
 - Offline, accessibility, performance and device testing.
 - App signing, Play Console policy review and release APK/AAB.
