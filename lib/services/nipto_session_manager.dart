@@ -51,6 +51,7 @@ class NiptoSessionManager {
   static const _refreshTokenKey = 'nipto.refresh_token.v1';
   static const _recoveryIdKey = 'nipto.recovery.challenge_id.v1';
   static const _recoverySecretKey = 'nipto.recovery.challenge_secret.v1';
+  static const _recoveryStartedAtKey = 'nipto.recovery.started_at.v1';
   static const _resetGrantKey = 'nipto.recovery.reset_grant.v1';
   static const _legacyAccessKey = 'nipto.legacy.access_token.v1';
   static const _legacyRefreshKey = 'nipto.legacy.refresh_token.v1';
@@ -303,6 +304,18 @@ class NiptoSessionManager {
 
   Future<void> startPasswordRecovery(String niptoId) async {
     if (await _storage.read(key: _resetGrantKey) != null) return;
+    final existingId = await _storage.read(key: _recoveryIdKey);
+    final existingSecret = await _storage.read(key: _recoverySecretKey);
+    final startedAtRaw = await _storage.read(key: _recoveryStartedAtKey);
+    final startedAt = int.tryParse(startedAtRaw ?? '');
+    if (existingId != null &&
+        existingSecret != null &&
+        startedAt != null &&
+        DateTime.now().millisecondsSinceEpoch - startedAt <
+            const Duration(minutes: 15).inMilliseconds) {
+      return;
+    }
+    await _clearRecoveryChallenge();
     final response = await _post('recovery/start', {
       'nipto_id': niptoId.trim().replaceFirst(RegExp(r'^@'), ''),
     });
@@ -313,6 +326,10 @@ class NiptoSessionManager {
     }
     await _storage.write(key: _recoveryIdKey, value: challengeId);
     await _storage.write(key: _recoverySecretKey, value: challengeSecret);
+    await _storage.write(
+      key: _recoveryStartedAtKey,
+      value: DateTime.now().millisecondsSinceEpoch.toString(),
+    );
   }
 
   Future<String?> checkPasswordRecoveryApproval() async {
@@ -329,13 +346,13 @@ class NiptoSessionManager {
     });
     final status = response['status'];
     if (status == 'rejected') {
+      await _clearRecoveryChallenge();
       throw const NiptoAuthException(
         'Your trusted Nipto account declined the request. Contact them or choose another recovery account.',
       );
     }
     if (status == 'expired') {
-      await _storage.delete(key: _recoveryIdKey);
-      await _storage.delete(key: _recoverySecretKey);
+      await _clearRecoveryChallenge();
       throw const NiptoAuthException(
         'This recovery request expired. Start a new request.',
       );
@@ -365,9 +382,14 @@ class NiptoSessionManager {
       }
       rethrow;
     }
+    await _clearRecoveryChallenge();
+    await _storage.delete(key: _resetGrantKey);
+  }
+
+  Future<void> _clearRecoveryChallenge() async {
     await _storage.delete(key: _recoveryIdKey);
     await _storage.delete(key: _recoverySecretKey);
-    await _storage.delete(key: _resetGrantKey);
+    await _storage.delete(key: _recoveryStartedAtKey);
   }
 
   Future<void> changePassword({
