@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
+
 import '../services/nipto_session_manager.dart';
 import '../theme/nipto_theme.dart';
-import 'password_recovery_screen.dart';
 import '../widgets/nipto_logo_mark.dart';
+import 'password_recovery_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -12,61 +13,21 @@ class AuthScreen extends StatefulWidget {
 }
 
 class _AuthScreenState extends State<AuthScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _niptoId = TextEditingController();
-  final _displayName = TextEditingController();
-  final _password = TextEditingController();
-  final _confirmPassword = TextEditingController();
-  final _recoveryNiptoId = TextEditingController();
-
-  bool _creatingAccount = false;
   bool _busy = false;
-  bool _hidePassword = true;
   String? _notice;
   bool _noticeIsError = false;
 
-  @override
-  void dispose() {
-    _niptoId.dispose();
-    _displayName.dispose();
-    _password.dispose();
-    _confirmPassword.dispose();
-    _recoveryNiptoId.dispose();
-    super.dispose();
-  }
-
-  String? _validateNiptoId(String? value) {
-    final input = (value ?? '').trim().toLowerCase();
-    if (!RegExp(r'^[a-z0-9_]{3,24}$').hasMatch(input)) {
-      return 'Use 3–24 lowercase letters, numbers or underscores.';
-    }
-    if (const ['admin', 'administrator', 'support', 'help', 'nipto', 'official', 'security', 'moderator'].contains(input)) {
-      return 'This Nipto ID is reserved.';
-    }
-    return null;
-  }
-
-  Future<void> _submit() async {
-    if (!_formKey.currentState!.validate() || _busy) return;
+  Future<void> _startSignIn({required bool register}) async {
+    if (_busy) return;
     setState(() {
       _busy = true;
       _notice = null;
     });
-
     try {
-      final handle = _niptoId.text.trim().toLowerCase().replaceFirst(RegExp(r'^@'), '');
-      final sessions = NiptoSessionManager.instance;
-      if (_creatingAccount) {
-        await sessions.register(
-          niptoId: handle,
-          displayName: _displayName.text.trim(),
-          password: _password.text,
-          recoveryNiptoId: _recoveryNiptoId.text.trim().isEmpty
-              ? null
-              : _recoveryNiptoId.text.trim().toLowerCase().replaceFirst(RegExp(r'^@'), ''),
-        );
+      if (register) {
+        await NiptoSessionManager.instance.register();
       } else {
-        await sessions.signIn(niptoId: handle, password: _password.text);
+        await NiptoSessionManager.instance.signIn();
       }
     } on NiptoAuthException catch (error) {
       if (!mounted) return;
@@ -77,7 +38,7 @@ class _AuthScreenState extends State<AuthScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _notice = 'Nipto could not complete your request. Check your connection and try again.';
+        _notice = 'Nipto could not open secure sign-in. Check your connection and try again.';
         _noticeIsError = true;
       });
     } finally {
@@ -86,27 +47,33 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _recoverPassword() async {
-    final niptoIdController = TextEditingController();
+    final controller = TextEditingController();
     final niptoId = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Recover your Nipto account'),
         content: TextField(
-          controller: niptoIdController,
+          controller: controller,
           autocorrect: false,
           textCapitalization: TextCapitalization.none,
-          decoration: const InputDecoration(labelText: 'Your Nipto ID', prefixText: '@'),
+          decoration: const InputDecoration(
+            labelText: 'Your Nipto ID',
+            prefixText: '@',
+          ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, niptoIdController.text.trim()),
+            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
             child: const Text('Continue'),
           ),
         ],
       ),
     );
-    niptoIdController.dispose();
+    controller.dispose();
     if (niptoId == null || niptoId.trim().isEmpty || !mounted) return;
 
     try {
@@ -117,7 +84,8 @@ class _AuthScreenState extends State<AuthScreen> {
         barrierDismissible: false,
         builder: (dialogContext) {
           var checking = false;
-          var message = 'If this account has an accepted recovery Nipto account, it will receive an in-app request. After approval, check here to continue.';
+          var message =
+              'If this account has an accepted recovery Nipto account, it will receive an in-app request. After approval, check here to continue.';
           return StatefulBuilder(
             builder: (context, setDialogState) => AlertDialog(
               title: const Text('Waiting for recovery approval'),
@@ -133,24 +101,35 @@ class _AuthScreenState extends State<AuthScreen> {
                       : () async {
                           setDialogState(() => checking = true);
                           try {
-                            final approved = await NiptoSessionManager.instance.checkPasswordRecoveryApproval();
+                            final approved = await NiptoSessionManager.instance
+                                .checkPasswordRecoveryApproval();
                             if (approved != null && dialogContext.mounted) {
                               Navigator.pop(dialogContext, approved);
                             } else {
                               setDialogState(() {
-                                message = 'No approval has arrived yet. Ask your trusted Nipto contact to review the request, then check again.';
+                                message =
+                                    'No approval has arrived yet. Ask your trusted Nipto contact to review the request, then check again.';
                               });
                             }
                           } on NiptoAuthException catch (error) {
                             setDialogState(() => message = error.message);
                           } catch (_) {
-                            setDialogState(() => message = 'Could not check the request. Try again when your connection is available.');
+                            setDialogState(() {
+                              message =
+                                  'Could not check the request. Try again when your connection is available.';
+                            });
                           } finally {
-                            if (dialogContext.mounted) setDialogState(() => checking = false);
+                            if (dialogContext.mounted) {
+                              setDialogState(() => checking = false);
+                            }
                           }
                         },
                   child: checking
-                      ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : const Text('Check approval'),
                 ),
               ],
@@ -167,7 +146,8 @@ class _AuthScreenState extends State<AuthScreen> {
               Navigator.of(context).pop();
               if (mounted) {
                 setState(() {
-                  _notice = 'Your password has been updated. Sign in with your new password.';
+                  _notice =
+                      'Your password has been updated. Sign in with your new Nipto password.';
                   _noticeIsError = false;
                 });
               }
@@ -190,191 +170,91 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  void _toggleMode() {
-    setState(() {
-      _creatingAccount = !_creatingAccount;
-      _notice = null;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+            padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 440),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 12),
-                    const Center(child: NiptoLogoMark(size: 92)),
-                    const SizedBox(height: 18),
-                    const Text(
-                      'NIPTO',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: NiptoColors.ink,
-                        fontSize: 30,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 4,
-                      ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 20),
+                  const Center(child: NiptoLogoMark(size: 92)),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Your Nipto account. Your identity.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: NiptoColors.ink,
+                      fontSize: 25,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Sign in or create an account with your Nipto ID and password. No email address or phone number is required.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: NiptoColors.muted,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  FilledButton.icon(
+                    onPressed: _busy ? null : () => _startSignIn(register: false),
+                    icon: const Icon(Icons.login_rounded),
+                    label: const Text('Sign in with Nipto'),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : () => _startSignIn(register: true),
+                    icon: const Icon(Icons.person_add_alt_1_rounded),
+                    label: const Text('Create Nipto account'),
+                  ),
+                  if (_busy) ...[
+                    const SizedBox(height: 20),
+                    const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      _creatingAccount ? 'Your people. Your space.' : 'Good to see you again.',
+                    const Text(
+                      'Opening secure Nipto sign-in…',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        color: NiptoColors.muted,
-                        fontSize: 15,
-                      ),
+                      style: TextStyle(color: NiptoColors.muted, fontSize: 12),
                     ),
-                    const SizedBox(height: 34),
+                  ],
+                  if (_notice != null) ...[
+                    const SizedBox(height: 18),
                     Text(
-                      _creatingAccount ? 'Create your account' : 'Sign in to Nipto',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: 20),
-                    if (_creatingAccount) ...[
-                      TextFormField(
-                        controller: _displayName,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: const InputDecoration(
-                          labelText: 'Your name',
-                          prefixIcon: Icon(Icons.person_outline_rounded),
-                        ),
-                        validator: (value) {
-                          if ((value ?? '').trim().isEmpty) return 'Enter your name.';
-                          if ((value ?? '').trim().length > 50) return 'Name is too long.';
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 13),
-                      TextFormField(
-                        controller: _recoveryNiptoId,
-                        autocorrect: false,
-                        textCapitalization: TextCapitalization.none,
-                        decoration: const InputDecoration(
-                          labelText: 'Recovery Nipto ID (optional)',
-                          prefixIcon: Icon(Icons.shield_outlined),
-                          prefixText: '@',
-                          hintText: 'trusted_person',
-                        ),
-                        validator: (value) {
-                          final input = (value ?? '').trim().toLowerCase().replaceFirst(RegExp(r'^@'), '');
-                          if (input.isEmpty) return null;
-                          if (!RegExp(r'^[a-z0-9_]{3,24}$').hasMatch(input)) {
-                            return 'Enter a valid Nipto ID or leave this blank.';
-                          }
-                          if (input == _niptoId.text.trim().toLowerCase()) {
-                            return 'Choose a different Nipto account.';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 13),
-                    ],
-                    TextFormField(
-                      controller: _niptoId,
-                      autocorrect: false,
-                      textCapitalization: TextCapitalization.none,
-                      decoration: const InputDecoration(
-                        labelText: 'Nipto ID',
-                        prefixIcon: Icon(Icons.alternate_email_rounded),
-                        hintText: 'yourname',
-                      ),
-                      validator: _validateNiptoId,
-                    ),
-                    const SizedBox(height: 13),
-                    TextFormField(
-                      controller: _password,
-                      obscureText: _hidePassword,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock_outline_rounded),
-                        suffixIcon: IconButton(
-                          tooltip: _hidePassword ? 'Show password' : 'Hide password',
-                          onPressed: () => setState(() => _hidePassword = !_hidePassword),
-                          icon: Icon(_hidePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                        ),
-                      ),
-                      validator: (value) {
-                        if ((value ?? '').length < 12) return 'Use at least 12 characters.';
-                        return null;
-                      },
-                    ),
-                    if (_creatingAccount) ...[
-                      const SizedBox(height: 13),
-                      TextFormField(
-                        controller: _confirmPassword,
-                        obscureText: _hidePassword,
-                        decoration: const InputDecoration(
-                          labelText: 'Confirm password',
-                          prefixIcon: Icon(Icons.verified_user_outlined),
-                        ),
-                        validator: (value) {
-                          if (value != _password.text) return 'Passwords do not match.';
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Your Nipto ID and password are your account credentials. A recovery Nipto account is optional; you can add one now or later in Settings → Security. The other account must accept your request.',
-                        style: TextStyle(color: NiptoColors.muted, fontSize: 12, height: 1.4),
-                      ),
-
-                    ],
-                    if (!_creatingAccount)
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: _busy ? null : _recoverPassword,
-                          child: const Text('Forgot password?'),
-                        ),
-                      ),
-                    if (_notice != null) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(13),
-                        decoration: BoxDecoration(
-                          color: _noticeIsError ? const Color(0xFFFFEEEE) : NiptoColors.violetSoft,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Text(
-                          _notice!,
-                          style: TextStyle(
-                            color: _noticeIsError ? NiptoColors.danger : NiptoColors.ink,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 22),
-                    FilledButton(
-                      onPressed: _busy ? null : _submit,
-                      child: _busy
-                          ? const SizedBox(
-                              height: 21,
-                              width: 21,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                            )
-                          : Text(_creatingAccount ? 'Create Nipto account' : 'Sign in'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextButton(
-                      onPressed: _busy ? null : _toggleMode,
-                      child: Text(
-                        _creatingAccount
-                            ? 'Already have a Nipto ID? Sign in'
-                            : 'New to Nipto? Create an account',
+                      _notice!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: _noticeIsError
+                            ? NiptoColors.danger
+                            : NiptoColors.success,
                       ),
                     ),
                   ],
-                ),
+                  const SizedBox(height: 18),
+                  TextButton(
+                    onPressed: _busy ? null : _recoverPassword,
+                    child: const Text('Forgot password?'),
+                  ),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'A recovery Nipto account is optional. You can add or change one later in Settings.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: NiptoColors.muted,
+                      fontSize: 12,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -383,4 +263,3 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 }
-
