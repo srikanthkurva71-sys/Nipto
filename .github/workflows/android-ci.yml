@@ -34,6 +34,8 @@ jobs:
           path = Path("android/app/src/main/AndroidManifest.xml")
           manifest = path.read_text()
           permissions = [
+              '    <uses-feature android:name="android.hardware.camera" android:required="false" />',
+              '    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />',
               '    <uses-permission android:name="android.permission.INTERNET" />',
               '    <uses-permission android:name="android.permission.RECORD_AUDIO" />',
               '    <uses-permission android:name="android.permission.CAMERA" />',
