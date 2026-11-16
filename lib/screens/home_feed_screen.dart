@@ -240,7 +240,42 @@ class _FeedPostCardState extends State<_FeedPostCard> {
         builder: (context, snapshot) {
           if (snapshot.hasError) return Container(height: 250, color: NiptoColors.violetSoft, child: const Center(child: Icon(Icons.broken_image_outlined, color: NiptoColors.violet)));
           if (!snapshot.hasData) return Container(height: 250, color: NiptoColors.violetSoft, child: const Center(child: CircularProgressIndicator(strokeWidth: 2)));
-          return Image.network(snapshot.data!, width: double.infinity, height: 330, fit: BoxFit.cover, errorBuilder: (_, __, ___) => Container(height: 250, color: NiptoColors.violetSoft, child: const Center(child: Icon(Icons.broken_image_outlined, color: NiptoColors.violet))));
+          if (widget.post['media_type'] == 'video') {
+            return Container(
+              height: 330,
+              color: const Color(0xFF101C50),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.network(
+                    snapshot.data!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(color: NiptoColors.violetSoft),
+                  ),
+                  const Center(
+                    child: CircleAvatar(
+                      radius: 30,
+                      backgroundColor: Color(0x99000000),
+                      child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 38),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+          return Image.network(
+            snapshot.data!,
+            width: double.infinity,
+            height: 330,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Container(
+              height: 250,
+              color: NiptoColors.violetSoft,
+              child: const Center(
+                child: Icon(Icons.broken_image_outlined, color: NiptoColors.violet),
+              ),
+            ),
+          );
         },
       ),
       if (caption.isNotEmpty) Padding(padding: const EdgeInsets.fromLTRB(14, 12, 14, 0), child: Text(caption, style: const TextStyle(height: 1.4))),
