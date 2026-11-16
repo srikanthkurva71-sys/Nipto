@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/nipto_session_manager.dart';
+
 import '../theme/nipto_theme.dart';
 import 'settings_screen.dart';
 import 'connections_screen.dart';
@@ -32,7 +34,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<_ProfileData> _loadProfile() async {
-    final userId = _client.auth.currentUser!.id;
+    final userId = NiptoSessionManager.instance.userId!;
     final raw = await _client.from('profiles').select().eq('id', userId).single();
     final profile = Map<String, dynamic>.from(raw);
 
@@ -146,7 +148,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     captionController.dispose();
     if (caption == null || !mounted) return;
 
-    final userId = _client.auth.currentUser?.id;
+    final userId = NiptoSessionManager.instance.userId;
     if (userId == null) return;
     final path = userId + '/' + DateTime.now().microsecondsSinceEpoch.toString() + '.' + extension;
 
@@ -213,7 +215,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       return;
     }
 
-    final userId = _client.auth.currentUser?.id;
+    final userId = NiptoSessionManager.instance.userId;
     if (userId == null) return;
     final path = userId + '/avatar.' + extension;
     try {
@@ -288,7 +290,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       await _client.from('profiles').update(result).eq(
         'id',
-        _client.auth.currentUser!.id,
+        NiptoSessionManager.instance.userId!,
       );
       if (mounted) setState(() => _profile = _loadProfile());
     } catch (_) {
