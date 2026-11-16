@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 
 import 'nipto_app.dart';
+import 'services/nipto_session_manager.dart';
 
 const _supabaseUrl = String.fromEnvironment(
   'SUPABASE_URL',
@@ -20,9 +21,12 @@ Future<void> main() async {
     return;
   }
 
+  await NiptoSessionManager.instance.initialize(_supabaseUrl);
+
   await Supabase.initialize(
     url: _supabaseUrl,
     publishableKey: _supabasePublishableKey,
+    accessToken: NiptoSessionManager.instance.accessToken,
     debug: false,
   );
 
