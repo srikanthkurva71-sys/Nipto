@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/nipto_session_manager.dart';
+
 import '../theme/nipto_theme.dart';
 
 class FeedbackScreen extends StatefulWidget {
@@ -45,7 +47,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
 
   Future<void> _submit() async {
     if (_submitting || !_formKey.currentState!.validate()) return;
-    final userId = _client.auth.currentUser?.id;
+    final userId = NiptoSessionManager.instance.userId;
     if (userId == null) return;
 
     setState(() => _submitting = true);
