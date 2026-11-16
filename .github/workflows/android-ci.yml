@@ -59,11 +59,14 @@ jobs:
         with:
           deno-version: v2.x
 
+      - name: Format Nipto identity TypeScript
+        run: deno fmt supabase/functions/nipto-identity scripts/generate_nipto_oidc_keys.ts
+
       - name: Check Nipto identity Edge Function and key utility
         run: deno check supabase/functions/nipto-identity/index.ts scripts/generate_nipto_oidc_keys.ts
 
-      - name: Check Deno formatting
-        run: deno fmt --check supabase/functions/nipto-identity/index.ts scripts/generate_nipto_oidc_keys.ts
+      - name: Test Nipto identity validation
+        run: deno test supabase/functions/nipto-identity/validation_test.ts
 
       - name: Configure Android plugin repositories
         run: |
