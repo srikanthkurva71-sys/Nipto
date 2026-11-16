@@ -7,11 +7,12 @@
 
 ## 1. Product definition
 
-Nipto is one social identity for keeping up with people, talking privately and sharing short videos. The first screen after sign-in is the Chats experience. The main navigation has exactly three destinations:
+Nipto is one social identity for keeping up with people, talking privately and sharing short videos. The first screen after sign-in is the Chats experience. The main navigation has four destinations, available through swipe gestures and the bottom bar:
 
-- **Chats:** conversations, user search/discovery, following and statuses.
+- **Home:** a paginated feed of approved posts, likes and comments from eligible public and followed accounts.
+- **Chats:** conversations, user search/discovery, following, 24-hour statuses and notifications.
 - **Shorts:** full-screen vertical videos.
-- **You:** personal profile and account controls.
+- **You:** personal profile, posts and account controls.
 
 The app should feel familiar without copying another product's branding or visual assets. Prioritize clear hierarchy, low-friction actions, readable type, accessible touch targets and fast transitions.
 
