@@ -1,38 +1,69 @@
--- Nipto-native authentication for hosted Supabase Custom OIDC.
--- STAGED: do not apply to production until Nipto OIDC endpoints, Custom OIDC
--- issuer trust, client session storage, and the full test suite are ready.
--- Existing profile UUIDs and social data are preserved. auth.users rows are not
--- deleted; new Nipto identities are created directly in public.profiles.
+-- Nipto-owned credentials with Supabase Auth as an email-optional OIDC session broker.
+-- Nipto remains the identity provider; Supabase Auth only brokers app sessions
+-- and preserves the existing auth.uid(), RLS, Storage and Realtime architecture.
+
+alter table public.profiles alter column is_private set default true;
+alter table public.posts alter column visibility set default 'followers';
+alter table public.shorts alter column visibility set default 'followers';
 
 create table private.nipto_accounts (
-  user_id uuid primary key references public.profiles(id) on delete cascade,
+  identity_id uuid primary key default gen_random_uuid(),
+  nipto_id text not null unique
+    check (nipto_id = lower(nipto_id)
+      and nipto_id ~ '^[a-z0-9_]{3,24}$'
+      and nipto_id not in ('admin','administrator','support','help','nipto','official','security','moderator')),
+  display_name text not null check (char_length(display_name) between 1 and 50),
   password_hash text not null
     check (password_hash like '$argon2id$%' and char_length(password_hash) between 32 and 512),
-  credential_version bigint not null default 1 check (credential_version > 0),
-  status text not null default 'active' check (status in ('active','locked','disabled')),
+  status text not null default 'active'
+    check (status in ('active','locked','disabled')),
+  supabase_user_id uuid unique references auth.users(id) on delete cascade,
+  pending_recovery_nipto_id text
+    check (pending_recovery_nipto_id is null or pending_recovery_nipto_id ~ '^[a-z0-9_]{3,24}$'),
   password_changed_at timestamptz not null default pg_catalog.now(),
   created_at timestamptz not null default pg_catalog.now(),
   updated_at timestamptz not null default pg_catalog.now()
 );
+create index nipto_accounts_supabase_user_idx
+  on private.nipto_accounts(supabase_user_id)
+  where supabase_user_id is not null;
 
-create table private.nipto_sessions (
+create table private.nipto_oidc_transactions (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references private.nipto_accounts(user_id) on delete cascade,
-  refresh_token_hash text not null unique check (refresh_token_hash ~ '^[a-f0-9]{64}$'),
-  device_label text check (device_label is null or char_length(device_label) <= 80),
+  client_id text not null,
+  redirect_uri text not null,
+  response_type text not null check (response_type='code'),
+  scope text not null,
+  state text not null,
+  nonce text not null,
+  code_challenge text not null,
+  code_challenge_method text not null check (code_challenge_method='S256'),
+  csrf_hash text not null check (csrf_hash ~ '^[a-f0-9]{64}$'),
   created_at timestamptz not null default pg_catalog.now(),
   expires_at timestamptz not null,
-  last_used_at timestamptz not null default pg_catalog.now(),
-  revoked_at timestamptz,
-  rotated_to uuid references private.nipto_sessions(id) on delete set null,
+  consumed_at timestamptz,
   check (expires_at > created_at)
 );
-create index nipto_sessions_user_active_idx
-  on private.nipto_sessions(user_id, expires_at desc) where revoked_at is null;
+create index nipto_oidc_transactions_expiry_idx
+  on private.nipto_oidc_transactions(expires_at);
+
+create table private.nipto_oidc_codes (
+  code_hash text primary key check (code_hash ~ '^[a-f0-9]{64}$'),
+  identity_id uuid not null references private.nipto_accounts(identity_id) on delete cascade,
+  client_id text not null,
+  redirect_uri text not null,
+  nonce text not null,
+  code_challenge text not null,
+  created_at timestamptz not null default pg_catalog.now(),
+  expires_at timestamptz not null,
+  consumed_at timestamptz,
+  check (expires_at > created_at)
+);
+create index nipto_oidc_codes_expiry_idx on private.nipto_oidc_codes(expires_at);
 
 create table private.nipto_recovery_challenges (
   id uuid primary key default gen_random_uuid(),
-  owner_id uuid not null references private.nipto_accounts(user_id) on delete cascade,
+  owner_identity_id uuid not null references private.nipto_accounts(identity_id) on delete cascade,
   recovery_user_id uuid not null references public.profiles(id) on delete cascade,
   challenge_hash text not null check (challenge_hash ~ '^[a-f0-9]{64}$'),
   status text not null default 'pending'
@@ -42,20 +73,20 @@ create table private.nipto_recovery_challenges (
   approved_at timestamptz,
   rejected_at timestamptz,
   consumed_at timestamptz,
-  check (owner_id <> recovery_user_id),
   check (expires_at > created_at)
 );
-create unique index nipto_recovery_one_pending_per_owner_idx
-  on private.nipto_recovery_challenges(owner_id) where status = 'pending';
+create unique index nipto_recovery_one_pending_owner_idx
+  on private.nipto_recovery_challenges(owner_identity_id)
+  where status='pending';
 create index nipto_recovery_inbox_idx
-  on private.nipto_recovery_challenges(recovery_user_id, created_at desc)
-  where status = 'pending';
+  on private.nipto_recovery_challenges(recovery_user_id,created_at desc)
+  where status='pending';
 
 create table private.nipto_password_reset_grants (
   id uuid primary key default gen_random_uuid(),
   challenge_id uuid not null unique
     references private.nipto_recovery_challenges(id) on delete cascade,
-  owner_id uuid not null references private.nipto_accounts(user_id) on delete cascade,
+  owner_identity_id uuid not null references private.nipto_accounts(identity_id) on delete cascade,
   grant_hash text not null unique check (grant_hash ~ '^[a-f0-9]{64}$'),
   created_at timestamptz not null default pg_catalog.now(),
   expires_at timestamptz not null,
@@ -65,195 +96,45 @@ create table private.nipto_password_reset_grants (
 
 create table private.nipto_security_events (
   id bigint generated always as identity primary key,
-  user_id uuid references private.nipto_accounts(user_id) on delete set null,
+  identity_id uuid references private.nipto_accounts(identity_id) on delete set null,
   event_type text not null check (event_type in (
-    'account_created','account_migrated','password_changed','password_reset',
-    'session_created','session_rotated','session_revoked',
-    'recovery_requested','recovery_approved','recovery_rejected'
+    'account_created','account_linked','password_changed','password_reset',
+    'recovery_requested','recovery_approved','recovery_rejected',
+    'email_identity_removed','session_revoked'
   )),
   created_at timestamptz not null default pg_catalog.now(),
   metadata jsonb not null default '{}'::jsonb
 );
-create index nipto_security_events_user_created_idx
-  on private.nipto_security_events(user_id, created_at desc);
+create index nipto_security_events_identity_created_idx
+  on private.nipto_security_events(identity_id,created_at desc);
 
 alter table private.nipto_accounts enable row level security;
-alter table private.nipto_sessions enable row level security;
+alter table private.nipto_oidc_transactions enable row level security;
+alter table private.nipto_oidc_codes enable row level security;
 alter table private.nipto_recovery_challenges enable row level security;
 alter table private.nipto_password_reset_grants enable row level security;
 alter table private.nipto_security_events enable row level security;
-revoke all on private.nipto_accounts, private.nipto_sessions,
-  private.nipto_recovery_challenges, private.nipto_password_reset_grants,
-  private.nipto_security_events from public, anon, authenticated;
 
--- Existing profiles used auth.users as their UUID source. Native Nipto identities
--- create profile UUIDs directly; keep old auth.users rows untouched.
-alter table public.profiles drop constraint if exists profiles_id_fkey;
--- Safer defaults for newly created accounts and media. Existing explicit
--- visibility choices are preserved.
-alter table public.profiles alter column is_private set default true;
-alter table public.posts alter column visibility set default 'followers';
-alter table public.shorts alter column visibility set default 'followers';
+revoke all on private.nipto_accounts, private.nipto_oidc_transactions,
+  private.nipto_oidc_codes, private.nipto_recovery_challenges,
+  private.nipto_password_reset_grants, private.nipto_security_events
+from public, anon, authenticated;
 
--- Retire the legacy Nipto-ID-to-email lookup used by the old login function.
-drop function if exists public.resolve_nipto_login(text);
-
--- Supabase still has its own Auth issuer enabled. Restrict every application
--- identity check to the Nipto issuer so a legacy Supabase Auth JWT cannot pass
--- application RLS or SECURITY DEFINER RPCs during the migration window.
-create or replace function private.nipto_uid()
-returns uuid
-language sql
-stable
-security invoker
-set search_path=''
-as $
-  select case
-    when auth.jwt()->>'iss' = 'https://advmjribduqzyuwktkod.supabase.co/functions/v1/nipto-identity'
-    then auth.uid()
-    else null
-  end;
-$;
-revoke all on function private.nipto_uid() from public, anon;
-grant execute on function private.nipto_uid() to authenticated, service_role;
-
--- Replace auth.uid() with the issuer-checked helper in every existing public
--- SECURITY DEFINER function that accepts authenticated callers. This preserves
--- function behavior for Nipto JWTs while rejecting legacy Supabase Auth tokens.
-do $
-declare
-  v_function record;
-  v_definition text;
-begin
-  for v_function in
-    select p.oid
-    from pg_proc p
-    join pg_namespace n on n.oid=p.pronamespace
-    where n.nspname='public'
-      and p.prosecdef
-      and has_function_privilege('authenticated',p.oid,'EXECUTE')
-      and position('auth.uid' in lower(pg_catalog.pg_get_functiondef(p.oid))) > 0
-  loop
-    v_definition := pg_catalog.pg_get_functiondef(v_function.oid);
-    v_definition := regexp_replace(v_definition, 'auth[.]uid[[:space:]]*[(][[:space:]]*[)]', 'private.nipto_uid()', 'gi');
-    execute v_definition;
-  end loop;
-end;
-$;
-
--- The one-time migration bridge verifies only the old Supabase Auth issuer
--- and returns the caller's UUID. It never reads or returns email or user metadata.
-create or replace function public.nipto_native_verify_legacy_session()
-returns uuid
-language plpgsql
-security definer
-set search_path=''
-as $
-declare
-  v_user_id uuid;
-begin
-  if auth.jwt()->>'iss' <> 'https://advmjribduqzyuwktkod.supabase.co/auth/v1' then
-    raise exception 'Legacy account migration session required';
-  end if;
-  v_user_id := auth.uid();
-  if v_user_id is null then
-    raise exception 'Legacy account migration session required';
-  end if;
-  return v_user_id;
-end;
-$;
-revoke all on function public.nipto_native_verify_legacy_session() from public, anon;
-grant execute on function public.nipto_native_verify_legacy_session() to authenticated;
-
--- Apply an issuer guard as a restrictive policy to every public table with RLS.
--- Existing permissive ownership/visibility policies remain in place and are
--- ANDed with this issuer requirement.
-do $
-declare
-  v_table record;
-begin
-  for v_table in
-    select schemaname, tablename
-    from pg_tables
-    where schemaname='public' and rowsecurity
-  loop
-    execute format(
-      'drop policy if exists nipto_issuer_guard on %I.%I',
-      v_table.schemaname, v_table.tablename
-    );
-    execute format(
-      'create policy nipto_issuer_guard on %I.%I as restrictive for all to authenticated using (private.nipto_uid() is not null) with check (private.nipto_uid() is not null)',
-      v_table.schemaname, v_table.tablename
-    );
-  end loop;
-end;
-$;
-
--- Storage and Realtime also accept third-party JWTs; constrain their
--- authenticated policies to the same Nipto issuer.
-do $
-begin
-  if to_regclass('storage.objects') is not null then
-    execute 'drop policy if exists nipto_issuer_guard on storage.objects';
-    execute 'create policy nipto_issuer_guard on storage.objects as restrictive for all to authenticated using (private.nipto_uid() is not null) with check (private.nipto_uid() is not null)';
-  end if;
-  if to_regclass('realtime.messages') is not null then
-    execute 'drop policy if exists nipto_issuer_guard on realtime.messages';
-    execute 'create policy nipto_issuer_guard on realtime.messages as restrictive for all to authenticated using (private.nipto_uid() is not null) with check (private.nipto_uid() is not null)';
-  end if;
-end;
-$;
-revoke all on function public.request_recovery_contact(text) from public, anon, authenticated;
-revoke all on function public.respond_recovery_contact(uuid, boolean) from public, anon, authenticated;
-
--- Application ownership and moderation history must reference the stable Nipto
--- profile UUID, not the legacy Supabase Auth row. This allows the legacy Auth
--- identity (which may contain an email) to be deleted after successful migration.
-alter table public.posts drop constraint if exists posts_moderation_reviewed_by_fkey;
-alter table public.posts add constraint posts_moderation_reviewed_by_fkey
-  foreign key (moderation_reviewed_by) references public.profiles(id) on delete set null;
-
-alter table public.shorts drop constraint if exists shorts_moderation_reviewed_by_fkey;
-alter table public.shorts add constraint shorts_moderation_reviewed_by_fkey
-  foreign key (moderation_reviewed_by) references public.profiles(id) on delete set null;
-
-alter table public.user_feedback drop constraint if exists user_feedback_reviewed_by_fkey;
-alter table public.user_feedback add constraint user_feedback_reviewed_by_fkey
-  foreign key (reviewed_by) references public.profiles(id) on delete set null;
-
-alter table public.user_reports drop constraint if exists user_reports_reviewed_by_fkey;
-alter table public.user_reports add constraint user_reports_reviewed_by_fkey
-  foreign key (reviewed_by) references public.profiles(id) on delete set null;
-
-alter table private.staff_action_log drop constraint if exists staff_action_log_actor_id_fkey;
-alter table private.staff_action_log add constraint staff_action_log_actor_id_fkey
-  foreign key (actor_id) references public.profiles(id) on delete restrict;
-
-alter table private.staff_roles drop constraint if exists staff_roles_user_id_fkey;
-alter table private.staff_roles add constraint staff_roles_user_id_fkey
-  foreign key (user_id) references public.profiles(id) on delete cascade;
-
-alter table private.staff_roles drop constraint if exists staff_roles_granted_by_fkey;
-alter table private.staff_roles add constraint staff_roles_granted_by_fkey
-  foreign key (granted_by) references public.profiles(id) on delete set null;
-
-create or replace function public.nipto_native_register(
+-- Called only by the trusted Nipto OIDC authorization endpoint.
+create or replace function public.nipto_oidc_register(
   p_nipto_id text,
   p_display_name text,
   p_password_hash text,
   p_recovery_nipto_id text default null
 )
-returns table(user_id uuid, recovery_request_id uuid)
-language plpgsql
-security definer
-set search_path = ''
+returns uuid
+language plpgsql security definer set search_path=''
 as $$
 declare
-  v_user_id uuid := gen_random_uuid();
-  v_nipto_id text := lower(trim(coalesce(p_nipto_id, '')));
-  v_display_name text := trim(coalesce(p_display_name, ''));
-  v_recovery_id uuid;
-  v_recovery_request uuid;
+  v_identity_id uuid;
+  v_nipto_id text := lower(trim(coalesce(p_nipto_id,'')));
+  v_display_name text := trim(coalesce(p_display_name,''));
+  v_recovery text := nullif(lower(trim(coalesce(p_recovery_nipto_id,''))),'');
 begin
   if v_nipto_id !~ '^[a-z0-9_]{3,24}$'
      or v_nipto_id = any(array['admin','administrator','support','help','nipto','official','security','moderator']) then
@@ -266,458 +147,356 @@ begin
      or char_length(p_password_hash) not between 32 and 512 then
     raise exception 'Invalid password hash';
   end if;
-
-  insert into public.profiles(id, nipto_id, display_name)
-  values (v_user_id, v_nipto_id, v_display_name);
-
-  insert into private.nipto_accounts(user_id, password_hash)
-  values (v_user_id, p_password_hash);
-
-  insert into private.nipto_security_events(user_id, event_type)
-  values (v_user_id, 'account_created');
-
-  if nullif(trim(coalesce(p_recovery_nipto_id, '')), '') is not null then
-    select p.id into v_recovery_id
-    from public.profiles p
-    join private.nipto_accounts recovery_account
-      on recovery_account.user_id = p.id and recovery_account.status = 'active'
-    where p.nipto_id = lower(trim(p_recovery_nipto_id))
-      and p.account_state = 'active';
-
-    if v_recovery_id is null or v_recovery_id = v_user_id then
-      raise exception 'Recovery Nipto account could not be selected';
+  if v_recovery is not null then
+    if v_recovery !~ '^[a-z0-9_]{3,24}$' or v_recovery=v_nipto_id then
+      raise exception 'Invalid recovery Nipto ID';
     end if;
-    if private.is_blocked_between(v_user_id, v_recovery_id) then
-      raise exception 'Recovery Nipto account could not be selected';
+    if not exists (
+      select 1 from public.profiles p
+      join private.nipto_accounts a on a.supabase_user_id=p.id and a.status='active'
+      where p.nipto_id=v_recovery and p.account_state='active'
+    ) then
+      raise exception 'Recovery Nipto account is unavailable';
     end if;
-
-    insert into public.account_recovery_contacts(owner_id, recovery_user_id)
-    values (v_user_id, v_recovery_id)
-    returning id into v_recovery_request;
   end if;
 
-  return query select v_user_id, v_recovery_request;
+  insert into private.nipto_accounts(nipto_id,display_name,password_hash,pending_recovery_nipto_id)
+  values(v_nipto_id,v_display_name,p_password_hash,v_recovery)
+  returning identity_id into v_identity_id;
+
+  insert into private.nipto_security_events(identity_id,event_type)
+  values(v_identity_id,'account_created');
+  return v_identity_id;
 end;
 $$;
-revoke all on function public.nipto_native_register(text,text,text,text) from public, anon, authenticated;
-grant execute on function public.nipto_native_register(text,text,text,text) to service_role;
+revoke all on function public.nipto_oidc_register(text,text,text,text) from public, anon, authenticated;
+grant execute on function public.nipto_oidc_register(text,text,text,text) to service_role;
 
-create or replace function public.nipto_native_login_record(p_nipto_id text)
-returns table(user_id uuid, password_hash text, account_state text, nipto_id text, display_name text)
-language sql
-stable
-security definer
-set search_path = ''
+create or replace function public.nipto_oidc_login_record(p_nipto_id text)
+returns table(identity_id uuid,password_hash text,status text,nipto_id text,display_name text)
+language sql stable security definer set search_path=''
 as $$
-  select a.user_id, a.password_hash, p.account_state, p.nipto_id, p.display_name
+  select a.identity_id,a.password_hash,a.status,a.nipto_id,a.display_name
   from private.nipto_accounts a
-  join public.profiles p on p.id = a.user_id
-  where p.nipto_id = lower(trim(coalesce(p_nipto_id, '')))
-    and a.status = 'active'
-    and p.account_state = 'active'
+  where a.nipto_id=lower(trim(coalesce(p_nipto_id,'')))
   limit 1;
 $$;
-revoke all on function public.nipto_native_login_record(text) from public, anon, authenticated;
-grant execute on function public.nipto_native_login_record(text) to service_role;
+revoke all on function public.nipto_oidc_login_record(text) from public, anon, authenticated;
+grant execute on function public.nipto_oidc_login_record(text) to service_role;
 
-create or replace function public.nipto_native_create_session(
-  p_user_id uuid,
-  p_refresh_token_hash text,
-  p_expires_at timestamptz,
-  p_device_label text default null
+create or replace function public.nipto_oidc_create_transaction(
+  p_client_id text,p_redirect_uri text,p_scope text,p_state text,p_nonce text,
+  p_code_challenge text,p_csrf_hash text
 )
 returns uuid
-language plpgsql
-security definer
-set search_path = ''
+language plpgsql security definer set search_path=''
 as $$
-declare v_session_id uuid;
+declare v_id uuid;
 begin
-  if p_refresh_token_hash !~ '^[a-f0-9]{64}$'
-     or p_expires_at <= pg_catalog.now()
-     or p_expires_at > pg_catalog.now() + interval '90 days' then
-    raise exception 'Invalid session parameters';
+  if p_client_id is null or p_redirect_uri is null or p_state is null
+     or p_nonce is null or p_code_challenge is null
+     or p_code_challenge !~ '^[A-Za-z0-9_-]{43,128}$'
+     or p_csrf_hash !~ '^[a-f0-9]{64}$' then
+    raise exception 'Invalid OIDC authorization request';
   end if;
-  if not exists (
-    select 1 from private.nipto_accounts a
-    join public.profiles p on p.id = a.user_id
-    where a.user_id = p_user_id and a.status = 'active'
-      and p.account_state = 'active'
-  ) then raise exception 'Account unavailable'; end if;
-
-  -- Keep a bounded number of active device sessions per account.
-  update private.nipto_sessions s
-    set revoked_at = pg_catalog.now()
-    where s.id in (
-      select old_session.id
-      from private.nipto_sessions old_session
-      where old_session.user_id = p_user_id and old_session.revoked_at is null
-      order by old_session.created_at desc
-      offset 9
-    );
-
-  insert into private.nipto_sessions(user_id, refresh_token_hash, expires_at, device_label)
-  values (p_user_id, p_refresh_token_hash, p_expires_at, left(p_device_label, 80))
-  returning id into v_session_id;
-
-  insert into private.nipto_security_events(user_id, event_type)
-  values (p_user_id, 'session_created');
-  return v_session_id;
-end;
-$$;
-revoke all on function public.nipto_native_create_session(uuid,text,timestamptz,text) from public, anon, authenticated;
-grant execute on function public.nipto_native_create_session(uuid,text,timestamptz,text) to service_role;
-
-create or replace function public.nipto_native_rotate_session(
-  p_old_refresh_token_hash text,
-  p_new_refresh_token_hash text,
-  p_new_expires_at timestamptz
-)
-returns table(user_id uuid, session_id uuid)
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare v_old private.nipto_sessions%rowtype; v_new_id uuid;
-begin
-  if p_old_refresh_token_hash !~ '^[a-f0-9]{64}$'
-     or p_new_refresh_token_hash !~ '^[a-f0-9]{64}$'
-     or p_new_expires_at <= pg_catalog.now()
-     or p_new_expires_at > pg_catalog.now() + interval '90 days' then
-    return;
-  end if;
-
-  select * into v_old from private.nipto_sessions s
-  where s.refresh_token_hash = p_old_refresh_token_hash for update;
-  if not found then return; end if;
-
-  if v_old.revoked_at is not null then
-    update private.nipto_sessions s set revoked_at = coalesce(s.revoked_at, pg_catalog.now())
-    where s.user_id = v_old.user_id;
-    insert into private.nipto_security_events(user_id, event_type)
-    values (v_old.user_id, 'session_revoked');
-    return;
-  end if;
-
-  if v_old.expires_at <= pg_catalog.now() or not exists (
-    select 1 from private.nipto_accounts a join public.profiles p on p.id=a.user_id
-    where a.user_id=v_old.user_id and a.status='active' and p.account_state='active'
-  ) then
-    update private.nipto_sessions s set revoked_at=pg_catalog.now() where s.id=v_old.id;
-    return;
-  end if;
-
-  update private.nipto_sessions s
-    set revoked_at=pg_catalog.now(), last_used_at=pg_catalog.now()
-    where s.id=v_old.id;
-
-  insert into private.nipto_sessions(user_id,refresh_token_hash,expires_at,device_label)
-  values(v_old.user_id,p_new_refresh_token_hash,p_new_expires_at,v_old.device_label)
-  returning id into v_new_id;
-
-  update private.nipto_sessions s set rotated_to=v_new_id where s.id=v_old.id;
-  insert into private.nipto_security_events(user_id,event_type)
-  values(v_old.user_id,'session_rotated');
-
-  return query select v_old.user_id,v_new_id;
-end;
-$$;
-revoke all on function public.nipto_native_rotate_session(text,text,timestamptz) from public, anon, authenticated;
-grant execute on function public.nipto_native_rotate_session(text,text,timestamptz) to service_role;
-
-create or replace function public.nipto_native_is_session_active(
-  p_user_id uuid, p_session_id uuid
-)
-returns boolean
-language sql stable security definer set search_path=''
-as $
-  select exists (
-    select 1
-    from private.nipto_sessions s
-    join private.nipto_accounts a on a.user_id=s.user_id
-    join public.profiles p on p.id=s.user_id
-    where s.id=p_session_id and s.user_id=p_user_id
-      and s.revoked_at is null and s.expires_at>pg_catalog.now()
-      and a.status='active' and p.account_state='active'
-  );
-$;
-revoke all on function public.nipto_native_is_session_active(uuid,uuid) from public, anon, authenticated;
-grant execute on function public.nipto_native_is_session_active(uuid,uuid) to service_role;
-
-create or replace function public.nipto_native_list_sessions(p_user_id uuid)
-returns table(
-  session_id uuid,
-  device_label text,
-  created_at timestamptz,
-  last_used_at timestamptz,
-  expires_at timestamptz
-)
-language sql stable security definer set search_path=''
-as $
-  select s.id,s.device_label,s.created_at,s.last_used_at,s.expires_at
-  from private.nipto_sessions s
-  where s.user_id=p_user_id and s.revoked_at is null
-    and s.expires_at>pg_catalog.now()
-  order by s.last_used_at desc
-  limit 10;
-$;
-revoke all on function public.nipto_native_list_sessions(uuid) from public, anon, authenticated;
-grant execute on function public.nipto_native_list_sessions(uuid) to service_role;
-
-create or replace function public.nipto_native_revoke_session(
-  p_user_id uuid, p_session_id uuid
-)
-returns boolean
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare v_count integer;
-begin
-  update private.nipto_sessions s set revoked_at=pg_catalog.now()
-  where s.id=p_session_id and s.user_id=p_user_id and s.revoked_at is null;
-  get diagnostics v_count=row_count;
-  if v_count=1 then
-    insert into private.nipto_security_events(user_id,event_type)
-    values(p_user_id,'session_revoked');
-  end if;
-  return v_count=1;
-end;
-$$;
-revoke all on function public.nipto_native_revoke_session(uuid,uuid) from public, anon, authenticated;
-grant execute on function public.nipto_native_revoke_session(uuid,uuid) to service_role;
-
-create or replace function public.nipto_native_revoke_all_sessions(p_user_id uuid)
-returns integer
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare v_count integer;
-begin
-  update private.nipto_sessions s set revoked_at=pg_catalog.now()
-  where s.user_id=p_user_id and s.revoked_at is null;
-  get diagnostics v_count=row_count;
-  insert into private.nipto_security_events(user_id,event_type)
-  values(p_user_id,'session_revoked');
-  return v_count;
-end;
-$$;
-revoke all on function public.nipto_native_revoke_all_sessions(uuid) from public, anon, authenticated;
-grant execute on function public.nipto_native_revoke_all_sessions(uuid) to service_role;
-
-create or replace function public.nipto_native_request_recovery_contact(
-  p_owner_id uuid, p_nipto_id text
-)
-returns uuid
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare v_target uuid; v_id uuid;
-begin
-  select p.id into v_target
-  from public.profiles p
-  join private.nipto_accounts target_account
-    on target_account.user_id=p.id and target_account.status='active'
-  where p.nipto_id=lower(trim(coalesce(p_nipto_id,'')))
-    and p.account_state='active';
-  if v_target is null or v_target=p_owner_id
-     or not exists(select 1 from private.nipto_accounts a where a.user_id=p_owner_id and a.status='active')
-     or private.is_blocked_between(p_owner_id,v_target) then
-    raise exception 'Recovery Nipto account could not be selected';
-  end if;
-
-  if exists (
-    select 1 from public.account_recovery_contacts rc
-    where rc.owner_id=p_owner_id and rc.status in ('pending','accepted')
-      and rc.recovery_user_id<>v_target
-  ) then raise exception 'Remove the existing recovery account before choosing another'; end if;
-
-  insert into public.account_recovery_contacts(owner_id,recovery_user_id)
-  values(p_owner_id,v_target)
-  on conflict(owner_id,recovery_user_id) do update
-    set status='pending',updated_at=pg_catalog.now()
+  insert into private.nipto_oidc_transactions(
+    client_id,redirect_uri,response_type,scope,state,nonce,
+    code_challenge,code_challenge_method,csrf_hash,expires_at
+  )
+  values(
+    p_client_id,p_redirect_uri,'code',coalesce(p_scope,'openid profile'),
+    p_state,p_nonce,p_code_challenge,'S256',p_csrf_hash,
+    pg_catalog.now()+interval '10 minutes'
+  )
   returning id into v_id;
   return v_id;
 end;
 $$;
-revoke all on function public.nipto_native_request_recovery_contact(uuid,text) from public, anon, authenticated;
-grant execute on function public.nipto_native_request_recovery_contact(uuid,text) to service_role;
+revoke all on function public.nipto_oidc_create_transaction(text,text,text,text,text,text,text) from public, anon, authenticated;
+grant execute on function public.nipto_oidc_create_transaction(text,text,text,text,text,text,text) to service_role;
 
-create or replace function public.nipto_native_list_recovery_contacts(p_user_id uuid)
-returns table(
-  request_id uuid, owner_id uuid, owner_nipto_id text, owner_display_name text,
-  recovery_user_id uuid, recovery_nipto_id text, recovery_display_name text,
-  status text, created_at timestamptz
-)
+create or replace function public.nipto_oidc_get_transaction(p_id uuid,p_csrf_hash text)
+returns table(client_id text,redirect_uri text,scope text,state text,nonce text,code_challenge text)
 language sql stable security definer set search_path=''
 as $$
-  select rc.id,rc.owner_id,op.nipto_id,op.display_name,
-         rc.recovery_user_id,rp.nipto_id,rp.display_name,rc.status,rc.created_at
-  from public.account_recovery_contacts rc
-  join public.profiles op on op.id=rc.owner_id
-  join public.profiles rp on rp.id=rc.recovery_user_id
-  where rc.owner_id=p_user_id or rc.recovery_user_id=p_user_id
-  order by rc.created_at desc limit 20;
+  select t.client_id,t.redirect_uri,t.scope,t.state,t.nonce,t.code_challenge
+  from private.nipto_oidc_transactions t
+  where t.id=p_id and t.csrf_hash=p_csrf_hash
+    and t.consumed_at is null and t.expires_at>pg_catalog.now()
+  limit 1;
 $$;
-revoke all on function public.nipto_native_list_recovery_contacts(uuid) from public, anon, authenticated;
-grant execute on function public.nipto_native_list_recovery_contacts(uuid) to service_role;
+revoke all on function public.nipto_oidc_get_transaction(uuid,text) from public, anon, authenticated;
+grant execute on function public.nipto_oidc_get_transaction(uuid,text) to service_role;
 
-create or replace function public.nipto_native_respond_recovery_contact(
-  p_request_id uuid, p_recovery_user_id uuid, p_accept boolean
-)
+create or replace function public.nipto_oidc_consume_transaction(p_id uuid,p_csrf_hash text)
 returns boolean
 language plpgsql security definer set search_path=''
 as $$
-declare v_owner uuid;
+declare v_count integer;
 begin
-  update public.account_recovery_contacts rc
-    set status=case when p_accept then 'accepted' else 'rejected' end,
-        updated_at=pg_catalog.now()
-  where rc.id=p_request_id and rc.recovery_user_id=p_recovery_user_id
-    and rc.status='pending'
-    and exists (
-      select 1 from private.nipto_accounts a
-      join public.profiles op on op.id=a.user_id
-      join public.profiles rp on rp.id=rc.recovery_user_id
-      join private.nipto_accounts recovery_account
-        on recovery_account.user_id=rp.id and recovery_account.status='active'
-      where a.user_id=rc.owner_id and a.status='active'
-        and op.account_state='active' and rp.account_state='active'
-        and not private.is_blocked_between(rc.owner_id,rc.recovery_user_id)
-    )
-  returning rc.owner_id into v_owner;
-  if v_owner is null then return false; end if;
-  insert into private.nipto_security_events(user_id,event_type)
-  values(v_owner,case when p_accept then 'recovery_approved' else 'recovery_rejected' end);
+  update private.nipto_oidc_transactions
+  set consumed_at=pg_catalog.now()
+  where id=p_id and csrf_hash=p_csrf_hash
+    and consumed_at is null and expires_at>pg_catalog.now();
+  get diagnostics v_count=row_count;
+  return v_count=1;
+end;
+$$;
+revoke all on function public.nipto_oidc_consume_transaction(uuid,text) from public, anon, authenticated;
+grant execute on function public.nipto_oidc_consume_transaction(uuid,text) to service_role;
+
+create or replace function public.nipto_oidc_create_code(
+  p_code_hash text,p_identity_id uuid,p_client_id text,p_redirect_uri text,
+  p_nonce text,p_code_challenge text
+)
+returns void
+language plpgsql security definer set search_path=''
+as $$
+begin
+  if p_code_hash !~ '^[a-f0-9]{64}$'
+     or p_code_challenge !~ '^[A-Za-z0-9_-]{43,128}$' then
+    raise exception 'Invalid authorization code';
+  end if;
+  insert into private.nipto_oidc_codes(
+    code_hash,identity_id,client_id,redirect_uri,nonce,code_challenge,expires_at
+  )
+  select p_code_hash,a.identity_id,p_client_id,p_redirect_uri,p_nonce,
+         p_code_challenge,pg_catalog.now()+interval '2 minutes'
+  from private.nipto_accounts a
+  where a.identity_id=p_identity_id and a.status='active';
+  if not found then raise exception 'Nipto account unavailable'; end if;
+end;
+$$;
+revoke all on function public.nipto_oidc_create_code(text,uuid,text,text,text,text) from public, anon, authenticated;
+grant execute on function public.nipto_oidc_create_code(text,uuid,text,text,text,text) to service_role;
+
+create or replace function public.nipto_oidc_consume_code(
+  p_code_hash text,p_client_id text,p_redirect_uri text,p_code_challenge text
+)
+returns table(identity_id uuid,nonce text,nipto_id text,display_name text)
+language plpgsql security definer set search_path=''
+as $$
+begin
+  return query
+  update private.nipto_oidc_codes c
+  set consumed_at=pg_catalog.now()
+  from private.nipto_accounts a
+  where c.code_hash=p_code_hash and c.client_id=p_client_id
+    and c.redirect_uri=p_redirect_uri and c.code_challenge=p_code_challenge
+    and c.identity_id=a.identity_id and a.status='active'
+    and c.consumed_at is null and c.expires_at>pg_catalog.now()
+  returning c.identity_id,c.nonce,a.nipto_id,a.display_name;
+end;
+$$;
+revoke all on function public.nipto_oidc_consume_code(text,text,text,text) from public, anon, authenticated;
+grant execute on function public.nipto_oidc_consume_code(text,text,text,text) to service_role;
+
+create or replace function public.nipto_oidc_get_identity(p_identity_id uuid)
+returns table(identity_id uuid,nipto_id text,display_name text,status text)
+language sql stable security definer set search_path=''
+as $$
+  select a.identity_id,a.nipto_id,a.display_name,a.status
+  from private.nipto_accounts a
+  where a.identity_id=p_identity_id and a.status='active'
+  limit 1;
+$$;
+revoke all on function public.nipto_oidc_get_identity(uuid) from public, anon, authenticated;
+grant execute on function public.nipto_oidc_get_identity(uuid) to service_role;
+
+create or replace function public.nipto_oidc_link_user(p_nipto_id text,p_user_id uuid)
+returns boolean
+language plpgsql security definer set search_path=''
+as $$
+declare v_count integer;
+begin
+  if not exists (
+    select 1 from public.profiles p
+    where p.id=p_user_id and p.nipto_id=lower(trim(p_nipto_id))
+  ) then raise exception 'Nipto profile does not match'; end if;
+
+  update private.nipto_accounts
+  set supabase_user_id=p_user_id,updated_at=pg_catalog.now()
+  where nipto_id=lower(trim(p_nipto_id))
+    and (supabase_user_id is null or supabase_user_id=p_user_id)
+    and status='active';
+  get diagnostics v_count=row_count;
+  if v_count<>1 then raise exception 'Nipto account could not be linked'; end if;
+
+  insert into private.nipto_security_events(identity_id,event_type)
+  select identity_id,'account_linked' from private.nipto_accounts
+  where nipto_id=lower(trim(p_nipto_id));
   return true;
 end;
 $$;
-revoke all on function public.nipto_native_respond_recovery_contact(uuid,uuid,boolean) from public, anon, authenticated;
-grant execute on function public.nipto_native_respond_recovery_contact(uuid,uuid,boolean) to service_role;
+revoke all on function public.nipto_oidc_link_user(text,uuid) from public, anon, authenticated;
+grant execute on function public.nipto_oidc_link_user(text,uuid) to service_role;
 
-create or replace function public.nipto_native_start_recovery(
-  p_nipto_id text, p_challenge_hash text
-)
-returns table(challenge_id uuid, owner_id uuid, recovery_user_id uuid)
+-- Called by the existing auth.users trigger after OIDC sign-in creates a
+-- Supabase user. The OIDC userinfo claims carry nipto_id and display_name.
+create or replace function private.handle_new_nipto_user()
+returns trigger
 language plpgsql security definer set search_path=''
 as $$
-declare v_owner uuid; v_recovery uuid; v_challenge uuid;
+declare
+  v_nipto_id text := lower(coalesce(new.raw_user_meta_data->>'nipto_id',''));
+  v_display_name text := nullif(trim(coalesce(
+    new.raw_user_meta_data->>'display_name',
+    new.raw_user_meta_data->>'name',''
+  )),'');
+  v_recovery_nipto_id text;
+  v_recovery_user_id uuid;
+begin
+  if new.raw_app_meta_data->>'provider' <> 'custom:nipto' then
+    raise exception 'Use your Nipto account to sign in';
+  end if;
+  if v_nipto_id !~ '^[a-z0-9_]{3,24}$'
+     or v_nipto_id in ('admin','administrator','support','help','nipto','official','security','moderator') then
+    raise exception 'A valid Nipto ID is required';
+  end if;
+  if v_display_name is null or char_length(v_display_name) not between 1 and 50 then
+    raise exception 'A valid display name is required';
+  end if;
+
+  select a.pending_recovery_nipto_id into v_recovery_nipto_id
+  from private.nipto_accounts a
+  where a.nipto_id=v_nipto_id and a.status='active'
+    and a.supabase_user_id is null
+  for update;
+  if not found then raise exception 'Nipto account identity is unavailable'; end if;
+
+  insert into public.profiles(id,nipto_id,display_name,is_private)
+  values(new.id,v_nipto_id,v_display_name,true);
+
+  update private.nipto_accounts
+  set supabase_user_id=new.id,pending_recovery_nipto_id=null,updated_at=pg_catalog.now()
+  where nipto_id=v_nipto_id and supabase_user_id is null;
+
+  if v_recovery_nipto_id is not null then
+    select p.id into v_recovery_user_id
+    from public.profiles p
+    join private.nipto_accounts ra on ra.supabase_user_id=p.id and ra.status='active'
+    where p.nipto_id=v_recovery_nipto_id and p.account_state='active'
+    limit 1;
+    if v_recovery_user_id is not null
+       and not private.is_blocked_between(new.id,v_recovery_user_id) then
+      insert into public.account_recovery_contacts(owner_id,recovery_user_id)
+      values(new.id,v_recovery_user_id)
+      on conflict(owner_id,recovery_user_id) do update
+        set status='pending',updated_at=pg_catalog.now();
+    end if;
+  end if;
+  return new;
+end;
+$$;
+revoke all on function private.handle_new_nipto_user() from public,anon,authenticated;
+
+-- A caller may read only their own stable Supabase Auth UUID through the API.
+create or replace function public.nipto_native_current_user()
+returns uuid
+language sql stable security invoker set search_path=''
+as $$ select auth.uid(); $$;
+revoke all on function public.nipto_native_current_user() from public,anon;
+grant execute on function public.nipto_native_current_user() to authenticated;
+
+-- Existing users link the custom Nipto identity first. This RPC then removes
+-- the legacy email credential and email identity; new OIDC users have no email.
+create or replace function public.nipto_native_clear_legacy_email()
+returns boolean
+language plpgsql security definer set search_path=''
+as $$
+declare v_user_id uuid := auth.uid();
+begin
+  if v_user_id is null or not exists (
+    select 1 from auth.identities i
+    where i.user_id=v_user_id and i.provider='custom:nipto'
+  ) then
+    raise exception 'Link your Nipto identity before removing legacy sign-in';
+  end if;
+
+  update auth.users
+  set email=null,email_confirmed_at=null
+  where id=v_user_id;
+
+  delete from auth.identities
+  where user_id=v_user_id and provider='email';
+
+  insert into private.nipto_security_events(identity_id,event_type)
+  select a.identity_id,'email_identity_removed'
+  from private.nipto_accounts a
+  where a.supabase_user_id=v_user_id;
+
+  return true;
+end;
+$$;
+revoke all on function public.nipto_native_clear_legacy_email() from public,anon;
+grant execute on function public.nipto_native_clear_legacy_email() to authenticated;
+
+-- Recovery Nipto account flows. The owner is resolved by Nipto ID; the recovery
+-- party is an existing Nipto profile with a linked native identity.
+create or replace function public.nipto_native_start_recovery(
+  p_nipto_id text,p_challenge_hash text
+)
+returns table(challenge_id uuid,owner_user_id uuid,recovery_user_id uuid)
+language plpgsql security definer set search_path=''
+as $$
+declare
+  v_identity uuid;
+  v_owner uuid;
+  v_recovery uuid;
+  v_challenge uuid;
 begin
   if p_challenge_hash !~ '^[a-f0-9]{64}$' then return; end if;
-  select p.id into v_owner
-  from public.profiles p join private.nipto_accounts a on a.user_id=p.id
-  where p.nipto_id=lower(trim(coalesce(p_nipto_id,'')))
-    and p.account_state='active' and a.status='active';
-  if v_owner is null then return; end if;
+  select a.identity_id,a.supabase_user_id into v_identity,v_owner
+  from private.nipto_accounts a
+  join public.profiles p on p.id=a.supabase_user_id
+  where a.nipto_id=lower(trim(coalesce(p_nipto_id,'')))
+    and a.status='active' and p.account_state='active';
+  if v_identity is null or v_owner is null then return; end if;
 
   select rc.recovery_user_id into v_recovery
   from public.account_recovery_contacts rc
   join public.profiles rp on rp.id=rc.recovery_user_id
-  join private.nipto_accounts recovery_account
-    on recovery_account.user_id=rp.id and recovery_account.status='active'
+  join private.nipto_accounts ra on ra.supabase_user_id=rp.id and ra.status='active'
   where rc.owner_id=v_owner and rc.status='accepted'
     and rp.account_state='active'
     and not private.is_blocked_between(v_owner,rc.recovery_user_id)
   limit 1;
   if v_recovery is null then return; end if;
 
-  update private.nipto_recovery_challenges c set status='expired'
-  where c.owner_id=v_owner and c.status='pending' and c.expires_at<=pg_catalog.now();
-  if exists(select 1 from private.nipto_recovery_challenges c
-    where c.owner_id=v_owner and c.status='pending' and c.expires_at>pg_catalog.now()) then
-    return;
-  end if;
+  update private.nipto_recovery_challenges
+  set status='expired'
+  where owner_identity_id=v_identity and status='pending'
+    and expires_at<=pg_catalog.now();
+
+  if exists (
+    select 1 from private.nipto_recovery_challenges c
+    where c.owner_identity_id=v_identity and c.status='pending'
+      and c.expires_at>pg_catalog.now()
+  ) then return; end if;
 
   insert into private.nipto_recovery_challenges(
-    owner_id,recovery_user_id,challenge_hash,expires_at
-  ) values(v_owner,v_recovery,p_challenge_hash,pg_catalog.now()+interval '15 minutes')
+    owner_identity_id,recovery_user_id,challenge_hash,expires_at
+  )
+  values(v_identity,v_recovery,p_challenge_hash,pg_catalog.now()+interval '15 minutes')
   returning id into v_challenge;
 
   insert into public.notifications(recipient_id,actor_id,notification_type,payload)
   values(v_recovery,v_owner,'system',
     jsonb_build_object('kind','password_recovery_request','challenge_id',v_challenge));
 
-  insert into private.nipto_security_events(user_id,event_type)
-  values(v_owner,'recovery_requested');
+  insert into private.nipto_security_events(identity_id,event_type)
+  values(v_identity,'recovery_requested');
+
   return query select v_challenge,v_owner,v_recovery;
 end;
 $$;
-revoke all on function public.nipto_native_start_recovery(text,text) from public, anon, authenticated;
+revoke all on function public.nipto_native_start_recovery(text,text) from public,anon,authenticated;
 grant execute on function public.nipto_native_start_recovery(text,text) to service_role;
 
-create or replace function public.nipto_native_list_recovery_requests(p_recovery_user_id uuid)
-returns table(challenge_id uuid, owner_id uuid, owner_nipto_id text, owner_display_name text, created_at timestamptz, expires_at timestamptz)
-language sql stable security definer set search_path=''
-as $$
-  select c.id,c.owner_id,p.nipto_id,p.display_name,c.created_at,c.expires_at
-  from private.nipto_recovery_challenges c
-  join public.profiles p on p.id=c.owner_id
-  join private.nipto_accounts owner_account
-    on owner_account.user_id=c.owner_id and owner_account.status='active'
-  join public.account_recovery_contacts rc
-    on rc.owner_id=c.owner_id
-    and rc.recovery_user_id=c.recovery_user_id
-    and rc.status='accepted'
-  join public.profiles recovery_profile
-    on recovery_profile.id=c.recovery_user_id
-  join private.nipto_accounts recovery_account
-    on recovery_account.user_id=c.recovery_user_id and recovery_account.status='active'
-  where c.recovery_user_id=p_recovery_user_id
-    and c.status='pending' and c.expires_at>pg_catalog.now()
-    and p.account_state='active' and recovery_profile.account_state='active'
-    and not private.is_blocked_between(c.owner_id,c.recovery_user_id)
-  order by c.created_at desc limit 10;
-$$;
-revoke all on function public.nipto_native_list_recovery_requests(uuid) from public, anon, authenticated;
-grant execute on function public.nipto_native_list_recovery_requests(uuid) to service_role;
-
-create or replace function public.nipto_native_respond_password_recovery(
-  p_challenge_id uuid, p_recovery_user_id uuid, p_approve boolean
-)
-returns boolean
-language plpgsql security definer set search_path=''
-as $$
-declare v_owner uuid;
-begin
-  update private.nipto_recovery_challenges c
-    set status=case when p_approve then 'approved' else 'rejected' end,
-        approved_at=case when p_approve then pg_catalog.now() else null end,
-        rejected_at=case when p_approve then null else pg_catalog.now() end
-  where c.id=p_challenge_id and c.recovery_user_id=p_recovery_user_id
-    and c.status='pending' and c.expires_at>pg_catalog.now()
-    and exists(
-      select 1 from public.account_recovery_contacts rc
-      join public.profiles op on op.id=rc.owner_id
-      join public.profiles rp on rp.id=rc.recovery_user_id
-      join private.nipto_accounts a on a.user_id=rc.owner_id
-      join private.nipto_accounts recovery_account
-        on recovery_account.user_id=rp.id and recovery_account.status='active'
-      where rc.owner_id=c.owner_id and rc.recovery_user_id=c.recovery_user_id
-        and rc.status='accepted' and op.account_state='active'
-        and rp.account_state='active' and a.status='active'
-        and not private.is_blocked_between(rc.owner_id,rc.recovery_user_id)
-    )
-  returning c.owner_id into v_owner;
-  if v_owner is null then return false; end if;
-  insert into private.nipto_security_events(user_id,event_type)
-  values(v_owner,case when p_approve then 'recovery_approved' else 'recovery_rejected' end);
-  insert into public.notifications(recipient_id,actor_id,notification_type,payload)
-  values(v_owner,p_recovery_user_id,'system',
-    jsonb_build_object('kind',case when p_approve then 'password_recovery_approved' else 'password_recovery_rejected' end));
-  return true;
-end;
-$$;
-revoke all on function public.nipto_native_respond_password_recovery(uuid,uuid,boolean) from public, anon, authenticated;
-grant execute on function public.nipto_native_respond_password_recovery(uuid,uuid,boolean) to service_role;
-
-create or replace function public.nipto_native_recovery_status(
-  p_challenge_id uuid, p_challenge_hash text
-)
+create or replace function public.nipto_native_recovery_status(p_challenge_id uuid,p_challenge_hash text)
 returns text
 language sql stable security definer set search_path=''
-as $
+as $$
   select case
     when c.status in ('pending','approved') and c.expires_at<=pg_catalog.now() then 'expired'
     else c.status
@@ -725,54 +504,103 @@ as $
   from private.nipto_recovery_challenges c
   where c.id=p_challenge_id and c.challenge_hash=p_challenge_hash
   limit 1;
-$;
-revoke all on function public.nipto_native_recovery_status(uuid,text) from public, anon, authenticated;
+$$;
+revoke all on function public.nipto_native_recovery_status(uuid,text) from public,anon,authenticated;
 grant execute on function public.nipto_native_recovery_status(uuid,text) to service_role;
 
+create or replace function public.nipto_native_list_recovery_requests(p_recovery_user_id uuid)
+returns table(challenge_id uuid,owner_nipto_id text,owner_display_name text,created_at timestamptz,expires_at timestamptz)
+language sql stable security definer set search_path=''
+as $$
+  select c.id,a.nipto_id,a.display_name,c.created_at,c.expires_at
+  from private.nipto_recovery_challenges c
+  join private.nipto_accounts a on a.identity_id=c.owner_identity_id and a.status='active'
+  join public.account_recovery_contacts rc
+    on rc.owner_id=a.supabase_user_id
+    and rc.recovery_user_id=c.recovery_user_id and rc.status='accepted'
+  join public.profiles rp on rp.id=c.recovery_user_id and rp.account_state='active'
+  where c.recovery_user_id=p_recovery_user_id
+    and c.status='pending' and c.expires_at>pg_catalog.now()
+    and not private.is_blocked_between(a.supabase_user_id,c.recovery_user_id)
+  order by c.created_at desc limit 10;
+$$;
+revoke all on function public.nipto_native_list_recovery_requests(uuid) from public,anon,authenticated;
+grant execute on function public.nipto_native_list_recovery_requests(uuid) to service_role;
+
+create or replace function public.nipto_native_respond_password_recovery(
+  p_challenge_id uuid,p_recovery_user_id uuid,p_approve boolean
+)
+returns boolean
+language plpgsql security definer set search_path=''
+as $$
+declare v_owner_identity uuid; v_owner_user uuid;
+begin
+  update private.nipto_recovery_challenges c
+  set status=case when p_approve then 'approved' else 'rejected' end,
+      approved_at=case when p_approve then pg_catalog.now() else null end,
+      rejected_at=case when p_approve then null else pg_catalog.now() end
+  where c.id=p_challenge_id and c.recovery_user_id=p_recovery_user_id
+    and c.status='pending' and c.expires_at>pg_catalog.now()
+    and exists (
+      select 1 from public.account_recovery_contacts rc
+      where rc.owner_id=(select a.supabase_user_id from private.nipto_accounts a where a.identity_id=c.owner_identity_id)
+        and rc.recovery_user_id=c.recovery_user_id and rc.status='accepted'
+    )
+  returning c.owner_identity_id into v_owner_identity;
+  if v_owner_identity is null then return false; end if;
+
+  select supabase_user_id into v_owner_user
+  from private.nipto_accounts where identity_id=v_owner_identity;
+
+  insert into public.notifications(recipient_id,actor_id,notification_type,payload)
+  values(
+    v_owner_user,p_recovery_user_id,'system',
+    jsonb_build_object('kind',case when p_approve then 'password_recovery_approved' else 'password_recovery_rejected' end)
+  );
+  insert into private.nipto_security_events(identity_id,event_type)
+  values(v_owner_identity,case when p_approve then 'recovery_approved' else 'recovery_rejected' end);
+  return true;
+end;
+$$;
+revoke all on function public.nipto_native_respond_password_recovery(uuid,uuid,boolean) from public,anon,authenticated;
+grant execute on function public.nipto_native_respond_password_recovery(uuid,uuid,boolean) to service_role;
+
 create or replace function public.nipto_native_claim_reset_grant(
-  p_challenge_id uuid, p_challenge_hash text, p_grant_hash text
+  p_challenge_id uuid,p_challenge_hash text,p_grant_hash text
 )
 returns uuid
 language plpgsql security definer set search_path=''
 as $$
-declare v_owner uuid;
+declare v_owner_identity uuid;
 begin
-  if p_challenge_hash !~ '^[a-f0-9]{64}$' or p_grant_hash !~ '^[a-f0-9]{64}$' then return null; end if;
-  select c.owner_id into v_owner
+  if p_challenge_hash !~ '^[a-f0-9]{64}$' or p_grant_hash !~ '^[a-f0-9]{64}$' then
+    return null;
+  end if;
+  select c.owner_identity_id into v_owner_identity
   from private.nipto_recovery_challenges c
   where c.id=p_challenge_id and c.challenge_hash=p_challenge_hash
     and c.status='approved' and c.expires_at>pg_catalog.now()
-    and exists (
-      select 1
-      from public.account_recovery_contacts rc
-      join public.profiles op on op.id=rc.owner_id
-      join public.profiles rp on rp.id=rc.recovery_user_id
-      join private.nipto_accounts recovery_account
-        on recovery_account.user_id=rp.id and recovery_account.status='active'
-      where rc.owner_id=c.owner_id and rc.recovery_user_id=c.recovery_user_id
-        and rc.status='accepted' and op.account_state='active'
-        and rp.account_state='active'
-        and not private.is_blocked_between(rc.owner_id,rc.recovery_user_id)
-    )
   for update;
-  if v_owner is null then return null; end if;
+  if v_owner_identity is null then return null; end if;
 
-  insert into private.nipto_password_reset_grants(challenge_id,owner_id,grant_hash,expires_at)
-  values(p_challenge_id,v_owner,p_grant_hash,pg_catalog.now()+interval '10 minutes')
+  insert into private.nipto_password_reset_grants(
+    challenge_id,owner_identity_id,grant_hash,expires_at
+  )
+  values(p_challenge_id,v_owner_identity,p_grant_hash,pg_catalog.now()+interval '10 minutes')
   on conflict(challenge_id) do nothing;
   if not found then return null; end if;
 
-  update private.nipto_recovery_challenges c
+  update private.nipto_recovery_challenges
   set status='consumed',consumed_at=pg_catalog.now()
-  where c.id=p_challenge_id;
-  return v_owner;
+  where id=p_challenge_id;
+  return v_owner_identity;
 end;
 $$;
-revoke all on function public.nipto_native_claim_reset_grant(uuid,text,text) from public, anon, authenticated;
+revoke all on function public.nipto_native_claim_reset_grant(uuid,text,text) from public,anon,authenticated;
 grant execute on function public.nipto_native_claim_reset_grant(uuid,text,text) to service_role;
 
 create or replace function public.nipto_native_consume_reset_grant(
-  p_grant_hash text, p_new_password_hash text
+  p_grant_hash text,p_new_password_hash text
 )
 returns uuid
 language plpgsql security definer set search_path=''
@@ -780,58 +608,60 @@ as $$
 declare v_grant private.nipto_password_reset_grants%rowtype;
 begin
   if p_grant_hash !~ '^[a-f0-9]{64}$'
-     or p_new_password_hash is null or p_new_password_hash not like '$argon2id$%'
-     or char_length(p_new_password_hash) not between 32 and 512 then return null; end if;
-
-  select * into v_grant from private.nipto_password_reset_grants g
-  where g.grant_hash=p_grant_hash for update;
+     or p_new_password_hash is null
+     or p_new_password_hash not like '$argon2id$%'
+     or char_length(p_new_password_hash) not between 32 and 512 then
+    return null;
+  end if;
+  select * into v_grant
+  from private.nipto_password_reset_grants g
+  where g.grant_hash=p_grant_hash
+  for update;
   if not found or v_grant.consumed_at is not null
-     or v_grant.expires_at<=pg_catalog.now()
-     or not exists (
-       select 1 from private.nipto_accounts a
-       join public.profiles p on p.id=a.user_id
-       where a.user_id=v_grant.owner_id and a.status='active'
-         and p.account_state='active'
-     ) then return null; end if;
+     or v_grant.expires_at<=pg_catalog.now() then return null; end if;
 
-  update private.nipto_password_reset_grants g
-    set consumed_at=pg_catalog.now() where g.id=v_grant.id;
-  update private.nipto_accounts a
-    set password_hash=p_new_password_hash,
-        credential_version=credential_version+1,
-        password_changed_at=pg_catalog.now(),updated_at=pg_catalog.now()
-    where a.user_id=v_grant.owner_id;
-  update private.nipto_sessions s set revoked_at=pg_catalog.now()
-    where s.user_id=v_grant.owner_id and s.revoked_at is null;
-  insert into private.nipto_security_events(user_id,event_type)
-  values(v_grant.owner_id,'password_reset');
-  return v_grant.owner_id;
+  update private.nipto_password_reset_grants
+  set consumed_at=pg_catalog.now() where id=v_grant.id;
+
+  update private.nipto_accounts
+  set password_hash=p_new_password_hash,
+      password_changed_at=pg_catalog.now(),
+      updated_at=pg_catalog.now()
+  where identity_id=v_grant.owner_identity_id;
+
+  insert into private.nipto_security_events(identity_id,event_type)
+  values(v_grant.owner_identity_id,'password_reset');
+
+  return (select supabase_user_id from private.nipto_accounts
+          where identity_id=v_grant.owner_identity_id);
 end;
 $$;
-revoke all on function public.nipto_native_consume_reset_grant(text,text) from public, anon, authenticated;
+revoke all on function public.nipto_native_consume_reset_grant(text,text) from public,anon,authenticated;
 grant execute on function public.nipto_native_consume_reset_grant(text,text) to service_role;
 
-create or replace function public.nipto_native_change_password(
-  p_user_id uuid, p_new_password_hash text
-)
+create or replace function public.nipto_native_list_sessions(p_user_id uuid)
+returns table(session_id uuid,created_at timestamptz,last_active_at timestamptz,user_agent text)
+language sql stable security definer set search_path=''
+as $$
+  select s.id,s.created_at,coalesce(s.refreshed_at,s.created_at),left(coalesce(s.user_agent,''),180)
+  from auth.sessions s
+  where s.user_id=p_user_id
+  order by coalesce(s.refreshed_at,s.created_at) desc
+  limit 10;
+$$;
+revoke all on function public.nipto_native_list_sessions(uuid) from public,anon,authenticated;
+grant execute on function public.nipto_native_list_sessions(uuid) to service_role;
+
+create or replace function public.nipto_native_revoke_session(p_user_id uuid,p_session_id uuid)
 returns boolean
 language plpgsql security definer set search_path=''
 as $$
+declare v_count integer;
 begin
-  if p_new_password_hash is null or p_new_password_hash not like '$argon2id$%'
-     or char_length(p_new_password_hash) not between 32 and 512 then return false; end if;
-  update private.nipto_accounts a
-    set password_hash=p_new_password_hash,
-        credential_version=credential_version+1,
-        password_changed_at=pg_catalog.now(),updated_at=pg_catalog.now()
-    where a.user_id=p_user_id and a.status='active';
-  if not found then return false; end if;
-  update private.nipto_sessions s set revoked_at=pg_catalog.now()
-    where s.user_id=p_user_id and s.revoked_at is null;
-  insert into private.nipto_security_events(user_id,event_type)
-  values(p_user_id,'password_changed');
-  return true;
+  delete from auth.sessions where id=p_session_id and user_id=p_user_id;
+  get diagnostics v_count=row_count;
+  return v_count=1;
 end;
 $$;
-revoke all on function public.nipto_native_change_password(uuid,text) from public, anon, authenticated;
-grant execute on function public.nipto_native_change_password(uuid,text) to service_role;
+revoke all on function public.nipto_native_revoke_session(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.nipto_native_revoke_session(uuid,uuid) to service_role;
