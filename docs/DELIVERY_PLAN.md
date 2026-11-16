@@ -101,3 +101,12 @@ The existing hosted Supabase project remains the target. Its Custom OIDC integra
 - [ ] Validate the SQL migration in a disposable staging database; do not apply it to production yet.
 - [ ] Configure Edge Function secrets and the Supabase Custom OIDC trust integration.
 - [ ] Run Deno Edge Function tests, Flutter analysis/tests, Android APK build, and two-device security tests.
+
+
+## Calling infrastructure checkpoint
+
+- [x] Replace the public third-party STUN dependency with authenticated Nipto-managed ICE configuration.
+- [x] Add short-lived HMAC TURN credential issuance from the Nipto identity Edge Function.
+- [x] Add a self-hosted coturn Docker Compose deployment template.
+- [ ] Provision the TURN host, DNS and TLS certificate; configure the same shared secret in coturn and Supabase Edge Function Secrets.
+- [ ] Verify UDP and TCP/TLS relay across independent mobile networks and complete two-device call tests.
