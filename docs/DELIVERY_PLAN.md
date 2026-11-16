@@ -31,6 +31,17 @@
 - [ ] Implement one-to-one WebRTC voice/video calls using private authenticated signaling, short-lived TURN credentials, push wake-up, call lifecycle controls and mobile network recovery; see `docs/WEBRTC_CALLS.md`.
 - [ ] Add group calling through an SFU only after one-to-one calling is stable; no production mesh fan-out.
 
+## WebRTC implementation checkpoint (in progress)
+- [x] Add Flutter WebRTC dependency and Android microphone, camera and network permissions to the generated Android manifest in CI.
+- [x] Add a call service for local media capture, peer connections, SDP offer/answer exchange, trickled ICE, serialized signaling, mute/camera controls and resource cleanup.
+- [x] Add a one-to-one call screen and voice/video entry points in direct conversations.
+- [x] Add foreground incoming-call polling while the relevant conversation is open, with accept/decline actions.
+- [ ] Verify the Flutter implementation with passing CI, including analyzer, tests and Android build.
+- [ ] Configure production TURN with short-lived credentials minted server-side; the current STUN-only development configuration is not sufficient for reliable production NAT traversal.
+- [ ] Add push notifications and app-wide incoming-call handling when the recipient is outside the conversation screen.
+- [ ] Add audio routing/Bluetooth controls, network handoff recovery, connection timeout handling and comprehensive automated tests.
+- [ ] Complete two-device real-network tests before enabling calls for production users.
+
 ## Phase 3 — Status
 - [x] Text/image/video status publishing.
 - [x] 24-hour visibility expiry filtering and viewer inserts.
