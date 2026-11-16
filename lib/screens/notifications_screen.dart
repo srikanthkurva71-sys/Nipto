@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/nipto_session_manager.dart';
+
 import '../theme/nipto_theme.dart';
 import 'conversation_screen.dart';
 import 'recovery_contacts_screen.dart';
@@ -55,7 +57,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }) async {
     final id = item['id'] as String;
     final actorId = item['actor_id'] as String?;
-    final myId = _client.auth.currentUser?.id;
+    final myId = NiptoSessionManager.instance.userId;
     if (actorId == null || myId == null || _busyIds.contains(id)) return;
 
     setState(() => _busyIds.add(id));
