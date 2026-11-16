@@ -6,7 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 /// On Android, flutter_secure_storage uses Android Keystore-backed key
 /// wrapping and authenticated encryption. Keep this storage dedicated to
 /// authentication sessions; never use it as a general application database.
-class NiptoSecureAuthStorage extends AuthAsyncStorage {
+class NiptoSecureAuthStorage implements AuthAsyncStorage {
   const NiptoSecureAuthStorage();
 
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
