@@ -1,7 +1,9 @@
 -- Nipto-native authentication foundation.
 -- This migration is intentionally staged in source control only. Do not apply it to
--- production until custom JWT signing-key verification and the account migration
--- plan have passed in a non-production Supabase environment.
+-- the hosted production project. The hosted Supabase project must first be proven
+-- to trust the Nipto identity issuer, or the deployment architecture must move to
+-- a self-hosted Supabase stack with Nipto's private OIDC provider. See
+-- docs/NIPTO_NATIVE_AUTH_DESIGN.md, section 9.
 
 -- Decouple the profile identity UUID from Supabase Auth. Existing profile UUIDs
 -- remain unchanged; native Nipto registration can now create profiles directly.
@@ -385,6 +387,18 @@ begin
       and c.recovery_user_id = p_recovery_user_id
       and c.status = 'pending'
       and c.expires_at > pg_catalog.now()
+      and exists (
+        select 1
+        from public.account_recovery_contacts rc
+        join public.profiles owner_profile on owner_profile.id = rc.owner_id
+        join public.profiles recovery_profile on recovery_profile.id = rc.recovery_user_id
+        where rc.owner_id = c.owner_id
+          and rc.recovery_user_id = c.recovery_user_id
+          and rc.status = 'accepted'
+          and owner_profile.account_state = 'active'
+          and recovery_profile.account_state = 'active'
+          and not private.is_blocked_between(rc.owner_id, rc.recovery_user_id)
+      )
     returning c.owner_id into v_owner;
 
   if v_owner is null then return false; end if;
