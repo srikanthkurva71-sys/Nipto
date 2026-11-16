@@ -4,6 +4,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'nipto_call_signal_validator.dart';
+import 'nipto_session_manager.dart';
 
 enum NiptoCallPhase { preparing, ringing, connecting, connected, ended, failed }
 
@@ -38,13 +39,6 @@ class NiptoCallService {
   Timer? _connectTimeout;
   Timer? _disconnectTimeout;
   Completer<void>? _remoteReady;
-
-  static const Map<String, dynamic> _rtcConfiguration = {
-    'sdpSemantics': 'unified-plan',
-    'iceServers': [
-      {'urls': 'stun:stun.l.google.com:19302'},
-    ],
-  };
 
   Future<void> startOutgoing() async {
     try {
@@ -117,7 +111,24 @@ class NiptoCallService {
     await joined.future.timeout(const Duration(seconds: 15));
     if (_closed) return;
 
-    final peer = await createPeerConnection(_rtcConfiguration);
+    final iceServers = await NiptoSessionManager.instance.getIceServers();
+    final hasTurnRelay = iceServers.any((server) {
+      final urls = server['urls'];
+      if (urls is String) return urls.startsWith('turn:') || urls.startsWith('turns:');
+      if (urls is List) {
+        return urls.whereType<String>().any(
+          (url) => url.startsWith('turn:') || url.startsWith('turns:'),
+        );
+      }
+      return false;
+    });
+    if (!hasTurnRelay) {
+      throw StateError('Nipto calling relay is not configured yet.');
+    }
+    final peer = await createPeerConnection({
+      'sdpSemantics': 'unified-plan',
+      'iceServers': iceServers,
+    });
     if (_closed) {
       await peer.close();
       return;
