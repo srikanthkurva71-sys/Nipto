@@ -167,3 +167,21 @@ References:
 - Third-party auth overview: https://supabase.com/docs/guides/auth/third-party/overview
 
 This corrects the earlier assumption that custom OIDC was limited to self-hosted Supabase. Nipto can retain its hosted Supabase project if the custom OIDC integration is configured and the end-to-end tests pass. Supabase Auth itself remains enabled by the platform, but Nipto will not use its email or phone credential flows.
+
+
+## 10. Deployment configuration and activation
+
+The Nipto identity Edge Function uses these server-only environment variables:
+- `NIPTO_OIDC_ISSUER`: exact HTTPS URL, without trailing slash, for `https://<project-ref>.supabase.co/functions/v1/nipto-identity`.
+- `NIPTO_OIDC_KID`: stable key identifier, for example `nipto-es256-2026-11`.
+- `NIPTO_OIDC_PRIVATE_JWK`: the complete private ES256 JWK generated locally by `scripts/generate_nipto_oidc_keys.ts`. Never commit or paste it into chat. Configure it only in Supabase Edge Function Secrets.
+- `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are Supabase-provided Edge Function environment values and must remain server-side.
+
+The key-generation script prints a private JWK. Store it securely, set the three variables in the Supabase Dashboard's Edge Function Secrets, and verify the public JWKS endpoint contains only the public key coordinates. Plan key rotation with overlapping public keys; the current first implementation supports one active key, so do not rotate until multi-key support is added and tested.
+
+After deployment, configure Authentication → Sign In / Providers → Third-Party Auth → Custom OIDC with the exact `NIPTO_OIDC_ISSUER`. Supabase's issuer discovery must resolve the `jwks_uri`. Confirm the integration is active before using Nipto-issued tokens with Data API, Storage, or Realtime.
+
+The Edge Function is configured with `verify_jwt = false` because login, registration, and recovery-start are public endpoints and authenticated routes verify Nipto's ES256 JWT in the function itself. This does not disable authorization: every protected route must call the shared token verifier, and all database RPCs remain service-role-only. Do not add a route that accepts a caller-supplied user UUID as identity.
+
+The app initializes Supabase with the `accessToken` callback from `NiptoSessionManager`. In this configuration the Supabase Auth namespace is unavailable by design; application identity comes from the verified Nipto session manager. Refresh tokens are stored using Android secure storage, while access tokens remain in memory.
+
