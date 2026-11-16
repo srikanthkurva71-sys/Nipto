@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/nipto_theme.dart';
+import 'status_screen.dart';
 import 'conversation_screen.dart';
 
 class ChatsScreen extends StatefulWidget {
@@ -17,6 +20,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
   bool _searching = false;
   bool _loadingSearch = false;
   String? _searchError;
+  Timer? _searchDebounce;
+  int _searchVersion = 0;
   late Future<List<_ChatPreview>> _inbox;
 
   SupabaseClient get _client => Supabase.instance.client;
@@ -29,6 +34,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   @override
   void dispose() {
+    _searchDebounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -123,11 +129,17 @@ class _ChatsScreenState extends State<ChatsScreen> {
   String _initials(String value) {
     final parts = value.trim().split(RegExp(r'\s+'));
     if (parts.isEmpty || parts.first.isEmpty) return 'N';
-    if (parts.length == 1) return parts.first.characters.first.toUpperCase();
-    return (parts.first.characters.first + parts.last.characters.first).toUpperCase();
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first.characters.first + parts.last.substring(0, 1)).toUpperCase();
+  }
+
+  void _scheduleSearch(String value) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () => _search(value));
   }
 
   Future<void> _search(String value) async {
+    final version = ++_searchVersion;
     final query = value.trim().replaceFirst('@', '').toLowerCase();
     if (query.length < 2) {
       setState(() {
@@ -147,17 +159,17 @@ class _ChatsScreenState extends State<ChatsScreen> {
         'search_profiles',
         params: {'p_query': query, 'p_limit': 20},
       );
-      if (!mounted) return;
+      if (!mounted || version != _searchVersion) return;
       setState(() {
         _searchResults = (result as List)
             .map((row) => Map<String, dynamic>.from(row))
             .toList();
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || version != _searchVersion) return;
       setState(() => _searchError = 'Search is unavailable. Please try again.');
     } finally {
-      if (mounted) setState(() => _loadingSearch = false);
+      if (mounted && version == _searchVersion) setState(() => _loadingSearch = false);
     }
   }
 
@@ -269,7 +281,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 child: TextField(
                   controller: _searchController,
                   onTap: () => setState(() => _searching = true),
-                  onChanged: _search,
+                  onChanged: _scheduleSearch,
                   decoration: InputDecoration(
                     hintText: 'Search by Nipto ID',
                     prefixIcon: const Icon(Icons.search_rounded),
@@ -277,6 +289,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         ? IconButton(
                             tooltip: 'Clear search',
                             onPressed: () {
+                              _searchDebounce?.cancel();
+                              _searchVersion++;
                               _searchController.clear();
                               setState(() {
                                 _searching = false;
@@ -397,23 +411,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
     );
   }
 
-  Widget _buildStatusTray() {
-    return SizedBox(
-      height: 105,
-      child: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        scrollDirection: Axis.horizontal,
-        children: [
-          _StatusAvatar(label: 'Your status', initials: '+', onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Status publishing is in the next implementation phase.')),
-            );
-          }),
-          _StatusAvatar(label: 'Discover', initials: 'N', onTap: () => setState(() => _searching = true)),
-        ],
-      ),
-    );
-  }
+  Widget _buildStatusTray() => const StatusTray();
 
   Widget _buildSearchResults() {
     if (_loadingSearch) {
