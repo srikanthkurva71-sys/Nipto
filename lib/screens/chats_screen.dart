@@ -212,13 +212,6 @@ class _ChatsScreenState extends State<ChatsScreen> {
     }
   }
 
-  String _initials(String value) {
-    final parts = value.trim().split(RegExp(r'\s+'));
-    if (parts.isEmpty || parts.first.isEmpty) return 'N';
-    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
-  }
-
   void _scheduleSearch(String value) {
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 300), () => _search(value));
@@ -575,8 +568,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
   String _initials(String value) {
     final parts = value.trim().split(RegExp(r'\s+'));
     if (parts.isEmpty || parts.first.isEmpty) return 'N';
-    if (parts.length == 1) return parts.first.characters.first.toUpperCase();
-    return (parts.first.characters.first + parts.last.substring(0, 1)).toUpperCase();
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
   }
 }
 
@@ -596,54 +589,6 @@ class _ChatPreview {
   final String message;
   final String initials;
   final DateTime? updatedAt;
-}
-
-class _StatusAvatar extends StatelessWidget {
-  const _StatusAvatar({
-    required this.label,
-    required this.initials,
-    required this.onTap,
-  });
-
-  final String label;
-  final String initials;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 17),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: SizedBox(
-          width: 66,
-          child: Column(
-            children: [
-              Container(
-                width: 58,
-                height: 58,
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: NiptoColors.coral, width: 2),
-                ),
-                child: CircleAvatar(
-                  backgroundColor: NiptoColors.violetSoft,
-                  child: Text(
-                    initials,
-                    style: const TextStyle(color: NiptoColors.violet, fontWeight: FontWeight.w800, fontSize: 19),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 7),
-              Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class _EmptyPanel extends StatelessWidget {
