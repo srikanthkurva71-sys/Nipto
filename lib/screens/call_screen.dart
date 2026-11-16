@@ -96,7 +96,7 @@ class _CallScreenState extends State<CallScreen> {
           _phase = NiptoCallPhase.failed;
         });
       }
-      await _service.dispose();
+      await _service.end(reason: 'failed');
     }
   }
 
