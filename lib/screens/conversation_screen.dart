@@ -30,8 +30,19 @@ class _ConversationScreenState extends State<ConversationScreen> {
   bool _markReadInFlight = false;
   bool _markReadAgain = false;
   int? _lastObservedMessageCount;
+  late final Stream<List<Map<String, dynamic>>> _messagesStream;
 
   SupabaseClient get _client => Supabase.instance.client;
+
+  @override
+  void initState() {
+    super.initState();
+    _messagesStream = _client
+        .from('messages')
+        .stream(primaryKey: ['id'])
+        .eq('conversation_id', widget.conversationId)
+        .order('created_at');
+  }
 
   @override
   void dispose() {
@@ -211,11 +222,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
         children: [
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _client
-                  .from('messages')
-                  .stream(primaryKey: ['id'])
-                  .eq('conversation_id', widget.conversationId)
-                  .order('created_at'),
+              stream: _messagesStream,
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return const Center(
