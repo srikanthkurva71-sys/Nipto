@@ -94,9 +94,9 @@ class _ShortsScreenState extends State<ShortsScreen> {
 
       final userId = _client.auth.currentUser!.id;
       final path = userId + '/' + DateTime.now().microsecondsSinceEpoch.toString() + '.mp4';
-      await _client.storage.from('shorts').uploadBinary(
+      await _client.storage.from('shorts').upload(
         path,
-        await file.readAsBytes(),
+        File(file.path),
         fileOptions: const FileOptions(contentType: 'video/mp4', upsert: false),
       );
       await _client.from('shorts').insert({
@@ -314,7 +314,8 @@ class _ShortTileState extends State<_ShortTile> with WidgetsBindingObserver {
     setState(() {
       _likeBusy = true;
       _liked = next;
-      _likeCount = (_likeCount + (next ? 1 : -1)).clamp(0, 1 << 30);
+      _likeCount = _likeCount + (next ? 1 : -1);
+      if (_likeCount < 0) _likeCount = 0;
     });
     try {
       if (next) {
@@ -332,7 +333,8 @@ class _ShortTileState extends State<_ShortTile> with WidgetsBindingObserver {
       if (mounted) {
         setState(() {
           _liked = !next;
-          _likeCount = (_likeCount + (next ? -1 : 1)).clamp(0, 1 << 30);
+          _likeCount = _likeCount + (next ? -1 : 1);
+          if (_likeCount < 0) _likeCount = 0;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not update your reaction.')),
