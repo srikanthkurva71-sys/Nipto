@@ -137,6 +137,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: const Text('Continue'),
           ),
         ],
+        ),
       ),
     );
     captionController.dispose();
