@@ -338,6 +338,7 @@ async function route(request: Request): Promise<Response> {
     if (!isValidPassword(newPassword)) {
       return json({ error: "Use at least 12 characters for your new Nipto password." }, 400);
     }
+    await enforceRateLimit(request, "migration:preauth");
     const legacyAuthorization = request.headers.get("authorization") ?? "";
     if (!/^Bearer [A-Za-z0-9._-]+$/.test(legacyAuthorization)) {
       return json({ error: "An existing signed-in session is required to migrate this account." }, 401);
@@ -434,6 +435,7 @@ async function route(request: Request): Promise<Response> {
     const claims = await verifyAccessToken(request);
     const input = await body(request);
     const sessionId = stringField(input.session_id, 36);
+    await enforceRateLimit(request, "session-revoke:" + claims.nipto_id);
     if (!/^[0-9a-f-]{36}$/i.test(sessionId)) {
       return json({ error: "Invalid session." }, 400);
     }
