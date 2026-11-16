@@ -102,7 +102,7 @@ class NiptoCallService {
     _peer = await createPeerConnection(_rtcConfiguration);
     _peer!.onIceCandidate = (candidate) {
       if (_closed || candidate.candidate == null) return;
-      unawaited(_sendSignal({
+      unawaited(_sendIceSignal({
         'type': 'ice',
         'candidate': candidate.candidate,
         'sdpMid': candidate.sdpMid,
@@ -230,6 +230,14 @@ class NiptoCallService {
       await _peer!.addCandidate(candidate);
     }
     _pendingCandidates.clear();
+  }
+
+  Future<void> _sendIceSignal(Map<String, dynamic> payload) async {
+    try {
+      await _sendSignal(payload);
+    } catch (_) {
+      // A later ICE candidate or connection timeout will surface network failure.
+    }
   }
 
   Future<void> _sendSignal(Map<String, dynamic> payload) async {
