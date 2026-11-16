@@ -14,7 +14,7 @@ class _AuthScreenState extends State<AuthScreen> {
   final _formKey = GlobalKey<FormState>();
   final _niptoId = TextEditingController();
   final _displayName = TextEditingController();
-  final _email = TextEditingController();
+  final _accountEmail = TextEditingController();
   final _password = TextEditingController();
   final _confirmPassword = TextEditingController();
   final _recoveryNiptoId = TextEditingController();
@@ -31,7 +31,7 @@ class _AuthScreenState extends State<AuthScreen> {
   void dispose() {
     _niptoId.dispose();
     _displayName.dispose();
-    _email.dispose();
+    _accountEmail.dispose();
     _password.dispose();
     _confirmPassword.dispose();
     _recoveryNiptoId.dispose();
@@ -60,7 +60,7 @@ class _AuthScreenState extends State<AuthScreen> {
       final handle = _niptoId.text.trim().toLowerCase();
       if (_creatingAccount) {
         final response = await _client.auth.signUp(
-          email: _email.text.trim(),
+          email: _accountEmail.text.trim(),
           password: _password.text,
           data: {
             'nipto_id': handle,
@@ -143,13 +143,13 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _recoverPassword() async {
-    final emailController = TextEditingController(text: _email.text.trim());
-    final email = await showDialog<String>(
+    final accountEmailController = TextEditingController(text: _accountEmail.text.trim());
+    final accountEmail = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Reset your password'),
         content: TextField(
-          controller: emailController,
+          controller: accountEmailController,
           keyboardType: TextInputType.emailAddress,
           decoration: const InputDecoration(
             labelText: 'Account email',
@@ -162,18 +162,18 @@ class _AuthScreenState extends State<AuthScreen> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, emailController.text.trim()),
+            onPressed: () => Navigator.pop(context, accountEmailController.text.trim()),
             child: const Text('Send link'),
           ),
         ],
       ),
     );
-    emailController.dispose();
-    if (email == null || email.isEmpty || !mounted) return;
+    accountEmailController.dispose();
+    if (accountEmail == null || accountEmail.isEmpty || !mounted) return;
 
     try {
       await _client.auth.resetPasswordForEmail(
-        email,
+        accountEmail,
         redirectTo: 'nipto://auth-callback',
       );
       if (!mounted) return;
@@ -278,12 +278,12 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                       const SizedBox(height: 13),
                       TextFormField(
-                        controller: _email,
+                        controller: _accountEmail,
                         keyboardType: TextInputType.emailAddress,
                         autocorrect: false,
                         decoration: const InputDecoration(
                           labelText: 'Account email',
-                          prefixIcon: Icon(Icons.alternate_email_rounded),
+                          prefixIcon: Icon(Icons.alternate_accountEmail_rounded),
                         ),
                         validator: (value) {
                           final input = (value ?? '').trim();
@@ -301,7 +301,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       textCapitalization: TextCapitalization.none,
                       decoration: const InputDecoration(
                         labelText: 'Nipto ID',
-                        prefixIcon: Icon(Icons.alternate_email_rounded),
+                        prefixIcon: Icon(Icons.alternate_accountEmail_rounded),
                         hintText: 'yourname',
                       ),
                       validator: _validateNiptoId,
