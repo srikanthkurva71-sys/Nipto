@@ -33,7 +33,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   bool _hasMoreOlder = true;
   bool _markReadInFlight = false;
   bool _markReadAgain = false;
-  int? _lastObservedMessageCount;
+  String? _lastObservedNewestMessageId;
   late final Stream<List<Map<String, dynamic>>> _messagesStream;
 
   SupabaseClient get _client => Supabase.instance.client;
@@ -335,9 +335,12 @@ class _ConversationScreenState extends State<ConversationScreen> {
                         : (a['id'] as String).compareTo(b['id'] as String);
                   });
 
-                final messageCount = latestMessages.length;
-                if (_lastObservedMessageCount != messageCount) {
-                  _lastObservedMessageCount = messageCount;
+                final newestMessageId = latestMessages.isEmpty
+                    ? null
+                    : latestMessages.first['id'] as String?;
+                if (newestMessageId != null &&
+                    _lastObservedNewestMessageId != newestMessageId) {
+                  _lastObservedNewestMessageId = newestMessageId;
                   final shouldStayAtBottom = !_scrollController.hasClients ||
                       _scrollController.position.maxScrollExtent -
                               _scrollController.position.pixels <=
