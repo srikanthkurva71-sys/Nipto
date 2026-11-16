@@ -320,6 +320,7 @@ class NiptoSessionManager {
         ? _http.getUrl(Uri.parse('$baseUrl/$path'))
         : _http.postUrl(Uri.parse('$baseUrl/$path')));
     request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+    request.headers.set('apikey', _publishableKey ?? '');
     if (payload != null) {
       request.headers.contentType = ContentType.json;
       request.write(jsonEncode(payload));
@@ -476,6 +477,7 @@ class NiptoSessionManager {
     if (baseUrl == null) throw const NiptoAuthException('Nipto is not initialized.');
     final request = await _http.postUrl(Uri.parse('$baseUrl/$path'));
     request.headers.contentType = ContentType.json;
+    request.headers.set('apikey', _publishableKey ?? '');
     request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $bearer');
     request.write(jsonEncode(payload));
     final response = await request.close();
