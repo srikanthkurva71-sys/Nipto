@@ -90,6 +90,37 @@ revoke all on private.nipto_accounts, private.nipto_sessions,
 -- create profile UUIDs directly; keep old auth.users rows untouched.
 alter table public.profiles drop constraint if exists profiles_id_fkey;
 
+-- Application ownership and moderation history must reference the stable Nipto
+-- profile UUID, not the legacy Supabase Auth row. This allows the legacy Auth
+-- identity (which may contain an email) to be deleted after successful migration.
+alter table public.posts drop constraint if exists posts_moderation_reviewed_by_fkey;
+alter table public.posts add constraint posts_moderation_reviewed_by_fkey
+  foreign key (moderation_reviewed_by) references public.profiles(id) on delete set null;
+
+alter table public.shorts drop constraint if exists shorts_moderation_reviewed_by_fkey;
+alter table public.shorts add constraint shorts_moderation_reviewed_by_fkey
+  foreign key (moderation_reviewed_by) references public.profiles(id) on delete set null;
+
+alter table public.user_feedback drop constraint if exists user_feedback_reviewed_by_fkey;
+alter table public.user_feedback add constraint user_feedback_reviewed_by_fkey
+  foreign key (reviewed_by) references public.profiles(id) on delete set null;
+
+alter table public.user_reports drop constraint if exists user_reports_reviewed_by_fkey;
+alter table public.user_reports add constraint user_reports_reviewed_by_fkey
+  foreign key (reviewed_by) references public.profiles(id) on delete set null;
+
+alter table private.staff_action_log drop constraint if exists staff_action_log_actor_id_fkey;
+alter table private.staff_action_log add constraint staff_action_log_actor_id_fkey
+  foreign key (actor_id) references public.profiles(id) on delete restrict;
+
+alter table private.staff_roles drop constraint if exists staff_roles_user_id_fkey;
+alter table private.staff_roles add constraint staff_roles_user_id_fkey
+  foreign key (user_id) references public.profiles(id) on delete cascade;
+
+alter table private.staff_roles drop constraint if exists staff_roles_granted_by_fkey;
+alter table private.staff_roles add constraint staff_roles_granted_by_fkey
+  foreign key (granted_by) references public.profiles(id) on delete set null;
+
 create or replace function public.nipto_native_register(
   p_nipto_id text,
   p_display_name text,
