@@ -462,10 +462,19 @@ async function route(request: Request): Promise<Response> {
       return json({ status: "pending" });
     }
     await enforceRateLimit(request, "recovery-claim:" + challengeId);
+    const challengeHash = await sha256Hex(challengeSecret);
+    const status = await rpc("nipto_native_recovery_status", {
+      p_challenge_id: challengeId,
+      p_challenge_hash: challengeHash,
+    });
+    if (status === "rejected") return json({ status: "rejected" });
+    if (status === "expired") return json({ status: "expired" });
+    if (status !== "approved") return json({ status: "pending" });
+
     const grantSecret = randomToken(32);
     const ownerId = await rpc("nipto_native_claim_reset_grant", {
       p_challenge_id: challengeId,
-      p_challenge_hash: await sha256Hex(challengeSecret),
+      p_challenge_hash: challengeHash,
       p_grant_hash: await sha256Hex(grantSecret),
     });
     return ownerId
