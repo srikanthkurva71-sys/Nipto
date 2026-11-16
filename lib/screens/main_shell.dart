@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/nipto_theme.dart';
 import 'chats_screen.dart';
@@ -41,6 +42,7 @@ class _MainShellState extends State<MainShell> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: NiptoColors.canvas,
+      appBar: null,
       body: PageView(
         controller: _pageController,
         onPageChanged: (value) => setState(() => _index = value),
