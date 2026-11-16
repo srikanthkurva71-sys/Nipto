@@ -7,6 +7,7 @@ import '../theme/nipto_theme.dart';
 import 'status_screen.dart';
 import 'conversation_screen.dart';
 import 'notifications_screen.dart';
+import 'group_create_screen.dart';
 
 class ChatsScreen extends StatefulWidget {
   const ChatsScreen({super.key});
@@ -378,6 +379,17 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         ),
                       ),
                       icon: const Icon(Icons.notifications_none_rounded),
+                    ),
+                    IconButton(
+                      tooltip: 'New group',
+                      onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const GroupCreateScreen(),
+                        ),
+                      ).then((_) {
+                        if (mounted) setState(() => _inbox = _loadInbox());
+                      }),
+                      icon: const Icon(Icons.group_add_outlined),
                     ),
                     IconButton(
                       tooltip: 'New chat',
