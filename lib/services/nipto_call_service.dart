@@ -49,7 +49,9 @@ class NiptoCallService {
       onPhaseChanged(NiptoCallPhase.preparing);
       _remoteReady = Completer<void>();
       await _prepareMediaAndChannel();
+      if (_closed) return;
       await _remoteReady!.future.timeout(const Duration(seconds: 20));
+      if (_closed) return;
       final offer = await _peer!.createOffer({
         'offerToReceiveAudio': true,
         'offerToReceiveVideo': mediaType == 'video',
@@ -71,7 +73,9 @@ class NiptoCallService {
     try {
       onPhaseChanged(NiptoCallPhase.preparing);
       await _client.rpc('accept_nipto_call', params: {'p_call_id': callId});
+      if (_closed) return;
       await _prepareMediaAndChannel();
+      if (_closed) return;
       await _sendSignal({'type': 'ready'});
       onPhaseChanged(NiptoCallPhase.connecting);
     } catch (error) {
@@ -109,8 +113,14 @@ class NiptoCallService {
       }
     });
     await joined.future.timeout(const Duration(seconds: 15));
+    if (_closed) return;
 
-    _peer = await createPeerConnection(_rtcConfiguration);
+    final peer = await createPeerConnection(_rtcConfiguration);
+    if (_closed) {
+      await peer.close();
+      return;
+    }
+    _peer = peer;
     _peer!.onIceCandidate = (candidate) {
       if (_closed || candidate.candidate == null) return;
       unawaited(_sendIceSignal({
@@ -160,6 +170,13 @@ class NiptoCallService {
             }
           : false,
     });
+    if (_closed) {
+      for (final track in stream.getTracks()) {
+        await track.stop();
+      }
+      await stream.dispose();
+      return;
+    }
     _localStream = stream;
     onLocalStream(stream);
     for (final track in stream.getTracks()) {
