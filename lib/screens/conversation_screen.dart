@@ -13,11 +13,13 @@ class ConversationScreen extends StatefulWidget {
     required this.conversationId,
     required this.title,
     required this.subtitle,
+    this.enableCalls = true,
   });
 
   final String conversationId;
   final String title;
   final String subtitle;
+  final bool enableCalls;
 
   @override
   State<ConversationScreen> createState() => _ConversationScreenState();
@@ -331,16 +333,18 @@ class _ConversationScreenState extends State<ConversationScreen> {
           ],
         ),
         actions: [
-          IconButton(
-            tooltip: 'Voice call',
-            onPressed: () => _startCall('audio'),
-            icon: const Icon(Icons.call_outlined),
-          ),
-          IconButton(
-            tooltip: 'Video call',
-            onPressed: () => _startCall('video'),
-            icon: const Icon(Icons.videocam_outlined),
-          ),
+          if (widget.enableCalls) ...[
+            IconButton(
+              tooltip: 'Voice call',
+              onPressed: () => _startCall('audio'),
+              icon: const Icon(Icons.call_outlined),
+            ),
+            IconButton(
+              tooltip: 'Video call',
+              onPressed: () => _startCall('video'),
+              icon: const Icon(Icons.videocam_outlined),
+            ),
+          ],
           IconButton(
             tooltip: 'Conversation options',
             onPressed: () {},
