@@ -119,15 +119,19 @@ class NiptoSessionManager {
 
   Future<void> linkLegacyAccount() async {
     try {
+      final migration = await _post('migration/prepare', const {}, authenticated: true);
+      final ticket = migration['migration_ticket'] as String?;
+      final niptoId = migration['nipto_id'] as String?;
+      if (ticket == null || niptoId == null) {
+        throw const NiptoAuthException('Could not prepare your Nipto account migration.');
+      }
       await _client.auth.linkIdentity(
         OAuthProvider('custom:nipto'),
         redirectTo: 'nipto://auth-callback',
-        queryParams: const {'screen': 'link'},
+        queryParams: {'screen': 'link', 'migration_ticket': ticket},
       );
       final user = _client.auth.currentUser;
-      final metadata = user?.userMetadata ?? const <String, dynamic>{};
-      final niptoId = (metadata['nipto_id'] ?? metadata['preferred_username'] ?? '').toString();
-      if (user == null || niptoId.isEmpty) {
+      if (user == null) {
         throw const NiptoAuthException('The linked Nipto identity could not be verified.');
       }
       await _post('account/link', {'nipto_id': niptoId}, authenticated: true);
