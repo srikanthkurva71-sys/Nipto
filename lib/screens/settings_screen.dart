@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/nipto_theme.dart';
 import 'feedback_screen.dart';
+import 'staff_console_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -20,6 +21,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _statusNotifications = true;
   bool _shortNotifications = true;
   late Future<List<Map<String, dynamic>>> _blocked;
+  late Future<bool> _staffAccess;
 
   SupabaseClient get _client => Supabase.instance.client;
 
@@ -27,6 +29,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _blocked = _loadBlocked();
+    _staffAccess = _loadStaffAccess();
     _loadSettings();
   }
 
@@ -120,6 +123,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<bool> _loadStaffAccess() async {
+    try {
+      return await _client.rpc('staff_can_access') == true;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -322,6 +333,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ],
               ),
+            ),
+            FutureBuilder<bool>(
+              future: _staffAccess,
+              builder: (context, snapshot) {
+                if (snapshot.data != true) return const SizedBox.shrink();
+                return Column(
+                  children: [
+                    const SizedBox(height: 20),
+                    const _SectionLabel('OPERATIONS'),
+                    Card(
+                      child: ListTile(
+                        leading: const Icon(Icons.admin_panel_settings_outlined, color: NiptoColors.violet),
+                        title: const Text('Staff review'),
+                        subtitle: const Text('Review feedback, reports and pending content.'),
+                        trailing: const Icon(Icons.chevron_right_rounded),
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(builder: (_) => const StaffConsoleScreen()),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
             const SizedBox(height: 20),
             const _SectionLabel('HELP & FEEDBACK'),
