@@ -13,9 +13,9 @@ void main() {
 
     test('keeps core palette tokens stable', () {
       expect(NiptoColors.ink.toARGB32(), 0xFF171827);
-      expect(NiptoColors.violet.value, 0xFF6657E8);
-      expect(NiptoColors.coral.value, 0xFFFF806B);
-      expect(NiptoColors.danger.value, 0xFFD94B5B);
+      expect(NiptoColors.violet.toARGB32(), 0xFF6657E8);
+      expect(NiptoColors.coral.toARGB32(), 0xFFFF806B);
+      expect(NiptoColors.danger.toARGB32(), 0xFFD94B5B);
     });
   });
 }
