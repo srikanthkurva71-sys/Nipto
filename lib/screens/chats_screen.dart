@@ -532,6 +532,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                   conversationId: chat.id,
                                   title: chat.title,
                                   subtitle: chat.subtitle,
+                                  enableCalls: chat.subtitle != 'Group conversation',
                                 ),
                               ),
                             );
