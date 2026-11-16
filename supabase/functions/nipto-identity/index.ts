@@ -139,7 +139,7 @@ function publicJwkSet(): Json[] {
       if (jwk.kty !== "EC" || jwk.crv !== "P-256"
           || typeof jwk.x !== "string" || typeof jwk.y !== "string"
           || typeof jwk.kid !== "string" || jwk.kid.length < 1
-          || jwk.kid.length > 80) {
+          || jwk.kid.length > 80 || jwk.kid === keyId()) {
         continue;
       }
       result.push({
@@ -155,7 +155,7 @@ function publicJwkSet(): Json[] {
   }
 
   const current = publicJwkFromPrivate();
-  if (!result.some((jwk) => jwk.kid === keyId())) result.push(current);
+  result.push(current);
   return result;
 }
 
