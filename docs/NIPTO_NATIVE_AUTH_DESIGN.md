@@ -27,35 +27,45 @@ Removing the visible email field without replacing these dependencies would brea
 
 ## 3. Target identity and session architecture
 
-### Identity records
+### Recommended deployment architecture
 
-Create a private `private.nipto_accounts` table with:
-- `id uuid primary key` — the stable Nipto identity UUID; equal to `public.profiles.id`.
-- `nipto_id_normalized text unique` — canonical login identifier; public handle remains in `profiles`.
-- `password_hash text` — encoded Argon2id hash only; never plaintext or reversible encryption.
-- `password_changed_at timestamptz`, `created_at`, `updated_at`.
-- `status` with explicit active / locked / disabled states.
-- Optional credential-version metadata for safe hash upgrades.
+Use a Nipto-owned OpenID Connect (OIDC) identity provider that authenticates Nipto ID + password, paired with a self-hosted Supabase stack (Auth, Postgres, PostgREST, Realtime, and Storage). Configure self-hosted Supabase Auth with a private custom OIDC provider identifier such as `custom:nipto`.
 
-Keep account and credential records in a non-exposed schema. No client role can select or update password hashes. Password verification and mutation happen only in trusted Edge Functions using service credentials.
+This keeps the user's only credential as Nipto ID + Nipto password. The OIDC provider is operated by Nipto; it is not Google, Apple, Facebook, phone OTP, or another external identity provider. Supabase Auth acts only as the application session broker. It must not collect an email address or phone number.
 
-### Session tokens and Supabase authorization
+The Nipto OIDC provider must implement:
+- OIDC discovery at `/.well-known/openid-configuration`.
+- Authorization Code flow with PKCE (S256), strict redirect URI allow-list, state and nonce validation.
+- Token endpoint with short-lived, asymmetrically signed ID tokens and one-time authorization codes.
+- JWKS endpoint with key IDs and a documented signing-key rotation process.
+- UserInfo claims limited to `sub`, `preferred_username`, `name`, and any required non-sensitive Nipto profile claims. Do not emit `email`, `email_verified`, `phone_number`, or synthetic contact values.
+- A private OIDC client registered only with self-hosted Supabase Auth. Its client secret stays in server configuration, never in Flutter.
+- Login and recovery endpoints backed by Nipto's Argon2id credential store and the recovery protocol in section 5.
 
-Nipto owns the login and refresh lifecycle. Use short-lived signed access JWTs for Supabase PostgREST, Storage, and Realtime, with:
-- `sub`: Nipto account UUID (same UUID as `profiles.id`).
-- `role`: `authenticated`.
-- `aud`: `authenticated`.
-- `iss`: Nipto's documented issuer.
-- `iat`, short `exp`, and unique `jti`.
-- No email or phone claims.
+Configure the self-hosted Supabase Auth custom OIDC provider with email optional and verify that the resulting `auth.users` row has no email address. Supabase Auth still creates the Supabase session and stable user UUID used by existing `auth.uid()` policies. Profile provisioning must map the Nipto OIDC claims to the same Nipto ID and display name, with uniqueness enforced by Postgres.
 
-Use a dedicated asymmetric signing key pair. The public verification key must be configured in the Supabase project's JWT signing-key configuration; the private key belongs only in Edge Function secrets. Never put the private key or service-role key in the Flutter app or repository. Confirm the project accepts these custom tokens for REST, Storage, and Realtime before migrating any production identity.
+### Credential storage
 
-Refresh tokens are cryptographically random opaque values. Store only a hash of each token in a private session table. Rotate on every refresh, revoke the previous token atomically, detect token reuse, and support per-device and global revocation. Access tokens should be short-lived (target 10 minutes); session lifetime and idle expiry must be explicit.
+The Nipto OIDC service stores:
+- A stable Nipto subject UUID.
+- Canonical unique Nipto ID.
+- Argon2id encoded password hash.
+- Credential version and password-change timestamps.
+- Account state and security audit metadata.
 
-### Authorization compatibility
+Credential hashes are kept in a private schema, never selected by app roles, never returned through UserInfo, and verified only by the Nipto OIDC service. The OIDC service must not store email or phone credentials.
 
-All existing RLS policies that use `auth.uid()` must continue to resolve to the Nipto UUID from the verified JWT `sub`. Realtime channel authorization and Storage policies must be tested with a custom Nipto JWT. Never bypass RLS by embedding the service-role key in the app.
+### Supabase session and authorization
+
+Supabase Auth issues the session JWT after the Nipto OIDC sign-in succeeds. The Nipto Android app uses the normal Supabase session for PostgREST, Storage, Realtime, and RLS. The JWT `sub` must map to the stable `public.profiles.id` UUID. All existing policies using `auth.uid()` continue to be the authorization boundary.
+
+Do not build a parallel custom refresh-token system for the app unless a later measured requirement justifies it. Let the self-hosted Supabase Auth session broker manage app access/refresh tokens; keep the Nipto OIDC provider's authorization codes and ID tokens short-lived and single-use.
+
+### Hosted-project constraint
+
+The current project is Supabase Cloud. Its documented first-class third-party authentication integrations are a limited set of providers; arbitrary custom OIDC provider administration is documented for self-hosted Supabase Auth. The current hosted project therefore cannot be assumed to support `custom:nipto`.
+
+To preserve the current direct Supabase client architecture and RLS, the compliant deployment path is to self-host the Supabase stack and Nipto OIDC provider together. Keeping the hosted Supabase Cloud project would require a much larger redesign in which every user-scoped database, storage, and realtime operation is routed through a Nipto-owned backend. Do not mix a Nipto-issued JWT with the hosted project and assume it works.
 
 ## 4. Password security
 
@@ -106,17 +116,16 @@ The recovery contact never receives the reset grant and cannot set the password.
 
 ## 6. Existing-account migration
 
-Do not delete or overwrite existing Supabase Auth identities until a verified migration path exists.
+The existing production project is hosted Supabase Cloud and currently has Supabase Auth identities. Do not delete, overwrite, or migrate those identities until the self-hosted target has passed an end-to-end proof of concept.
 
-1. Add native account/session tables and Edge Functions in parallel, with no change to production login yet.
-2. Configure and validate the dedicated JWT public key against a non-production Supabase environment. Verify REST, RLS, Storage, Realtime, and RPC behavior.
-3. Add a migration path for existing signed-in users: while they still have a valid existing session, require an explicit password re-entry, verify it against the existing credential once, create the Argon2id hash, and bind the native account to the same UUID. Do not copy Supabase Auth password hashes.
-4. Provide a clearly communicated fallback for users who cannot complete in-session migration. Do not silently fabricate email addresses or claim recovery is available.
-5. Backfill private native account rows for existing profiles only when credential migration can be completed safely. Preserve profile UUIDs and all social data.
-6. Switch new registration and login to native Nipto Auth only after custom JWT integration passes end-to-end tests.
-7. Remove old email lookup/reset Edge Function behavior, email-based UI, and Supabase Auth dependencies only after migration coverage and rollback strategy are verified.
-8. Remove the `profiles.id → auth.users.id` foreign key only after all active identities have native account records and no feature still depends on Supabase Auth user management.
-9. Keep a rollback window and backups. Never drop `auth.users` or destroy existing sessions/data as part of an early migration.
+1. Build the Nipto OIDC provider and self-hosted Supabase environment in parallel with the current hosted production project.
+2. Verify custom OIDC sign-in, no-email user creation, stable profile UUID mapping, RLS, PostgREST, Storage, Realtime, and Edge Functions on the self-hosted environment.
+3. Export a protected backup of the production database and storage metadata. Transfer files using a verified migration process; preserve profile UUIDs and all foreign-key relationships.
+4. Existing users must establish a Nipto password through a secure, verified migration flow. Do not copy Supabase Auth password hashes or assume they can be converted.
+5. Map each existing account to the same stable Nipto subject and profile UUID wherever possible. Validate message, conversation, media, notification, call, staff, and moderation ownership after import.
+6. Keep the current hosted project read-only or available for rollback until the new Android build has passed staged user acceptance and data-integrity checks.
+7. Switch Android configuration to the self-hosted Supabase endpoint only after migration, backup restoration, and security tests succeed.
+8. Retire hosted Supabase only after a verified rollback window and reconciliation of all user data. Never destroy production data during an early authentication experiment.
 
 ## 7. Required implementation and release tests
 
@@ -133,22 +142,19 @@ Do not delete or overwrite existing Supabase Auth identities until a verified mi
 
 ## 8. Deployment gates and non-goals
 
-- Do not deploy a partial native-auth schema or switch the app while the custom JWT signing key is not configured and verified.
-- Do not use synthetic `@nipto.invalid` email addresses, fake phone numbers, email OTP, or external login providers as a workaround.
-- Do not expose service-role credentials or password hashes to the client.
+- Do not apply an experimental native-auth schema to the current production project.
+- Do not use synthetic `@nipto.invalid` email addresses, fake phone numbers, email OTP, or external social login providers.
+- Do not expose OIDC signing keys, provider client secrets, service-role credentials, or password hashes to the client.
 - Do not claim recovery is complete until the full one-time reset protocol is implemented and tested.
-- This decision does not require changing the existing social product model, profile UUIDs, or feature data model.
+- Preserve the existing social product model, profile UUIDs, and feature data model.
+- Self-hosting requires an explicitly provisioned production server, domain, TLS, backups, monitoring, and a disaster-recovery plan. Do not deploy to a paid host or create billable infrastructure without the owner's explicit cost approval.
 
+## 9. Supabase platform evidence
 
-## 9. Supabase-hosted platform feasibility gate (must be resolved before implementation)
+Supabase's current documentation states that hosted third-party authentication supports a defined set of integrations and requires asymmetric OIDC JWTs. Supabase Auth cannot be disabled in the hosted platform. The custom OAuth/OIDC provider administration guide is specifically for self-hosted Supabase Auth.
 
-The target Supabase project is a hosted Supabase Cloud project, not a self-hosted stack. Supabase's current third-party-auth documentation states that hosted first-class integrations cover a defined set of providers (Clerk, Firebase Auth, Auth0, AWS Cognito, WorkOS), require asymmetric OIDC JWTs, and do not allow Supabase Auth to be disabled. The custom OAuth/OIDC provider administration guide is explicitly for self-hosted Supabase Auth.
+References:
+- Third-party auth overview: https://supabase.com/docs/guides/auth/third-party/overview
+- Custom OAuth/OIDC providers (self-hosted): https://supabase.com/docs/guides/self-hosting/self-hosted-custom-oauth-providers
 
-Consequences:
-- Do not assume that creating a Nipto JWT signing key and publishing a JWKS endpoint is sufficient to make the hosted project trust an arbitrary Nipto issuer.
-- Do not deploy this migration or mint tokens until the exact hosted-project trust configuration is confirmed with a working proof of concept.
-- Do not claim the custom Nipto password database alone can authorize existing PostgREST, Storage, and Realtime calls. Existing RLS relies on Supabase-verified JWT claims.
-- A private Nipto OIDC issuer may be a viable design only if the hosted project can be configured to trust it without an email claim and the proof of concept verifies PostgREST, Storage, Realtime, RPC, and RLS. If that is not supported, the compliant alternatives are (a) self-host the relevant Supabase Auth stack with a Nipto-owned OIDC provider, or (b) move all user-scoped data/media/realtime access behind a Nipto-owned backend/API and stop using direct Supabase client access. Option (b) is a substantial architecture migration.
-- The user requirement forbids email, phone, external social identity providers, and synthetic addresses. Do not quietly substitute one of them.
-
-The native-auth schema in this branch is a staged design artifact. It is not production-ready and must not be applied to the hosted production database until this platform gate is passed.
+This evidence is why the current hosted project cannot be assumed to trust a private Nipto OIDC issuer. The native-auth implementation is blocked on creating and testing the self-hosted target stack. The current hosted production project remains untouched.
