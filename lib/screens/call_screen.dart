@@ -31,6 +31,7 @@ class _CallScreenState extends State<CallScreen> {
   NiptoCallPhase _phase = NiptoCallPhase.preparing;
   bool _microphoneEnabled = true;
   bool _cameraEnabled = true;
+  bool _speakerEnabled = false;
   bool _renderersReady = false;
   String? _error;
   bool _ending = false;
@@ -38,6 +39,7 @@ class _CallScreenState extends State<CallScreen> {
   @override
   void initState() {
     super.initState();
+    _speakerEnabled = widget.mediaType == 'video';
     _service = NiptoCallService(
       callId: widget.callId,
       mediaType: widget.mediaType,
@@ -66,6 +68,7 @@ class _CallScreenState extends State<CallScreen> {
       await _remoteRenderer.initialize();
       if (!mounted) return;
       setState(() => _renderersReady = true);
+      if (_speakerEnabled) await _service.setSpeakerphoneEnabled(true);
       if (widget.isCaller) {
         await _service.startOutgoing();
       } else {
@@ -103,6 +106,12 @@ class _CallScreenState extends State<CallScreen> {
     final next = !_microphoneEnabled;
     await _service.setMicrophoneEnabled(next);
     if (mounted) setState(() => _microphoneEnabled = next);
+  }
+
+  Future<void> _toggleSpeaker() async {
+    final next = !_speakerEnabled;
+    await _service.setSpeakerphoneEnabled(next);
+    if (mounted) setState(() => _speakerEnabled = next);
   }
 
   Future<void> _toggleCamera() async {
@@ -249,6 +258,11 @@ class _CallScreenState extends State<CallScreen> {
                           label: _cameraEnabled ? 'Camera off' : 'Camera on',
                           onPressed: _toggleCamera,
                         ),
+                      _CallControl(
+                        icon: _speakerEnabled ? Icons.volume_up_rounded : Icons.hearing_rounded,
+                        label: _speakerEnabled ? 'Speaker' : 'Earpiece',
+                        onPressed: _toggleSpeaker,
+                      ),
                       _CallControl(
                         icon: Icons.call_end_rounded,
                         label: 'End',
