@@ -449,15 +449,24 @@ async function authorizePost(request: Request): Promise<Response> {
       if (displayName.length < 1 || displayName.length > 50) {
         throw new ApiError("Enter a display name between 1 and 50 characters.", 400);
       }
-      const passwordHash = await hashPassword(password);
-      const created = await rpc("nipto_oidc_register", {
-        p_nipto_id: niptoId,
-        p_display_name: displayName,
-        p_password_hash: passwordHash,
-        p_recovery_nipto_id: recoveryNiptoId || null,
-      });
-      if (typeof created !== "string") throw new ApiError("That Nipto ID is unavailable.", 409);
-      identityId = created;
+      const existing = firstRow(await rpc("nipto_oidc_login_record", { p_nipto_id: niptoId }));
+      if (existing && typeof existing.password_hash === "string") {
+        const valid = await verifyPassword(password, existing.password_hash);
+        if (!valid || existing.status !== "active") {
+          throw new ApiError("The Nipto ID or password is incorrect.", 401);
+        }
+        identityId = String(existing.identity_id);
+      } else {
+        const passwordHash = await hashPassword(password);
+        const created = await rpc("nipto_oidc_register", {
+          p_nipto_id: niptoId,
+          p_display_name: displayName,
+          p_password_hash: passwordHash,
+          p_recovery_nipto_id: recoveryNiptoId || null,
+        });
+        if (typeof created !== "string") throw new ApiError("That Nipto ID is unavailable.", 409);
+        identityId = created;
+      }
     } else {
       const record = firstRow(await rpc("nipto_oidc_login_record", { p_nipto_id: niptoId }));
       if (!record || typeof record.password_hash !== "string") {
