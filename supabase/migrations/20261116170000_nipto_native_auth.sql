@@ -196,6 +196,17 @@ begin
       and p.account_state = 'active'
   ) then raise exception 'Account unavailable'; end if;
 
+  -- Keep a bounded number of active device sessions per account.
+  update private.nipto_sessions s
+    set revoked_at = pg_catalog.now()
+    where s.id in (
+      select old_session.id
+      from private.nipto_sessions old_session
+      where old_session.user_id = p_user_id and old_session.revoked_at is null
+      order by old_session.created_at desc
+      offset 9
+    );
+
   insert into private.nipto_sessions(user_id, refresh_token_hash, expires_at, device_label)
   values (p_user_id, p_refresh_token_hash, p_expires_at, left(p_device_label, 80))
   returning id into v_session_id;
@@ -504,6 +515,16 @@ begin
   from private.nipto_recovery_challenges c
   where c.id=p_challenge_id and c.challenge_hash=p_challenge_hash
     and c.status='approved' and c.expires_at>pg_catalog.now()
+    and exists (
+      select 1
+      from public.account_recovery_contacts rc
+      join public.profiles op on op.id=rc.owner_id
+      join public.profiles rp on rp.id=rc.recovery_user_id
+      where rc.owner_id=c.owner_id and rc.recovery_user_id=c.recovery_user_id
+        and rc.status='accepted' and op.account_state='active'
+        and rp.account_state='active'
+        and not private.is_blocked_between(rc.owner_id,rc.recovery_user_id)
+    )
   for update;
   if v_owner is null then return null; end if;
 
@@ -536,7 +557,13 @@ begin
   select * into v_grant from private.nipto_password_reset_grants g
   where g.grant_hash=p_grant_hash for update;
   if not found or v_grant.consumed_at is not null
-     or v_grant.expires_at<=pg_catalog.now() then return null; end if;
+     or v_grant.expires_at<=pg_catalog.now()
+     or not exists (
+       select 1 from private.nipto_accounts a
+       join public.profiles p on p.id=a.user_id
+       where a.user_id=v_grant.owner_id and a.status='active'
+         and p.account_state='active'
+     ) then return null; end if;
 
   update private.nipto_password_reset_grants g
     set consumed_at=pg_catalog.now() where g.id=v_grant.id;
