@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'auth/nipto_secure_auth_storage.dart';
 
 import 'nipto_app.dart';
 
@@ -24,9 +23,6 @@ Future<void> main() async {
   await Supabase.initialize(
     url: _supabaseUrl,
     publishableKey: _supabasePublishableKey,
-    authOptions: const FlutterAuthClientOptions(
-      asyncStorage: NiptoSecureAuthStorage(),
-    ),
     debug: false,
   );
 
