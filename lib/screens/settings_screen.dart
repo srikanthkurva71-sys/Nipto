@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/nipto_theme.dart';
+import 'feedback_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -318,6 +319,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     leading: Icon(Icons.verified_user_outlined),
                     title: Text('Secure sign-in'),
                     subtitle: Text('Nipto uses Supabase Auth sessions and server-verified passwords.'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            const _SectionLabel('HELP & FEEDBACK'),
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.feedback_outlined, color: NiptoColors.violet),
+                    title: const Text('Feedback & support'),
+                    subtitle: const Text('Report a problem, suggest a feature or rate your experience.'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(builder: (_) => const FeedbackScreen()),
+                    ),
                   ),
                 ],
               ),
