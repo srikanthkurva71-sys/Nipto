@@ -18,7 +18,7 @@
 - Refresh tokens are cryptographically random opaque values. Only SHA-256 hashes are stored. Tokens rotate on use; reuse of a rotated token revokes the affected account's active sessions.
 - Access JWTs are short-lived (10 minutes), signed with ES256, carry a `kid`, and contain only the claims needed for Supabase authorization. No `email`, `email_verified`, `phone_number`, or synthetic contact claims are issued.
 - The Supabase Custom OIDC integration must trust the exact Nipto issuer and JWKS URL. The app uses the Supabase `accessToken` callback; the Supabase Auth namespace is intentionally not used for application identity.
-- Existing Supabase Auth accounts are migrated only from an existing signed-in session. The migration verifies that session without reading the email field, creates the native Nipto credential under the same profile UUID, moves application foreign keys to `public.profiles`, and then deletes the legacy Auth identity. The legacy Auth record is not deleted until the native credential is committed.
+- Existing Supabase Auth accounts are migrated only from an existing signed-in session. The migration verifies that session through an ID-only RPC that returns the caller UUID and never reads or returns email or user metadata, creates the native Nipto credential under the same profile UUID, moves application foreign keys to `public.profiles`, and then deletes the legacy Auth identity. The legacy Auth record is not deleted until the native credential is committed.
 - The Flutter client uses only the Supabase publishable key. Never embed service_role, secret, database password or JWT signing keys in the app.
 
 ## Recovery Nipto account
