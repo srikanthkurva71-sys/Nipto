@@ -113,10 +113,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
             ),
           );
         } else {
-          await Supabase.instance.client.rpc(
-            'decline_nipto_call',
-            params: {'p_call_id': callId},
-          );
+          await _declineIncomingCall(callId);
         }
         return;
       }
@@ -124,6 +121,45 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
       // Foreground call discovery is best-effort; push wake-up is a separate release gate.
     } finally {
       _pollingIncomingCalls = false;
+    }
+  }
+
+  Future<void> _declineIncomingCall(String callId) async {
+    final client = Supabase.instance.client;
+    final channel = client.channel(
+      'nipto-call:$callId',
+      opts: const RealtimeChannelConfig(private: true),
+    );
+    final joined = Completer<void>();
+    channel.subscribe((status, error) {
+      if (joined.isCompleted) return;
+      if (status == RealtimeSubscribeStatus.subscribed) {
+        joined.complete();
+      } else if (status == RealtimeSubscribeStatus.channelError ||
+          status == RealtimeSubscribeStatus.timedOut) {
+        joined.completeError(StateError('Call signaling unavailable.'));
+      }
+    });
+    try {
+      await joined.future.timeout(const Duration(seconds: 8));
+      await channel.sendBroadcastMessage(
+        event: 'signal',
+        payload: {'type': 'decline'},
+      );
+      await client.rpc(
+        'decline_nipto_call',
+        params: {'p_call_id': callId},
+      );
+    } catch (_) {
+      // The server-side decline remains authoritative even if signaling is offline.
+      try {
+        await client.rpc(
+          'decline_nipto_call',
+          params: {'p_call_id': callId},
+        );
+      } catch (_) {}
+    } finally {
+      await client.removeChannel(channel);
     }
   }
 
