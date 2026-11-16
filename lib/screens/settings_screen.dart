@@ -378,7 +378,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ListTile(
                     leading: const Icon(Icons.lock_reset_rounded),
                     title: const Text('Password and recovery'),
-                    subtitle: const Text('Use your verified recovery email to reset your password.'),
+                    subtitle: const Text('Use the private account email registered with Supabase Auth to reset your password.'),
                     onTap: () => ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Use Forgot password on the sign-in screen to reset your password.')),
                     ),
