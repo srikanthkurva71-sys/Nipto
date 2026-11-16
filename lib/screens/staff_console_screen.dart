@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:video_player/video_player.dart';
 
 import '../theme/nipto_theme.dart';
 
@@ -247,6 +248,12 @@ class _StaffConsoleScreenState extends State<StaffConsoleScreen>
               style: const TextStyle(fontWeight: FontWeight.w800)),
           const SizedBox(height: 8),
           Text((row['caption']?.toString().isNotEmpty == true) ? row['caption'].toString() : 'No caption'),
+          const SizedBox(height: 10),
+          StaffMediaPreview(
+            bucket: kind == 'short' ? 'shorts' : 'posts',
+            path: row['media_path']?.toString() ?? '',
+            isVideo: row['media_type']?.toString() == 'video',
+          ),
           const SizedBox(height: 8),
           Wrap(spacing: 6, children: [
             _button('Approve', () => _content(row, 'approved')),
@@ -298,6 +305,165 @@ class _StaffConsoleScreenState extends State<StaffConsoleScreen>
             ),
             if (_busy) const Positioned(top: 0, left: 0, right: 0, child: LinearProgressIndicator()),
           ]),
+        );
+      },
+    );
+  }
+}
+
+
+class StaffMediaPreview extends StatefulWidget {
+  const StaffMediaPreview({
+    super.key,
+    required this.bucket,
+    required this.path,
+    required this.isVideo,
+  });
+
+  final String bucket;
+  final String path;
+  final bool isVideo;
+
+  @override
+  State<StaffMediaPreview> createState() => _StaffMediaPreviewState();
+}
+
+class _StaffMediaPreviewState extends State<StaffMediaPreview>
+    with WidgetsBindingObserver {
+  late Future<String> _signedUrl;
+  VideoPlayerController? _video;
+  bool _videoReady = false;
+  bool _videoFailed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _signedUrl = _createSignedUrl();
+  }
+
+  Future<String> _createSignedUrl() async {
+    if (widget.path.isEmpty) throw StateError('Media path is missing');
+    return Supabase.instance.client.storage
+        .from(widget.bucket)
+        .createSignedUrl(widget.path, 600);
+  }
+
+  Future<void> _initializeVideo(String url) async {
+    if (_video != null || _videoFailed) return;
+    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    _video = controller;
+    try {
+      await controller.initialize();
+      await controller.setLooping(false);
+      if (mounted) setState(() => _videoReady = true);
+    } catch (_) {
+      await controller.dispose();
+      _video = null;
+      if (mounted) setState(() => _videoFailed = true);
+    }
+  }
+
+  Future<void> _toggleVideo() async {
+    final controller = _video;
+    if (controller == null || !controller.value.isInitialized) return;
+    if (controller.value.isPlaying) {
+      await controller.pause();
+    } else {
+      if (controller.value.position >= controller.value.duration) {
+        await controller.seekTo(Duration.zero);
+      }
+      await controller.play();
+    }
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed && _video?.value.isPlaying == true) {
+      _video?.pause();
+      if (mounted) setState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _video?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<String>(
+      future: _signedUrl,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            height: 120,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return const ListTile(
+            leading: Icon(Icons.lock_outline_rounded),
+            title: Text('Media preview unavailable'),
+            dense: true,
+          );
+        }
+        final url = snapshot.data!;
+        if (!widget.isVideo) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.network(
+              url,
+              height: 220,
+              width: double.infinity,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const SizedBox(
+                height: 120,
+                child: Center(child: Text('Image preview unavailable')),
+              ),
+            ),
+          );
+        }
+        _initializeVideo(url);
+        final controller = _video;
+        if (_videoFailed) {
+          return const SizedBox(
+            height: 120,
+            child: Center(child: Text('Video preview unavailable')),
+          );
+        }
+        if (!_videoReady || controller == null) {
+          return const SizedBox(
+            height: 160,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        return GestureDetector(
+          onTap: _toggleVideo,
+          child: Container(
+            height: 220,
+            width: double.infinity,
+            color: const Color(0xFF101C50),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Center(
+                  child: AspectRatio(
+                    aspectRatio: controller.value.aspectRatio,
+                    child: VideoPlayer(controller),
+                  ),
+                ),
+                if (!controller.value.isPlaying)
+                  const CircleAvatar(
+                    backgroundColor: Color(0x99000000),
+                    child: Icon(Icons.play_arrow_rounded, color: Colors.white),
+                  ),
+              ],
+            ),
+          ),
         );
       },
     );
