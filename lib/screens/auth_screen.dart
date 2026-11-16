@@ -147,7 +147,10 @@ class _AuthScreenState extends State<AuthScreen> {
     if (email == null || email.isEmpty || !mounted) return;
 
     try {
-      await _client.auth.resetPasswordForEmail(email);
+      await _client.auth.resetPasswordForEmail(
+        email,
+        redirectTo: 'nipto://auth-callback',
+      );
       if (!mounted) return;
       setState(() {
         _notice = 'If that address belongs to a Nipto account, a reset link will arrive shortly.';
