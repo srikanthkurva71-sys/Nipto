@@ -5,6 +5,7 @@ import '../theme/nipto_theme.dart';
 import 'feedback_screen.dart';
 import 'close_friends_screen.dart';
 import 'staff_console_screen.dart';
+import 'recovery_contacts_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -362,6 +363,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Card(
               child: Column(
                 children: [
+                  ListTile(
+                    leading: const Icon(Icons.shield_outlined, color: NiptoColors.violet),
+                    title: const Text('Recovery Nipto account'),
+                    subtitle: const Text('Add and manage a trusted Nipto account for recovery assistance.'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const RecoveryContactsScreen(),
+                      ),
+                    ),
+                  ),
+                  const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.lock_reset_rounded),
                     title: const Text('Password and recovery'),
