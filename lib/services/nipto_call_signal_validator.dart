@@ -8,7 +8,7 @@ class NiptoCallSignalValidator {
   static const int maxSdpMidLength = 128;
   static const int maxQueuedIceCandidates = 256;
 
-  static bool isDescriptionPayload(Map payload, String expectedType) {
+  static bool isDescriptionPayload(Map<dynamic, dynamic> payload, String expectedType) {
     final sdp = payload['sdp'];
     return sdp is String &&
         sdp.isNotEmpty &&
