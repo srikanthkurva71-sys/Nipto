@@ -312,6 +312,26 @@ $$;
 revoke all on function public.nipto_native_rotate_session(text,text,timestamptz) from public, anon, authenticated;
 grant execute on function public.nipto_native_rotate_session(text,text,timestamptz) to service_role;
 
+create or replace function public.nipto_native_list_sessions(p_user_id uuid)
+returns table(
+  session_id uuid,
+  device_label text,
+  created_at timestamptz,
+  last_used_at timestamptz,
+  expires_at timestamptz
+)
+language sql stable security definer set search_path=''
+as $
+  select s.id,s.device_label,s.created_at,s.last_used_at,s.expires_at
+  from private.nipto_sessions s
+  where s.user_id=p_user_id and s.revoked_at is null
+    and s.expires_at>pg_catalog.now()
+  order by s.last_used_at desc
+  limit 10;
+$;
+revoke all on function public.nipto_native_list_sessions(uuid) from public, anon, authenticated;
+grant execute on function public.nipto_native_list_sessions(uuid) to service_role;
+
 create or replace function public.nipto_native_revoke_session(
   p_user_id uuid, p_session_id uuid
 )
