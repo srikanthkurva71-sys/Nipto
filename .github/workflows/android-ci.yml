@@ -27,6 +27,30 @@ jobs:
       - name: Generate Android platform project
         run: flutter create --platforms=android --org com.nipto --project-name nipto .
 
+      - name: Configure password recovery deep link
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("android/app/src/main/AndroidManifest.xml")
+          manifest = path.read_text()
+          if "nipto://auth-callback" not in manifest:
+              activity_start = manifest.find('android:name=".MainActivity"')
+              if activity_start < 0:
+                  raise SystemExit("Generated MainActivity declaration was not found")
+              activity_end = manifest.find("</activity>", activity_start)
+              if activity_end < 0:
+                  raise SystemExit("Generated MainActivity closing tag was not found")
+              intent_filter = """            <intent-filter>
+                          <action android:name="android.intent.action.VIEW" />
+                          <category android:name="android.intent.category.DEFAULT" />
+                          <category android:name="android.intent.category.BROWSABLE" />
+                          <data android:scheme="nipto" android:host="auth-callback" />
+                      </intent-filter>
+              """
+              manifest = manifest[:activity_end] + intent_filter + manifest[activity_end:]
+              path.write_text(manifest)
+          PY
+
       - name: Configure Android plugin repositories
         run: |
           python3 -c "from pathlib import Path; p=Path('android/settings.gradle.kts'); s=p.read_text(); s=s.replace('repositories {', 'repositories {\\n        google()\\n        mavenCentral()', 1); p.write_text(s)"
