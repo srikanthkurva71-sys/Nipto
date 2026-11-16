@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/nipto_session_manager.dart';
+
 import '../theme/nipto_theme.dart';
 
 class CloseFriendsScreen extends StatefulWidget {
@@ -23,7 +25,7 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _load() async {
-    final userId = _client.auth.currentUser?.id;
+    final userId = NiptoSessionManager.instance.userId;
     if (userId == null) return [];
     final results = await Future.wait([
       _client.rpc('list_my_connections', params: {'p_direction': 'following'}),
@@ -40,7 +42,7 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
   }
 
   Future<void> _toggle(Map<String, dynamic> person) async {
-    final userId = _client.auth.currentUser?.id;
+    final userId = NiptoSessionManager.instance.userId;
     final friendId = person['user_id'] as String;
     if (userId == null || !_busy.add(friendId)) return;
     setState(() {});
