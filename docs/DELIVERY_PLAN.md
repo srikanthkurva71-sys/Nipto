@@ -29,7 +29,7 @@
 - [x] Text/image/video status publishing.
 - [x] 24-hour visibility expiry filtering and viewer inserts.
 - [x] Follower-only audience default.
-- [x] Add owner-only status viewer list with RLS-protected viewer identities.
+- [x] Add owner-only status viewer list with a minimal, server-authorized identity projection.
 - [ ] Add expiry cleanup job and close-friends audience UI.
 
 ## Phase 4 — Shorts and posts
