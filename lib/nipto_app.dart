@@ -30,9 +30,9 @@ class AuthGate extends StatelessWidget {
       stream: sessions.changes,
       initialData: sessions.currentSession,
       builder: (context, snapshot) {
-        if (snapshot.data != null) return const MainShell();
+        if (snapshot.data == null) return const AuthScreen();
         if (sessions.hasLegacySession) return const AccountMigrationScreen();
-        return const AuthScreen();
+        return const MainShell();
       },
     );
   }
