@@ -26,12 +26,27 @@ RLS rules:
 - Client roles cannot update or delete feedback and cannot set staff workflow status.
 - Feedback is not publicly visible and is not mixed into public.user_reports.
 
-## Operational workflow still required
-The intake and user history are implemented. A trusted staff-only moderation/triage interface is not yet implemented. Before launch, add:
-1. Staff identity/role assignment outside client-controlled profile fields.
-2. A staff-only queue for received/reviewing feedback.
-3. Audited status changes and internal notes, separate from user-visible message text.
-4. Response/notification workflow when a submission is resolved or needs clarification.
-5. Retention and deletion policy for feedback records.
+## Trusted staff workflow
+
+The backend is implemented; the staff-facing review console is still pending.
+
+- Staff identities live in `private.staff_roles`, outside the exposed public schema.
+- Roles are `moderator` or `admin`; there are no staff accounts by default.
+- The table is not readable by anonymous or authenticated client roles. Staff assignment must be performed by the trusted Supabase project owner through project controls, never by an Android client.
+- `staff_can_access()` fails closed when a user has no active staff role.
+- `staff_list_feedback()` and `staff_review_feedback()` provide bounded feedback triage and status/response updates.
+- `staff_list_reports()` and `staff_review_report()` provide safety-report triage.
+- `staff_list_pending_content()` and `staff_review_content()` provide pending post/Short review.
+- All review operations write to the private `staff_action_log` audit table.
+- User-facing status changes and responses are delivered through in-app notifications; the Feedback screen shows the user's own response.
+
+Only trusted, appropriately assigned adult moderators should review safety reports and potentially distressing user-generated content. Do not assign a minor account to a moderation role.
+
+## Remaining operations and release requirements
+1. Build the role-gated staff console for an appropriately staffed operations team.
+2. Define the staff identity verification and role-provisioning process, with separation of admin and moderator duties.
+3. Add retention/deletion policy and an appeal/escalation workflow.
+4. Test staff RPCs with no-role, moderator and admin sessions, and verify audit records.
+5. Configure push delivery for feedback and report updates.
 
 Never expose staff credentials or service-role keys in the Android app.
