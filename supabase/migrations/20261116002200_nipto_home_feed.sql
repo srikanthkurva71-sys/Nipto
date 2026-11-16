@@ -104,3 +104,15 @@ drop trigger if exists post_comments_after_insert_notify on public.post_comments
 create trigger post_comments_after_insert_notify
 after insert on public.post_comments
 for each row execute function private.notify_post_comment();
+
+
+-- Keep feed query plans predictable as the social graph grows.
+create index if not exists posts_approved_feed_created_idx
+  on public.posts (created_at desc, id desc)
+  where moderation_state = 'approved';
+
+create index if not exists post_likes_post_id_idx
+  on public.post_likes (post_id);
+
+create index if not exists post_comments_post_created_idx
+  on public.post_comments (post_id, created_at);
