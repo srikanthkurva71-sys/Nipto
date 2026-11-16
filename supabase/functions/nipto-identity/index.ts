@@ -260,6 +260,7 @@ async function createSession(account: any, deviceLabel: string): Promise<Json> {
   return {
     access_token: accessToken,
     refresh_token: refreshToken,
+    session_id: sessionId,
     expires_in: ACCESS_TOKEN_SECONDS,
     token_type: "Bearer",
     user: {
@@ -409,10 +410,31 @@ async function route(request: Request): Promise<Response> {
     return json({
       access_token: await signAccessToken(profileRows, session.session_id),
       refresh_token: newToken,
+      session_id: session.session_id,
       expires_in: ACCESS_TOKEN_SECONDS,
       token_type: "Bearer",
       user: { id: profileRows.user_id, nipto_id: profileRows.nipto_id, display_name: profileRows.display_name },
     });
+  }
+  if (path.endsWith("/sessions") && method === "GET") {
+    const claims = await verifyAccessToken(request);
+    const sessions = await rpc("nipto_native_list_sessions", {
+      p_user_id: claims.sub,
+    });
+    return json({ sessions: sessions ?? [], current_session_id: claims.sid });
+  }
+  if (path.endsWith("/sessions/revoke") && method === "POST") {
+    const claims = await verifyAccessToken(request);
+    const input = await body(request);
+    const sessionId = stringField(input.session_id, 36);
+    if (!/^[0-9a-f-]{36}$/i.test(sessionId)) {
+      return json({ error: "Invalid session." }, 400);
+    }
+    const revoked = await rpc("nipto_native_revoke_session", {
+      p_user_id: claims.sub,
+      p_session_id: sessionId,
+    });
+    return json({ ok: revoked === true, current_session: sessionId === claims.sid });
   }
   if (path.endsWith("/logout") && method === "POST") {
     const claims = await verifyAccessToken(request);
