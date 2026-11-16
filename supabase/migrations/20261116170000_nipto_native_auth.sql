@@ -90,6 +90,9 @@ revoke all on private.nipto_accounts, private.nipto_sessions,
 -- create profile UUIDs directly; keep old auth.users rows untouched.
 alter table public.profiles drop constraint if exists profiles_id_fkey;
 
+-- Retire the legacy Nipto-ID-to-email lookup used by the old login function.
+drop function if exists public.resolve_nipto_login(text);
+
 -- Application ownership and moderation history must reference the stable Nipto
 -- profile UUID, not the legacy Supabase Auth row. This allows the legacy Auth
 -- identity (which may contain an email) to be deleted after successful migration.
