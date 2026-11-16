@@ -485,11 +485,23 @@ class _ProfilePostTileState extends State<_ProfilePostTile> {
           FutureBuilder<String>(
             future: _signedUrl,
             builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Container(
+                  color: NiptoColors.violetSoft,
+                  child: const Center(
+                    child: Icon(Icons.broken_image_outlined, color: NiptoColors.violet, size: 30),
+                  ),
+                );
+              }
               if (!snapshot.hasData) {
                 return Container(
                   color: NiptoColors.violetSoft,
                   child: const Center(
-                    child: Icon(Icons.image_outlined, color: NiptoColors.violet, size: 30),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                   ),
                 );
               }
