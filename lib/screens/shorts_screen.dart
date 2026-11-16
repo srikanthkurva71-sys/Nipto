@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../services/nipto_session_manager.dart';
 import 'package:video_player/video_player.dart';
 
 import '../theme/nipto_theme.dart';
@@ -138,7 +140,7 @@ class _ShortsScreenState extends State<ShortsScreen> {
         throw const FormatException('Short videos must be 3 minutes or less.');
       }
 
-      final userId = _client.auth.currentUser!.id;
+      final userId = NiptoSessionManager.instance.userId!;
       final path = userId + '/' + DateTime.now().microsecondsSinceEpoch.toString() + '.mp4';
       await _client.storage.from('shorts').upload(
         path,
@@ -326,7 +328,7 @@ class _ShortTileState extends State<_ShortTile> with WidgetsBindingObserver {
   }
 
   Future<void> _loadLikeState() async {
-    final userId = _client.auth.currentUser?.id;
+    final userId = NiptoSessionManager.instance.userId;
     if (userId == null) return;
     try {
       final rows = await _client
@@ -354,7 +356,7 @@ class _ShortTileState extends State<_ShortTile> with WidgetsBindingObserver {
 
   Future<void> _toggleLike() async {
     if (_likeBusy) return;
-    final userId = _client.auth.currentUser?.id;
+    final userId = NiptoSessionManager.instance.userId;
     if (userId == null) return;
     final next = !_liked;
     setState(() {
@@ -520,7 +522,7 @@ class _ShortCommentsSheetState extends State<_ShortCommentsSheet> {
 
   Future<void> _send() async {
     final body = _controller.text.trim();
-    final userId = _client.auth.currentUser?.id;
+    final userId = NiptoSessionManager.instance.userId;
     if (body.isEmpty || userId == null || _sending) return;
     setState(() => _sending = true);
     try {
@@ -582,7 +584,7 @@ class _ShortCommentsSheetState extends State<_ShortCommentsSheet> {
                           backgroundColor: NiptoColors.violetSoft,
                           child: Icon(Icons.person_outline_rounded, color: NiptoColors.violet),
                         ),
-                        title: Text(comments[index]['author_id'] == _client.auth.currentUser?.id ? 'You' : 'Nipto member'),
+                        title: Text(comments[index]['author_id'] == NiptoSessionManager.instance.userId ? 'You' : 'Nipto member'),
                         subtitle: Text(comments[index]['body'] as String),
                       ),
                     );
