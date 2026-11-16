@@ -28,6 +28,8 @@
 - [x] Private chat media and signed access.
 - [x] Add newest-first 50-message conversation loading with cursor-based older-page retrieval while retaining the live latest-message stream.
 - [ ] Complete message requests, retries, audio/video/file attachments and multi-device delivery.
+- [ ] Implement one-to-one WebRTC voice/video calls using private authenticated signaling, short-lived TURN credentials, push wake-up, call lifecycle controls and mobile network recovery; see `docs/WEBRTC_CALLS.md`.
+- [ ] Add group calling through an SFU only after one-to-one calling is stable; no production mesh fan-out.
 
 ## Phase 3 — Status
 - [x] Text/image/video status publishing.
@@ -52,10 +54,10 @@
 - [x] Validate the role-gated staff console through formatting, static analysis, unit/widget tests and Android debug APK CI; production staff-session acceptance testing remains an operational gate.
 - [x] Test staff RPCs fail closed for identities without staff roles; moderator/admin acceptance testing remains an operational gate.
 - [x] In-app notifications for trusted recovery-contact requests and approvals, with navigation to the recovery-contact manager.
-- [ ] Push delivery and notification deep links.
+- [ ] Push delivery and notification deep links (also required for incoming-call wake-up).
 - [x] Role-gated staff review UI for feedback, abuse reports and pending content; backend authorization and audit logging are deployed.
 - Privacy export/deletion workflows.
-- Offline, accessibility, performance and device testing.
+- Offline, accessibility, performance and device testing, including two-device WebRTC network-transition tests.
 - App signing, Play Console policy review and release APK/AAB.
 
 ## Definition of done
