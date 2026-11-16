@@ -436,6 +436,95 @@ class _StatusPageState extends State<_StatusPage> {
     return Color(int.parse(raw.substring(1), radix: 16) + 0xFF000000);
   }
 
+  Future<List<Map<String, dynamic>>> _loadViewers() async {
+    final client = Supabase.instance.client;
+    final views = await client
+        .from('status_views')
+        .select('viewer_id, viewed_at')
+        .eq('status_id', widget.status['id'])
+        .order('viewed_at', ascending: false)
+        .limit(100);
+    final rows = (views as List)
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+    if (rows.isEmpty) return [];
+    final ids = rows.map((row) => row['viewer_id'] as String).toSet().toList();
+    final profiles = await client
+        .from('profiles')
+        .select('id, nipto_id, display_name')
+        .inFilter('id', ids);
+    final byId = <String, Map<String, dynamic>>{
+      for (final raw in profiles as List)
+        (raw['id'] as String): Map<String, dynamic>.from(raw),
+    };
+    return rows
+        .where((row) => byId.containsKey(row['viewer_id']))
+        .map((row) => {...byId[row['viewer_id']]!, 'viewed_at': row['viewed_at']})
+        .toList();
+  }
+
+  Future<void> _showViewers() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheetContext) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.sizeOf(sheetContext).height * 0.55,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 4, 20, 12),
+                child: Text('Status viewers', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+              ),
+              Expanded(
+                child: FutureBuilder<List<Map<String, dynamic>>>(
+                  future: _loadViewers(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return const Center(child: Text('Could not load viewers. Please retry.'));
+                    }
+                    final viewers = snapshot.data ?? [];
+                    if (viewers.isEmpty) {
+                      return const Center(child: Text('No views yet.'));
+                    }
+                    return ListView.separated(
+                      itemCount: viewers.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
+                      itemBuilder: (context, index) {
+                        final viewer = viewers[index];
+                        final name = viewer['display_name']?.toString() ?? 'Nipto member';
+                        final handle = viewer['nipto_id']?.toString() ?? '';
+                        final viewedAt = DateTime.tryParse(viewer['viewed_at']?.toString() ?? '')?.toLocal();
+                        final time = viewedAt == null
+                            ? ''
+                            : viewedAt.hour.toString().padLeft(2, '0') + ':' +
+                                viewedAt.minute.toString().padLeft(2, '0');
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: NiptoColors.violetSoft,
+                            child: Text(name.isEmpty ? 'N' : name.substring(0, 1).toUpperCase()),
+                          ),
+                          title: Text(name),
+                          subtitle: Text(handle.isEmpty ? 'Nipto member' : '@$handle'),
+                          trailing: Text(time, style: const TextStyle(color: NiptoColors.muted, fontSize: 12)),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final type = widget.status['status_type'] as String;
@@ -470,6 +559,37 @@ class _StatusPageState extends State<_StatusPage> {
       content = const Center(child: CircularProgressIndicator(color: Colors.white));
     }
 
-    return SizedBox.expand(child: content);
+    final isOwner = Supabase.instance.client.auth.currentUser?.id == widget.ownerId;
+    return SizedBox.expand(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          content,
+          if (isOwner)
+            Positioned(
+              left: 16,
+              bottom: 22,
+              child: SafeArea(
+                child: FutureBuilder<List<Map<String, dynamic>>>(
+                  future: _loadViewers(),
+                  builder: (context, snapshot) {
+                    final count = snapshot.data?.length;
+                    return OutlinedButton.icon(
+                      onPressed: _showViewers,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        backgroundColor: const Color(0x99000000),
+                        side: const BorderSide(color: Colors.white54),
+                      ),
+                      icon: const Icon(Icons.visibility_outlined, size: 18),
+                      label: Text(count == null ? 'Viewers' : '$count views'),
+                    );
+                  },
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
