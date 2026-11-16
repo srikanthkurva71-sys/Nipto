@@ -70,11 +70,16 @@ class _AuthScreenState extends State<AuthScreen> {
         );
 
         final recoveryId = _recoveryNiptoId.text.trim().toLowerCase().replaceFirst(RegExp(r'^@'), '');
+        var recoveryRequestFailed = false;
         if (response.session != null && recoveryId.isNotEmpty) {
-          await _client.rpc(
-            'request_recovery_contact',
-            params: {'p_nipto_id': recoveryId},
-          );
+          try {
+            await _client.rpc(
+              'request_recovery_contact',
+              params: {'p_nipto_id': recoveryId},
+            );
+          } catch (_) {
+            recoveryRequestFailed = true;
+          }
         }
 
         if (!mounted) return;
@@ -82,6 +87,11 @@ class _AuthScreenState extends State<AuthScreen> {
           setState(() {
             _notice = 'Account created. Verify your email, then open Settings → Security → Recovery Nipto account to add your trusted contact.';
             _noticeIsError = false;
+          });
+        } else if (recoveryRequestFailed) {
+          setState(() {
+            _notice = 'Account created, but the recovery request could not be sent. You can retry it in Settings → Security → Recovery Nipto account.';
+            _noticeIsError = true;
           });
         } else if (recoveryId.isNotEmpty) {
           setState(() {
@@ -323,21 +333,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         'Your recovery email is used for verification and password recovery. The optional recovery Nipto account must accept your request. You can also add or change it later in Settings → Security.',
                         style: TextStyle(color: NiptoColors.muted, fontSize: 12, height: 1.4),
                       ),
-                      const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          onPressed: _busy
-                              ? null
-                              : () => Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) => const RecoveryContactsScreen(),
-                                    ),
-                                  ),
-                          icon: const Icon(Icons.shield_outlined),
-                          label: const Text('Set recovery account later'),
-                        ),
-                      ),
+
                     ],
                     if (!_creatingAccount)
                       Align(
