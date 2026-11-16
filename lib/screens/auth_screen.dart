@@ -1,0 +1,371 @@
+import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../theme/nipto_theme.dart';
+
+class AuthScreen extends StatefulWidget {
+  const AuthScreen({super.key});
+
+  @override
+  State<AuthScreen> createState() => _AuthScreenState();
+}
+
+class _AuthScreenState extends State<AuthScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _niptoId = TextEditingController();
+  final _displayName = TextEditingController();
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  final _confirmPassword = TextEditingController();
+
+  bool _creatingAccount = false;
+  bool _busy = false;
+  bool _hidePassword = true;
+  String? _notice;
+  bool _noticeIsError = false;
+
+  SupabaseClient get _client => Supabase.instance.client;
+
+  @override
+  void dispose() {
+    _niptoId.dispose();
+    _displayName.dispose();
+    _email.dispose();
+    _password.dispose();
+    _confirmPassword.dispose();
+    super.dispose();
+  }
+
+  String? _validateNiptoId(String? value) {
+    final input = (value ?? '').trim().toLowerCase();
+    if (!RegExp(r'^[a-z0-9_]{3,24}$').hasMatch(input)) {
+      return 'Use 3–24 lowercase letters, numbers or underscores.';
+    }
+    if (const ['admin', 'administrator', 'support', 'help', 'nipto', 'official', 'security', 'moderator'].contains(input)) {
+      return 'This Nipto ID is reserved.';
+    }
+    return null;
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _busy = true;
+      _notice = null;
+    });
+
+    try {
+      final handle = _niptoId.text.trim().toLowerCase();
+      if (_creatingAccount) {
+        final response = await _client.auth.signUp(
+          email: _email.text.trim(),
+          password: _password.text,
+          data: {
+            'nipto_id': handle,
+            'display_name': _displayName.text.trim(),
+          },
+        );
+
+        if (!mounted) return;
+        if (response.session == null) {
+          setState(() {
+            _notice = 'Account created. Check your recovery email to verify Nipto before signing in.';
+            _noticeIsError = false;
+          });
+        }
+      } else {
+        final response = await _client.functions.invoke(
+          'nipto-login',
+          body: {
+            'nipto_id': handle,
+            'password': _password.text,
+          },
+        );
+
+        final data = response.data;
+        if (data is! Map || data['refresh_token'] is! String) {
+          throw const FormatException('The sign-in service returned an invalid response.');
+        }
+        await _client.auth.setSession(data['refresh_token'] as String);
+      }
+    } on AuthException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _notice = error.message;
+        _noticeIsError = true;
+      });
+    } on FunctionException catch (error) {
+      if (!mounted) return;
+      final details = error.details;
+      final message = details is Map && details['error'] is String
+          ? details['error'] as String
+          : 'Could not sign in. Check your connection and try again.';
+      setState(() {
+        _notice = message;
+        _noticeIsError = true;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _notice = error is FormatException
+            ? error.message
+            : 'Something went wrong. Please try again.';
+        _noticeIsError = true;
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _recoverPassword() async {
+    final emailController = TextEditingController(text: _email.text.trim());
+    final email = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset your password'),
+        content: TextField(
+          controller: emailController,
+          keyboardType: TextInputType.emailAddress,
+          decoration: const InputDecoration(
+            labelText: 'Verified recovery email',
+            hintText: 'you@example.com',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, emailController.text.trim()),
+            child: const Text('Send link'),
+          ),
+        ],
+      ),
+    );
+    emailController.dispose();
+    if (email == null || email.isEmpty || !mounted) return;
+
+    try {
+      await _client.auth.resetPasswordForEmail(email);
+      if (!mounted) return;
+      setState(() {
+        _notice = 'If that address belongs to a Nipto account, a reset link will arrive shortly.';
+        _noticeIsError = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _notice = 'Could not send the reset link. Please try again.';
+        _noticeIsError = true;
+      });
+    }
+  }
+
+  void _toggleMode() {
+    setState(() {
+      _creatingAccount = !_creatingAccount;
+      _notice = null;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 28, 24, 32),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 12),
+                    Center(
+                      child: Container(
+                        width: 68,
+                        height: 68,
+                        decoration: BoxDecoration(
+                          color: NiptoColors.violet,
+                          borderRadius: BorderRadius.circular(23),
+                          boxShadow: [
+                            BoxShadow(
+                              color: NiptoColors.violet.withValues(alpha: 0.2),
+                              blurRadius: 22,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.bubble_chart_rounded,
+                          color: Colors.white,
+                          size: 35,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    const Text(
+                      'NIPTO',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: NiptoColors.ink,
+                        fontSize: 30,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 4,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _creatingAccount ? 'Your people. Your space.' : 'Good to see you again.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: NiptoColors.muted,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 34),
+                    Text(
+                      _creatingAccount ? 'Create your account' : 'Sign in to Nipto',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 20),
+                    if (_creatingAccount) ...[
+                      TextFormField(
+                        controller: _displayName,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: const InputDecoration(
+                          labelText: 'Your name',
+                          prefixIcon: Icon(Icons.person_outline_rounded),
+                        ),
+                        validator: (value) {
+                          if ((value ?? '').trim().isEmpty) return 'Enter your name.';
+                          if ((value ?? '').trim().length > 50) return 'Name is too long.';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 13),
+                      TextFormField(
+                        controller: _email,
+                        keyboardType: TextInputType.emailAddress,
+                        autocorrect: false,
+                        decoration: const InputDecoration(
+                          labelText: 'Recovery email',
+                          prefixIcon: Icon(Icons.alternate_email_rounded),
+                        ),
+                        validator: (value) {
+                          final input = (value ?? '').trim();
+                          if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(input)) {
+                            return 'Enter a valid email address.';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 13),
+                    ],
+                    TextFormField(
+                      controller: _niptoId,
+                      autocorrect: false,
+                      textCapitalization: TextCapitalization.none,
+                      decoration: const InputDecoration(
+                        labelText: 'Nipto ID',
+                        prefixIcon: Icon(Icons.alternate_email_rounded),
+                        hintText: 'yourname',
+                      ),
+                      validator: _validateNiptoId,
+                    ),
+                    const SizedBox(height: 13),
+                    TextFormField(
+                      controller: _password,
+                      obscureText: _hidePassword,
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        prefixIcon: const Icon(Icons.lock_outline_rounded),
+                        suffixIcon: IconButton(
+                          tooltip: _hidePassword ? 'Show password' : 'Hide password',
+                          onPressed: () => setState(() => _hidePassword = !_hidePassword),
+                          icon: Icon(_hidePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                        ),
+                      ),
+                      validator: (value) {
+                        if ((value ?? '').length < 8) return 'Use at least 8 characters.';
+                        return null;
+                      },
+                    ),
+                    if (_creatingAccount) ...[
+                      const SizedBox(height: 13),
+                      TextFormField(
+                        controller: _confirmPassword,
+                        obscureText: _hidePassword,
+                        decoration: const InputDecoration(
+                          labelText: 'Confirm password',
+                          prefixIcon: Icon(Icons.verified_user_outlined),
+                        ),
+                        validator: (value) {
+                          if (value != _password.text) return 'Passwords do not match.';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Your recovery email is used for verification and password recovery. It is not shown on your public profile.',
+                        style: TextStyle(color: NiptoColors.muted, fontSize: 12, height: 1.4),
+                      ),
+                    ],
+                    if (!_creatingAccount)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: _busy ? null : _recoverPassword,
+                          child: const Text('Forgot password?'),
+                        ),
+                      ),
+                    if (_notice != null) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(13),
+                        decoration: BoxDecoration(
+                          color: _noticeIsError ? const Color(0xFFFFEEEE) : NiptoColors.violetSoft,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Text(
+                          _notice!,
+                          style: TextStyle(
+                            color: _noticeIsError ? NiptoColors.danger : NiptoColors.ink,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 22),
+                    FilledButton(
+                      onPressed: _busy ? null : _submit,
+                      child: _busy
+                          ? const SizedBox(
+                              height: 21,
+                              width: 21,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : Text(_creatingAccount ? 'Create Nipto account' : 'Sign in'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: _busy ? null : _toggleMode,
+                      child: Text(
+                        _creatingAccount
+                            ? 'Already have a Nipto ID? Sign in'
+                            : 'New to Nipto? Create an account',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
