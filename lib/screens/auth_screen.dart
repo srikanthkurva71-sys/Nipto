@@ -283,7 +283,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         autocorrect: false,
                         decoration: const InputDecoration(
                           labelText: 'Account email',
-                          prefixIcon: Icon(Icons.alternate_accountEmail_rounded),
+                          prefixIcon: Icon(Icons.alternate_email_rounded),
                         ),
                         validator: (value) {
                           final input = (value ?? '').trim();
@@ -301,7 +301,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       textCapitalization: TextCapitalization.none,
                       decoration: const InputDecoration(
                         labelText: 'Nipto ID',
-                        prefixIcon: Icon(Icons.alternate_accountEmail_rounded),
+                        prefixIcon: Icon(Icons.alternate_email_rounded),
                         hintText: 'yourname',
                       ),
                       validator: _validateNiptoId,
