@@ -126,11 +126,97 @@ class _ChatsScreenState extends State<ChatsScreen> {
     }).toList();
   }
 
+  Future<void> _handleSafetyAction(Map<String, dynamic> profile, String action) async {
+    final targetId = profile['id'] as String;
+    final handle = profile['nipto_id'] as String? ?? 'this account';
+    final myId = _client.auth.currentUser?.id;
+    if (myId == null) return;
+
+    if (action == 'block') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Block this account?'),
+          content: Text(
+            '@' + handle + ' will not be able to find your profile or contact you. Your shared conversation will be hidden.',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Block'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+      try {
+        await _client.from('blocked_users').insert({
+          'blocker_id': myId,
+          'blocked_id': targetId,
+        });
+        await _client.from('follows').delete().eq('follower_id', myId).eq('following_id', targetId);
+        await _client.from('follows').delete().eq('follower_id', targetId).eq('following_id', myId);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('@' + handle + ' has been blocked.')),
+        );
+        await _search(_searchController.text);
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('This account could not be blocked.')),
+        );
+      }
+      return;
+    }
+
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Why are you reporting this account?'),
+        children: [
+          for (final option in const [
+            ('spam', 'Spam or fake account'),
+            ('harassment', 'Harassment or bullying'),
+            ('hate', 'Hateful content'),
+            ('impersonation', 'Impersonation'),
+            ('unsafe_content', 'Unsafe content'),
+            ('other', 'Something else'),
+          ])
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialogContext, option.$1),
+              child: Text(option.$2),
+            ),
+        ],
+      ),
+    );
+    if (reason == null) return;
+    try {
+      await _client.from('user_reports').insert({
+        'reporter_id': myId,
+        'reported_user_id': targetId,
+        'reason': reason,
+        'content_type': 'profile',
+        'details': 'Report submitted from Nipto user discovery.',
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Thank you. Your report has been submitted.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Your report could not be submitted.')),
+      );
+    }
+  }
+
   String _initials(String value) {
     final parts = value.trim().split(RegExp(r'\s+'));
     if (parts.isEmpty || parts.first.isEmpty) return 'N';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.characters.first + parts.last.substring(0, 1)).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
   }
 
   void _scheduleSearch(String value) {
@@ -471,6 +557,14 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 onPressed: () => _follow(profile),
                 child: Text(profile['is_private'] == true ? 'Request' : 'Follow'),
               ),
+              PopupMenuButton<String>(
+                tooltip: 'Safety options',
+                onSelected: (action) => _handleSafetyAction(profile, action),
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'block', child: Text('Block account')),
+                  PopupMenuItem(value: 'report', child: Text('Report account')),
+                ],
+              ),
             ],
           ),
         );
@@ -482,7 +576,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
     final parts = value.trim().split(RegExp(r'\s+'));
     if (parts.isEmpty || parts.first.isEmpty) return 'N';
     if (parts.length == 1) return parts.first.characters.first.toUpperCase();
-    return (parts.first.characters.first + parts.last.characters.first).toUpperCase();
+    return (parts.first.characters.first + parts.last.substring(0, 1)).toUpperCase();
   }
 }
 
