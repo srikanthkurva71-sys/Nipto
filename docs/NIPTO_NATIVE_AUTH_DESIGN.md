@@ -180,10 +180,11 @@ This corrects the earlier assumption that custom OIDC was limited to self-hosted
 The Nipto identity Edge Function uses these server-only environment variables:
 - `NIPTO_OIDC_ISSUER`: exact HTTPS URL, without trailing slash, for `https://<project-ref>.supabase.co/functions/v1/nipto-identity`.
 - `NIPTO_OIDC_KID`: stable key identifier, for example `nipto-es256-2026-11`.
-- `NIPTO_OIDC_PRIVATE_JWK`: the complete private ES256 JWK generated locally by `scripts/generate_nipto_oidc_keys.ts`. Never commit or paste it into chat. Configure it only in Supabase Edge Function Secrets.
+- `NIPTO_OIDC_PRIVATE_JWK`: the complete active private ES256 JWK generated locally by `scripts/generate_nipto_oidc_keys.ts`. Never commit or paste it into chat. Configure it only in Supabase Edge Function Secrets.
+- `NIPTO_OIDC_PUBLIC_KEYS`: a JSON array of public ES256 JWKs. Include the active public key and any previous public keys still needed to verify unexpired tokens.
 - `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are Supabase-provided Edge Function environment values and must remain server-side.
 
-The key-generation script prints a private JWK. Store it securely, set the three variables in the Supabase Dashboard's Edge Function Secrets, and verify the public JWKS endpoint contains only the public key coordinates. Plan key rotation with overlapping public keys; the current first implementation supports one active key, so do not rotate until multi-key support is added and tested.
+The key-generation script prints a private JWK and its public counterpart. Store the private JWK securely, set the Edge Function secrets, and verify the public JWKS endpoint contains only public key coordinates. The issuer supports overlapping verification keys: on rotation, set the new private JWK and active key ID, and publish both the old and new public JWKs in `NIPTO_OIDC_PUBLIC_KEYS`. Retain the old public key for at least 30 minutes after rotation so Supabase's cached JWKS and still-valid 10-minute access tokens continue to verify; then remove it. Emergency key compromise response may take up to the provider's JWKS refresh interval.
 
 After deployment, configure Authentication → Sign In / Providers → Third-Party Auth → Custom OIDC with the exact `NIPTO_OIDC_ISSUER`. Supabase's issuer discovery must resolve the `jwks_uri`. Confirm the integration is active before using Nipto-issued tokens with Data API, Storage, or Realtime.
 
