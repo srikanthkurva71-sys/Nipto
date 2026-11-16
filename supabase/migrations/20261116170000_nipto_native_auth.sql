@@ -67,7 +67,7 @@ create table private.nipto_security_events (
   id bigint generated always as identity primary key,
   user_id uuid references private.nipto_accounts(user_id) on delete set null,
   event_type text not null check (event_type in (
-    'account_created','password_changed','password_reset',
+    'account_created','account_migrated','password_changed','password_reset',
     'session_created','session_rotated','session_revoked',
     'recovery_requested','recovery_approved','recovery_rejected'
   )),
