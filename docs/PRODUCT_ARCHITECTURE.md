@@ -93,7 +93,8 @@ Password recovery requires the verified recovery email associated with the accou
 | shorts, short_likes, short_comments | Short-video content and interactions |
 | notifications | In-app notification inbox |
 | device_tokens | Android push token ownership |
-| user_reports | Abuse/content reports |
+| user_reports | Abuse/content reports and safety escalations |
+| user_feedback | Private product feedback, feature requests, ratings and support requests |
 
 ## 6. API and data contracts
 
@@ -125,4 +126,5 @@ Password recovery requires the verified recovery email associated with the accou
 - App handles offline/slow network, expired sessions and media failures.
 - Accessibility: semantic labels, contrast, scalable text and touch targets.
 - Safe defaults for unsolicited messages, discoverability and private accounts.
-- Reporting, blocking and moderation workflows must exist before open public launch.
+- Reporting, blocking, feedback intake and moderation workflows must exist before open public launch.
+- Feedback is separate from abuse reports. Users can submit a category, optional 1–5 rating, subject and message, then view their own submission status. Only trusted moderation tooling may change feedback status.
