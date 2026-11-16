@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/nipto_theme.dart';
 import 'chats_screen.dart';
+import 'home_feed_screen.dart';
 import 'profile_screen.dart';
 import 'shorts_screen.dart';
 
@@ -84,6 +85,7 @@ class _MainShellState extends State<MainShell> {
         controller: _pageController,
         onPageChanged: (value) => setState(() => _index = value),
         children: const [
+          HomeFeedScreen(),
           ChatsScreen(),
           ShortsScreen(),
           ProfileScreen(),
@@ -93,6 +95,11 @@ class _MainShellState extends State<MainShell> {
         selectedIndex: _index,
         onDestinationSelected: _selectPage,
         destinations: [
+          const NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home_rounded),
+            label: 'Home',
+          ),
           NavigationDestination(
             icon: _unreadCount > 0
                 ? Badge(
