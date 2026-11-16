@@ -213,10 +213,9 @@ class NiptoCallService {
       if (type == 'ready' && isCaller) {
         if (!(_remoteReady?.isCompleted ?? true)) _remoteReady!.complete();
       } else if (type == 'offer' && !isCaller) {
-        final sdp = payload['sdp'];
-        final sdpType = payload['sdpType'];
         if (!NiptoCallSignalValidator.isDescriptionPayload(payload, 'offer')) return;
-        await _peer!.setRemoteDescription(RTCSessionDescription(sdp, sdpType));
+        final sdp = payload['sdp'] as String;
+        await _peer!.setRemoteDescription(RTCSessionDescription(sdp, 'offer'));
         _remoteDescriptionSet = true;
         await _flushCandidates();
         final answer = await _peer!.createAnswer({
@@ -228,18 +227,17 @@ class NiptoCallService {
         _armConnectTimeout();
         onPhaseChanged(NiptoCallPhase.connecting);
       } else if (type == 'answer' && isCaller) {
-        final sdp = payload['sdp'];
-        final sdpType = payload['sdpType'];
         if (!NiptoCallSignalValidator.isDescriptionPayload(payload, 'answer')) return;
-        await _peer!.setRemoteDescription(RTCSessionDescription(sdp, sdpType));
+        final sdp = payload['sdp'] as String;
+        await _peer!.setRemoteDescription(RTCSessionDescription(sdp, 'answer'));
         _remoteDescriptionSet = true;
         await _flushCandidates();
         _ringTimeout?.cancel();
         _armConnectTimeout();
         onPhaseChanged(NiptoCallPhase.connecting);
       } else if (type == 'ice') {
-        final candidate = payload['candidate'];
         if (!NiptoCallSignalValidator.isIceCandidatePayload(payload)) return;
+        final candidate = payload['candidate'] as String;
         if (!_remoteDescriptionSet &&
             !NiptoCallSignalValidator.canQueueIceCandidate(_pendingCandidates.length)) return;
         final index = payload['sdpMLineIndex'];
