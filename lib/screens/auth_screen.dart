@@ -152,7 +152,7 @@ class _AuthScreenState extends State<AuthScreen> {
           controller: emailController,
           keyboardType: TextInputType.emailAddress,
           decoration: const InputDecoration(
-            labelText: 'Verified recovery email',
+            labelText: 'Account email',
             hintText: 'you@example.com',
           ),
         ),
@@ -178,7 +178,7 @@ class _AuthScreenState extends State<AuthScreen> {
       );
       if (!mounted) return;
       setState(() {
-        _notice = 'If that address belongs to a Nipto account, a reset link will arrive shortly.';
+        _notice = 'If that account email belongs to a Nipto account, a reset link will arrive shortly.';
         _noticeIsError = false;
       });
     } catch (_) {
@@ -282,7 +282,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         keyboardType: TextInputType.emailAddress,
                         autocorrect: false,
                         decoration: const InputDecoration(
-                          labelText: 'Recovery email',
+                          labelText: 'Account email',
                           prefixIcon: Icon(Icons.alternate_email_rounded),
                         ),
                         validator: (value) {
@@ -340,7 +340,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                       const SizedBox(height: 12),
                       const Text(
-                        'Your recovery email is used for verification and password recovery. The optional recovery Nipto account must accept your request. You can also add or change it later in Settings → Security.',
+                        'Your account email is used by Supabase Auth for verification and password resets. Your recovery Nipto account is optional; the other account must accept your request. You can add or change it later in Settings → Security.',
                         style: TextStyle(color: NiptoColors.muted, fontSize: 12, height: 1.4),
                       ),
 
