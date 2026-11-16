@@ -42,12 +42,21 @@ class _ConversationScreenState extends State<ConversationScreen> {
     if (userId == null) return;
     try {
       final now = DateTime.now().toUtc().toIso8601String();
-      await _client.from('message_receipts').update({
-        'delivered_at': now,
-        'read_at': now,
-      }).eq('conversation_id', widget.conversationId)
-        .eq('user_id', userId)
-        .isFilter('read_at', null);
+      final messages = await _client
+          .from('messages')
+          .select('id, sender_id')
+          .eq('conversation_id', widget.conversationId)
+          .neq('sender_id', userId)
+          .limit(100);
+
+      for (final message in messages as List) {
+        await _client.from('message_receipts').update({
+          'delivered_at': now,
+          'read_at': now,
+        }).eq('message_id', message['id'])
+          .eq('user_id', userId)
+          .isFilter('read_at', null);
+      }
     } catch (_) {
       // A read receipt failure should not prevent the conversation from working.
     }
