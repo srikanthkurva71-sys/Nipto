@@ -132,10 +132,10 @@ begin
     where n.nspname='public'
       and p.prosecdef
       and has_function_privilege('authenticated',p.oid,'EXECUTE')
-      and position('auth.uid()' in lower(pg_catalog.pg_get_functiondef(p.oid))) > 0
+      and position('auth.uid' in lower(pg_catalog.pg_get_functiondef(p.oid))) > 0
   loop
     v_definition := pg_catalog.pg_get_functiondef(v_function.oid);
-    v_definition := regexp_replace(v_definition, 'auth[.]uid[(][)]', 'private.nipto_uid()', 'gi');
+    v_definition := regexp_replace(v_definition, 'auth[.]uid[[:space:]]*[(][[:space:]]*[)]', 'private.nipto_uid()', 'gi');
     execute v_definition;
   end loop;
 end;
