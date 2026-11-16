@@ -17,7 +17,8 @@
 - [x] Profile editing, unique handle validation and prefix search.
 - [x] Follow requests, private profiles, blocks and profile visibility.
 - [x] Message privacy and notification preference controls.
-- [ ] Verify account recovery deep links and session/device management.
+- [ ] Verify account recovery deep links and per-device session inventory.
+- [x] Add a user-confirmed global sign-out action that revokes refresh sessions; current access tokens may remain valid until expiry.
 
 ## Phase 2 — Messaging
 - [x] Inbox, direct conversations and group invitations.
