@@ -1,746 +1,760 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { argon2id, argon2Verify } from "npm:hash-wasm@4.13.0";
-import { isValidNiptoId, isValidPassword } from "./validation.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Content-Type": "application/json; charset=utf-8",
-  "Cache-Control": "no-store",
-};
-
-const encoder = new TextEncoder();
-const ARGON2 = { parallelism: 1, iterations: 3, memorySize: 65_536, hashLength: 32 };
-const ACCESS_TOKEN_SECONDS = 600;
-const REFRESH_TOKEN_DAYS = 30;
-const MAX_BODY_BYTES = 8_192;
 
 type Json = Record<string, unknown>;
-type Claims = {
-  sub: string;
-  sid: string;
-  nipto_id: string;
-  display_name: string;
-  iat: number;
-  exp: number;
-  jti: string;
-  iss: string;
-  aud: string;
-  role: string;
-};
+
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+const ARGON2 = { iterations: 3, memorySize: 65_536, parallelism: 1, hashLength: 32, outputType: "encoded" as const };
 
 class ApiError extends Error {
-  constructor(message: string, readonly statusCode: number) {
-    super(message);
-  }
+  constructor(message: string, readonly status = 400) { super(message); }
 }
 
 function env(name: string): string {
   const value = Deno.env.get(name);
-  if (!value) throw new Error("Missing server configuration");
+  if (!value) throw new ApiError(`Server configuration missing: ${name}`, 503);
   return value;
 }
-
-function json(body: Json, status = 200): Response {
-  return new Response(JSON.stringify(body), { status, headers: corsHeaders });
+function supabaseUrl(): string { return env("SUPABASE_URL").replace(/\/$/, ""); }
+function publishableKey(): string {
+  return Deno.env.get("SUPABASE_PUBLISHABLE_KEY") ?? env("SUPABASE_ANON_KEY");
 }
+function issuer(): string {
+  return (Deno.env.get("NIPTO_OIDC_ISSUER") ?? (supabaseUrl() + "/functions/v1/nipto-identity")).replace(/\/$/, "");
+}
+function oidcClientId(): string { return env("NIPTO_OIDC_CLIENT_ID"); }
+function oidcClientSecret(): string { return env("NIPTO_OIDC_CLIENT_SECRET"); }
+function oidcRedirectUri(): string {
+  return Deno.env.get("NIPTO_OIDC_REDIRECT_URI") ??
+    (supabaseUrl() + "/auth/v1/callback");
+}
+function keyId(): string { return env("NIPTO_OIDC_KID"); }
 
+function json(data: unknown, status = 200, extra: HeadersInit = {}): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "authorization, apikey, content-type",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      ...extra,
+    },
+  });
+}
+function html(content: string, status = 200): Response {
+  return new Response(content, {
+    status,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+    },
+  });
+}
+function redirect(url: string): Response {
+  return new Response(null, {
+    status: 302,
+    headers: { Location: url, "Cache-Control": "no-store" },
+  });
+}
+function htmlEscape(value: string): string {
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+}
+function randomToken(bytes = 32): string {
+  const data = crypto.getRandomValues(new Uint8Array(bytes));
+  return base64url(data);
+}
 function base64url(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
-
 function base64Standard(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary);
 }
-
 function fromBase64url(value: string): ArrayBuffer {
   const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
   const binary = atob(normalized + "=".repeat((4 - normalized.length % 4) % 4));
   const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index);
-  }
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
   return bytes.buffer;
 }
-
-function randomToken(bytes = 32): string {
-  return base64url(crypto.getRandomValues(new Uint8Array(bytes)));
-}
-
-function uuid(): string {
-  return crypto.randomUUID();
-}
-
 async function sha256Hex(value: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", encoder.encode(value));
-  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
-
-async function hmacHex(secret: string, value: string): Promise<string> {
+async function sha256Base64Url(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(value));
+  return base64url(new Uint8Array(digest));
+}
+async function hmacHex(value: string): Promise<string> {
   const key = await crypto.subtle.importKey(
-    "raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+    "raw", encoder.encode(env("SUPABASE_SERVICE_ROLE_KEY")),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
   );
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(value));
-  return Array.from(new Uint8Array(signature), (b) => b.toString(16).padStart(2, "0")).join("");
+  const result = await crypto.subtle.sign("HMAC", key, encoder.encode(value));
+  return [...new Uint8Array(result)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function constantTimeEqual(a: string, b: string): boolean {
+  const left = encoder.encode(a);
+  const right = encoder.encode(b);
+  if (left.length !== right.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < left.length; i += 1) mismatch |= left[i] ^ right[i];
+  return mismatch === 0;
 }
 
-function issuer(): string {
-  return env("NIPTO_OIDC_ISSUER").replace(/\/$/, "");
+async function hashPassword(password: string): Promise<string> {
+  return await argon2id({
+    password, salt: crypto.getRandomValues(new Uint8Array(16)), ...ARGON2,
+  });
 }
-
-function privateJwk(): Json {
-  return JSON.parse(env("NIPTO_OIDC_PRIVATE_JWK")) as Json;
-}
-
-function keyId(): string {
-  return env("NIPTO_OIDC_KID");
+async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  try { return await argon2Verify({ password, hash }); } catch { return false; }
 }
 
 let signingKeyPromise: Promise<CryptoKey> | undefined;
-function signingKey(): Promise<CryptoKey> {
-  signingKeyPromise ??= crypto.subtle.importKey(
-    "jwk",
-    privateJwk() as JsonWebKey,
-    { name: "ECDSA", namedCurve: "P-256" },
-    false,
-    ["sign"],
-  );
+async function signingKey(): Promise<CryptoKey> {
+  if (!signingKeyPromise) {
+    const jwk = JSON.parse(env("NIPTO_OIDC_PRIVATE_JWK")) as JsonWebKey;
+    signingKeyPromise = crypto.subtle.importKey(
+      "jwk", jwk, { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"],
+    );
+  }
   return signingKeyPromise;
 }
-
 function publicJwkFromPrivate(): Json {
-  const jwk = { ...privateJwk() };
-  delete jwk.d;
-  delete jwk.key_ops;
+  const jwk = JSON.parse(env("NIPTO_OIDC_PRIVATE_JWK")) as Record<string, unknown>;
   return {
-    kty: "EC",
-    crv: "P-256",
-    x: jwk.x,
-    y: jwk.y,
-    use: "sig",
-    alg: "ES256",
-    kid: keyId(),
+    kty: "EC", crv: "P-256", x: jwk.x, y: jwk.y,
+    use: "sig", alg: "ES256", kid: keyId(),
   };
 }
-
 function publicJwkSet(): Json[] {
   const raw = Deno.env.get("NIPTO_OIDC_PUBLIC_KEYS");
-  const configured = raw ? JSON.parse(raw) as unknown : [];
+  const configured: unknown = raw ? JSON.parse(raw) : [];
   const result: Json[] = [];
-
   if (Array.isArray(configured)) {
     for (const value of configured) {
       if (typeof value !== "object" || value === null) continue;
       const jwk = value as Record<string, unknown>;
       if (jwk.kty !== "EC" || jwk.crv !== "P-256"
-          || typeof jwk.x !== "string" || typeof jwk.y !== "string"
-          || typeof jwk.kid !== "string" || jwk.kid.length < 1
-          || jwk.kid.length > 80 || jwk.kid === keyId()) {
-        continue;
-      }
+        || typeof jwk.x !== "string" || typeof jwk.y !== "string"
+        || typeof jwk.kid !== "string" || jwk.kid === keyId()) continue;
       result.push({
-        kty: "EC",
-        crv: "P-256",
-        x: jwk.x,
-        y: jwk.y,
-        use: "sig",
-        alg: "ES256",
-        kid: jwk.kid,
+        kty: "EC", crv: "P-256", x: jwk.x, y: jwk.y,
+        use: "sig", alg: "ES256", kid: jwk.kid,
       });
     }
   }
-
-  const current = publicJwkFromPrivate();
-  result.push(current);
+  result.push(publicJwkFromPrivate());
   return result;
 }
-
-function publicJwkFor(kid: string): JsonWebKey {
-  const jwk = publicJwkSet().find((candidate) => candidate.kid === kid);
-  if (!jwk) throw new ApiError("Invalid session signing key", 401);
-  return jwk as JsonWebKey;
+const verificationKeys = new Map<string, Promise<CryptoKey>>();
+async function verificationKey(kid: string): Promise<CryptoKey> {
+  let pending = verificationKeys.get(kid);
+  if (!pending) {
+    const jwk = publicJwkSet().find((key) => key.kid === kid);
+    if (!jwk) throw new ApiError("Invalid token signing key", 401);
+    pending = crypto.subtle.importKey(
+      "jwk", jwk as JsonWebKey, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"],
+    );
+    verificationKeys.set(kid, pending);
+  }
+  return await pending;
 }
-
-async function signAccessToken(account: {
-  user_id: string;
-  nipto_id: string;
-  display_name: string;
-}, sessionId: string): Promise<string> {
-  const now = Math.floor(Date.now() / 1000);
+async function signJwt(claims: Json): Promise<string> {
   const header = base64url(encoder.encode(JSON.stringify({
     alg: "ES256", typ: "JWT", kid: keyId(),
   })));
-  const payload = base64url(encoder.encode(JSON.stringify({
-    iss: issuer(),
-    sub: account.user_id,
-    aud: "authenticated",
-    role: "authenticated",
-    iat: now,
-    exp: now + ACCESS_TOKEN_SECONDS,
-    jti: uuid(),
-    sid: sessionId,
-    nipto_id: account.nipto_id,
-    display_name: account.display_name,
-  })));
-  const input = encoder.encode(header + "." + payload);
+  const payload = base64url(encoder.encode(JSON.stringify(claims)));
+  const input = header + "." + payload;
   const signature = await crypto.subtle.sign(
-    { name: "ECDSA", hash: "SHA-256" }, await signingKey(), input,
+    { name: "ECDSA", hash: "SHA-256" }, await signingKey(), encoder.encode(input),
   );
-  return header + "." + payload + "." + base64url(new Uint8Array(signature));
+  return input + "." + base64url(new Uint8Array(signature));
 }
-
-const verifyKeyPromises = new Map<string, Promise<CryptoKey>>();
-function verifyKeyFor(kid: string): Promise<CryptoKey> {
-  let promise = verifyKeyPromises.get(kid);
-  if (!promise) {
-    promise = crypto.subtle.importKey(
-      "jwk",
-      publicJwkFor(kid),
-      { name: "ECDSA", namedCurve: "P-256" },
-      false,
-      ["verify"],
-    );
-    verifyKeyPromises.set(kid, promise);
-  }
-  return promise;
-}
-
-async function verifyAccessToken(request: Request): Promise<Claims> {
-  const authorization = request.headers.get("authorization") ?? "";
-  const match = /^Bearer ([A-Za-z0-9._-]+)$/.exec(authorization);
-  if (!match) throw new ApiError("Authentication required", 401);
-  const parts = match[1].split(".");
-  if (parts.length !== 3) throw new ApiError("Invalid session", 401);
-  const header = JSON.parse(new TextDecoder().decode(fromBase64url(parts[0]))) as Json;
-  const claims = JSON.parse(new TextDecoder().decode(fromBase64url(parts[1]))) as Claims;
+async function verifyJwt(token: string, tokenUse: string): Promise<Json> {
+  const parts = token.split(".");
+  if (parts.length !== 3) throw new ApiError("Invalid token", 401);
+  const header = JSON.parse(decoder.decode(fromBase64url(parts[0]))) as Json;
+  const claims = JSON.parse(decoder.decode(fromBase64url(parts[1]))) as Json;
   if (header.alg !== "ES256" || typeof header.kid !== "string") {
-    throw new ApiError("Invalid session", 401);
+    throw new ApiError("Invalid token", 401);
   }
   const valid = await crypto.subtle.verify(
     { name: "ECDSA", hash: "SHA-256" },
-    await verifyKeyFor(header.kid),
+    await verificationKey(header.kid),
     fromBase64url(parts[2]),
     encoder.encode(parts[0] + "." + parts[1]),
   );
   const now = Math.floor(Date.now() / 1000);
-  if (!valid || claims.iss !== issuer() || claims.aud !== "authenticated"
-      || claims.role !== "authenticated"
-      || !/^[0-9a-f-]{36}$/i.test(claims.sub)
-      || !/^[0-9a-f-]{36}$/i.test(claims.sid)
-      || !isValidNiptoId(claims.nipto_id)
-      || typeof claims.display_name !== "string" || claims.display_name.length < 1
-      || claims.display_name.length > 50
-      || typeof claims.iat !== "number" || claims.iat > now + 30
-      || claims.iat < now - ACCESS_TOKEN_SECONDS - 60
-      || typeof claims.jti !== "string" || claims.jti.length < 20
-      || typeof claims.exp !== "number" || claims.exp <= now
-      || claims.exp > now + ACCESS_TOKEN_SECONDS + 60) {
-    throw new ApiError("Invalid or expired session", 401);
-  }
-  const active = await rpc("nipto_native_is_session_active", {
-    p_user_id: claims.sub,
-    p_session_id: claims.sid,
-  });
-  if (active !== true) {
-    throw new ApiError("Session expired or revoked. Sign in again.", 401);
+  if (!valid || claims.iss !== issuer() || claims.aud !== oidcClientId()
+    || typeof claims.exp !== "number" || claims.exp <= now
+    || claims.token_use !== tokenUse) {
+    throw new ApiError("Invalid or expired token", 401);
   }
   return claims;
 }
 
 async function rpc(name: string, args: Json): Promise<any> {
-  const url = env("SUPABASE_URL").replace(/\/$/, "");
-  const key = env("SUPABASE_SERVICE_ROLE_KEY");
-  const response = await fetch(url + "/rest/v1/rpc/" + name, {
+  const response = await fetch(supabaseUrl() + "/rest/v1/rpc/" + name, {
     method: "POST",
     headers: {
-      apikey: key,
-      Authorization: "Bearer " + key,
+      apikey: env("SUPABASE_SERVICE_ROLE_KEY"),
+      Authorization: "Bearer " + env("SUPABASE_SERVICE_ROLE_KEY"),
       "Content-Type": "application/json",
     },
     body: JSON.stringify(args),
   });
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error("Database operation failed (" + response.status + "): " + text.slice(0, 300));
-  }
-  if (response.status === 204) return null;
-  return await response.json();
+  const raw = await response.text();
+  if (!response.ok) throw new ApiError("Nipto service could not complete the request", 503);
+  return raw ? JSON.parse(raw) : null;
 }
-
-async function body(request: Request): Promise<Json> {
-  const raw = await request.text();
-  if (encoder.encode(raw).length > MAX_BODY_BYTES) throw new Error("Request too large");
-  const value = JSON.parse(raw);
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid request");
-  return value as Json;
+function firstRow(value: any): Json | null {
+  if (Array.isArray(value) && value.length > 0 && typeof value[0] === "object") return value[0] as Json;
+  if (typeof value === "object" && value !== null) return value as Json;
+  return null;
 }
-
-function stringField(value: unknown, max: number): string {
-  return typeof value === "string" && value.length <= max ? value : "";
-}
-
-async function hashPassword(password: string): Promise<string> {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  return await argon2id({
-    password,
-    salt,
-    ...ARGON2,
-    outputType: "encoded",
-  }) as string;
-}
-
-async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  try {
-    return await argon2Verify({ password, hash });
-  } catch {
-    return false;
-  }
-}
-
-async function enforceRateLimit(request: Request, identifier: string): Promise<void> {
-  const forwarded = request.headers.get("x-forwarded-for");
-  const trustedForwardedIp = forwarded?.split(",").at(-1)?.trim();
+async function enforceRateLimit(request: Request, key: string): Promise<void> {
   const ip = request.headers.get("cf-connecting-ip")
     ?? request.headers.get("x-real-ip")
-    ?? trustedForwardedIp
+    ?? request.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim()
     ?? "unknown";
-  const keyHash = await hmacHex(env("SUPABASE_SERVICE_ROLE_KEY"), ip + "\u0000" + identifier);
-  const allowed = await rpc("consume_nipto_login_attempt", { p_key_hash: keyHash });
-  if (allowed !== true) throw new Error("RATE_LIMITED");
-}
-
-async function accountRecord(niptoId: string): Promise<any | null> {
-  const rows = await rpc("nipto_native_login_record", { p_nipto_id: niptoId });
-  return Array.isArray(rows) ? rows[0] ?? null : rows ?? null;
-}
-
-async function createSession(account: any, deviceLabel: string): Promise<Json> {
-  const refreshToken = randomToken(48);
-  const sessionId = await rpc("nipto_native_create_session", {
-    p_user_id: account.user_id,
-    p_refresh_token_hash: await sha256Hex(refreshToken),
-    p_expires_at: new Date(Date.now() + REFRESH_TOKEN_DAYS * 86_400_000).toISOString(),
-    p_device_label: deviceLabel.slice(0, 80),
+  const allowed = await rpc("consume_nipto_login_attempt", {
+    p_key_hash: await hmacHex(ip + ":" + key),
   });
-  const accessToken = await signAccessToken(account, sessionId);
-  return {
-    access_token: accessToken,
-    refresh_token: refreshToken,
-    session_id: sessionId,
-    expires_in: ACCESS_TOKEN_SECONDS,
-    token_type: "Bearer",
-    user: {
-      id: account.user_id,
-      nipto_id: account.nipto_id,
-      display_name: account.display_name,
+  if (allowed !== true) throw new ApiError("Too many attempts. Please wait and try again.", 429);
+}
+async function requestBody(request: Request): Promise<Json> {
+  const length = Number(request.headers.get("content-length") ?? "0");
+  if (length > 16_384) throw new ApiError("Request is too large", 413);
+  const value = await request.json();
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new ApiError("Invalid request", 400);
+  }
+  return value as Json;
+}
+async function authenticatedUserId(request: Request): Promise<string> {
+  const authorization = request.headers.get("authorization") ?? "";
+  if (!/^Bearer [A-Za-z0-9._-]+$/.test(authorization)) {
+    throw new ApiError("Sign in to continue", 401);
+  }
+  const response = await fetch(supabaseUrl() + "/rest/v1/rpc/nipto_native_current_user", {
+    method: "POST",
+    headers: {
+      apikey: publishableKey(),
+      Authorization: authorization,
+      "Content-Type": "application/json",
     },
+    body: "{}",
+  });
+  if (!response.ok) throw new ApiError("Sign in to continue", 401);
+  const userId = await response.json();
+  if (typeof userId !== "string" || !/^[0-9a-f-]{36}$/i.test(userId)) {
+    throw new ApiError("Sign in to continue", 401);
+  }
+  return userId;
+}
+async function rpcAsUser(request: Request, name: string): Promise<any> {
+  const authorization = request.headers.get("authorization") ?? "";
+  const response = await fetch(supabaseUrl() + "/rest/v1/rpc/" + name, {
+    method: "POST",
+    headers: {
+      apikey: publishableKey(),
+      Authorization: authorization,
+      "Content-Type": "application/json",
+    },
+    body: "{}",
+  });
+  if (!response.ok) throw new ApiError("Account update could not be completed", 400);
+  return response.text() ? await response.json() : null;
+}
+
+function discoveryDocument(): Json {
+  const base = issuer();
+  return {
+    issuer: base,
+    authorization_endpoint: base + "/authorize",
+    token_endpoint: base + "/token",
+    userinfo_endpoint: base + "/userinfo",
+    jwks_uri: base + "/jwks",
+    response_types_supported: ["code"],
+    subject_types_supported: ["public"],
+    id_token_signing_alg_values_supported: ["ES256"],
+    scopes_supported: ["openid", "profile"],
+    grant_types_supported: ["authorization_code"],
+    token_endpoint_auth_methods_supported: ["client_secret_basic", "client_secret_post"],
+    code_challenge_methods_supported: ["S256"],
+    claims_supported: ["sub", "iss", "aud", "exp", "iat", "nonce", "nipto_id", "preferred_username", "name", "display_name"],
   };
 }
-
-async function route(request: Request): Promise<Response> {
+function buildSwitchUrl(url: URL, screen: string): string {
+  const next = new URL(issuer() + "/authorize");
+  for (const key of ["client_id","redirect_uri","response_type","scope","state","nonce","code_challenge","code_challenge_method"]) {
+    const value = url.searchParams.get(key);
+    if (value) next.searchParams.set(key, value);
+  }
+  next.searchParams.set("screen", screen);
+  return next.toString();
+}
+function renderAuthorizePage(input: {
+  transactionId: string; csrfToken: string; screen: string; error?: string; switchUrl: string;
+}): string {
+  const isRegister = input.screen === "register";
+  const error = input.error ? `<p class="error">${htmlEscape(input.error)}</p>` : "";
+  const fields = isRegister
+    ? `<label>Display name<input name="display_name" maxlength="50" autocomplete="name" required></label>
+       <label>Recovery Nipto account <span>(optional)</span><input name="recovery_nipto_id" maxlength="24" autocomplete="off" placeholder="Nipto ID"></label>`
+    : "";
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>${isRegister ? "Create your Nipto account" : "Sign in to Nipto"}</title>
+    <style>
+      *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#f6f5fc;color:#19172b;font:16px system-ui,-apple-system,sans-serif;display:grid;place-items:center;padding:24px}
+      main{width:100%;max-width:420px;background:#fff;border:1px solid #e8e5f2;border-radius:22px;padding:30px;box-shadow:0 18px 50px #24164a12}
+      .brand{color:#6657e8;font-weight:900;letter-spacing:4px;font-size:26px;text-align:center;margin-bottom:8px}
+      h1{font-size:23px;text-align:center;margin:0 0 8px}p{color:#77748a;line-height:1.5;text-align:center}
+      label{display:block;font-size:14px;font-weight:650;margin:16px 0 0}label span{font-weight:400;color:#888}
+      input{display:block;width:100%;margin-top:7px;padding:13px 14px;border:1px solid #dedbea;border-radius:12px;font:inherit}
+      button{width:100%;margin-top:22px;padding:14px;border:0;border-radius:12px;background:#6657e8;color:#fff;font-weight:750;font-size:16px}
+      a{display:block;text-align:center;color:#6657e8;margin-top:18px;text-decoration:none;font-weight:650}
+      .error{background:#fff0f0;color:#a22;padding:10px;border-radius:10px;text-align:left}
+      .hint{font-size:13px}
+    </style></head><body><main><div class="brand">NIPTO</div>
+    <h1>${isRegister ? "Create your Nipto account" : "Welcome back"}</h1>
+    <p>${isRegister ? "Choose your Nipto ID and password. No email or phone number is required." : "Sign in with your Nipto ID and password. No email is required."}</p>
+    ${error}
+    <form method="post" action="${issuer()}/authorize">
+      <input type="hidden" name="transaction_id" value="${htmlEscape(input.transactionId)}">
+      <input type="hidden" name="csrf_token" value="${htmlEscape(input.csrfToken)}">
+      <input type="hidden" name="action" value="${isRegister ? "register" : "login"}">
+      ${fields}
+      <label>Nipto ID<input name="nipto_id" maxlength="24" autocomplete="username" autocapitalize="none" required></label>
+      <label>Password<input name="password" type="password" minlength="12" maxlength="128" autocomplete="${isRegister ? "new-password" : "current-password"}" required></label>
+      <button type="submit">${isRegister ? "Create account" : "Sign in"}</button>
+    </form>
+    <a href="${input.switchUrl}">${isRegister ? "Already have a Nipto account? Sign in" : "New to Nipto? Create an account"}</a>
+    <p class="hint">Your Nipto password is handled by Nipto. It is never sent to an email provider.</p>
+    </main></body></html>`;
+}
+async function authorizeGet(request: Request): Promise<Response> {
   const url = new URL(request.url);
-  const path = url.pathname.replace(/\/$/, "");
-  const method = request.method;
+  const client = url.searchParams.get("client_id") ?? "";
+  const redirectUri = url.searchParams.get("redirect_uri") ?? "";
+  const responseType = url.searchParams.get("response_type") ?? "";
+  const scope = url.searchParams.get("scope") ?? "";
+  const state = url.searchParams.get("state") ?? "";
+  const nonce = url.searchParams.get("nonce") ?? "";
+  const challenge = url.searchParams.get("code_challenge") ?? "";
+  const method = url.searchParams.get("code_challenge_method") ?? "";
+  if (client !== oidcClientId() || redirectUri !== oidcRedirectUri()
+    || responseType !== "code" || !scope.split(" ").includes("openid")
+    || scope.split(" ").includes("email") || !state || state.length > 512
+    || !nonce || nonce.length > 512 || method !== "S256"
+    || !/^[A-Za-z0-9_-]{43,128}$/.test(challenge)) {
+    throw new ApiError("Invalid Nipto authorization request", 400);
+  }
+  const csrf = randomToken(32);
+  const transactionId = await rpc("nipto_oidc_create_transaction", {
+    p_client_id: client,
+    p_redirect_uri: redirectUri,
+    p_scope: scope,
+    p_state: state,
+    p_nonce: nonce,
+    p_code_challenge: challenge,
+    p_csrf_hash: await sha256Hex(csrf),
+  });
+  const screen = url.searchParams.get("screen") === "register" ? "register" : "login";
+  return html(renderAuthorizePage({
+    transactionId: String(transactionId),
+    csrfToken: csrf,
+    screen,
+    switchUrl: buildSwitchUrl(url, screen === "register" ? "login" : "register"),
+  }));
+}
+async function authorizePost(request: Request): Promise<Response> {
+  const form = await request.formData();
+  const transactionId = String(form.get("transaction_id") ?? "");
+  const csrfToken = String(form.get("csrf_token") ?? "");
+  const action = String(form.get("action") ?? "login");
+  const niptoId = String(form.get("nipto_id") ?? "").trim().replace(/^@/, "").toLowerCase();
+  const password = String(form.get("password") ?? "");
+  const displayName = String(form.get("display_name") ?? "").trim();
+  const recoveryNiptoId = String(form.get("recovery_nipto_id") ?? "").trim().replace(/^@/, "").toLowerCase();
+  const txRows = await rpc("nipto_oidc_get_transaction", {
+    p_id: transactionId,
+    p_csrf_hash: await sha256Hex(csrfToken),
+  });
+  const tx = firstRow(txRows);
+  if (!tx) throw new ApiError("This sign-in request expired. Return to Nipto and try again.", 410);
+  const screen = action === "register" ? "register" : "login";
+  const switchUrl = buildSwitchUrl(new URL(
+    issuer() + "/authorize?" + new URLSearchParams({
+      client_id: String(tx.client_id),
+      redirect_uri: String(tx.redirect_uri),
+      response_type: "code",
+      scope: String(tx.scope),
+      state: String(tx.state),
+      nonce: String(tx.nonce),
+      code_challenge: String(tx.code_challenge),
+      code_challenge_method: "S256",
+    }).toString(),
+  ), screen === "register" ? "login" : "register");
 
-  if (method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (path.endsWith("/.well-known/openid-configuration") && method === "GET") {
-    const base = issuer();
-    return json({
-      issuer: base,
-      jwks_uri: base + "/jwks",
-      userinfo_endpoint: base + "/userinfo",
-      claims_supported: ["iss", "sub", "aud", "exp", "iat", "jti", "role", "sid", "nipto_id", "display_name"],
-      subject_types_supported: ["public"],
-      id_token_signing_alg_values_supported: ["ES256"],
-    });
-  }
-  if (path.endsWith("/jwks") && method === "GET") {
-    return json({ keys: publicJwkSet() });
-  }
-  if (path.endsWith("/register") && method === "POST") {
-    const input = await body(request);
-    const niptoId = stringField(input.nipto_id, 24).trim().toLowerCase().replace(/^@/, "");
-    const displayName = stringField(input.display_name, 50).trim();
-    const password = stringField(input.password, 128);
-    const recoveryId = stringField(input.recovery_nipto_id, 24).trim().toLowerCase().replace(/^@/, "");
-    if (!isValidNiptoId(niptoId) || displayName.length < 1 || !isValidPassword(password)
-        || (recoveryId && (!isValidNiptoId(recoveryId) || recoveryId === niptoId))) {
-      return json({ error: "Check your Nipto ID, name and password requirements." }, 400);
+  try {
+    if (!/^[a-z0-9_]{3,24}$/.test(niptoId) || password.length < 12 || password.length > 128) {
+      throw new ApiError("Check your Nipto ID and password.", 400);
     }
-    await enforceRateLimit(request, "register:" + niptoId);
-    const passwordHash = await hashPassword(password);
-    let rows: any;
-    try {
-      rows = await rpc("nipto_native_register", {
+    await enforceRateLimit(request, "oidc:" + niptoId);
+    let identityId: string;
+
+    if (action === "register") {
+      if (displayName.length < 1 || displayName.length > 50) {
+        throw new ApiError("Enter a display name between 1 and 50 characters.", 400);
+      }
+      const passwordHash = await hashPassword(password);
+      const created = await rpc("nipto_oidc_register", {
         p_nipto_id: niptoId,
         p_display_name: displayName,
         p_password_hash: passwordHash,
-        p_recovery_nipto_id: recoveryId || null,
+        p_recovery_nipto_id: recoveryNiptoId || null,
       });
-    } catch (error) {
-      if (error instanceof Error && (error.message.includes("23505") || error.message.includes("duplicate key"))) {
-        return json({ error: "That Nipto ID is already in use." }, 409);
+      if (typeof created !== "string") throw new ApiError("That Nipto ID is unavailable.", 409);
+      identityId = created;
+    } else {
+      const record = firstRow(await rpc("nipto_oidc_login_record", { p_nipto_id: niptoId }));
+      if (!record || typeof record.password_hash !== "string") {
+        await hashPassword(password);
+        throw new ApiError("The Nipto ID or password is incorrect.", 401);
       }
-      throw error;
-    }
-    const account = Array.isArray(rows) ? rows[0] : rows;
-    if (!account?.user_id) return json({ error: "Account could not be created." }, 409);
-    return json(await createSession({
-      user_id: account.user_id,
-      nipto_id: niptoId,
-      display_name: displayName,
-    }, stringField(input.device_label, 80)));
-  }
-  if (path.endsWith("/migrate") && method === "POST") {
-    const input = await body(request);
-    const newPassword = stringField(input.new_password, 128);
-    if (!isValidPassword(newPassword)) {
-      return json({ error: "Use at least 12 characters for your new Nipto password." }, 400);
-    }
-    await enforceRateLimit(request, "migration:preauth");
-    const legacyAuthorization = request.headers.get("authorization") ?? "";
-    if (!/^Bearer [A-Za-z0-9._-]+$/.test(legacyAuthorization)) {
-      return json({ error: "An existing signed-in session is required to migrate this account." }, 401);
+      const valid = await verifyPassword(password, record.password_hash);
+      if (!valid || record.status !== "active") {
+        throw new ApiError("The Nipto ID or password is incorrect.", 401);
+      }
+      identityId = String(record.identity_id);
     }
 
-    const legacyIdentityResponse = await fetch(
-      env("SUPABASE_URL").replace(/\/$/, "") + "/rest/v1/rpc/nipto_native_verify_legacy_session",
-      {
-        method: "POST",
-        headers: {
-          apikey: env("SUPABASE_ANON_KEY"),
-          Authorization: legacyAuthorization,
-          "Content-Type": "application/json",
-        },
-        body: "{}",
-      },
-    );
-    if (!legacyIdentityResponse.ok) {
-      return json({ error: "Your previous session expired. Open the previous Nipto version and sign in before migrating." }, 401);
-    }
-    const userId = await legacyIdentityResponse.json();
-    if (typeof userId !== "string" || !/^[0-9a-f-]{36}$/i.test(userId)) {
-      return json({ error: "The existing account could not be verified." }, 401);
-    }
-    await enforceRateLimit(request, "migration:" + userId);
-    const profile = await fetchProfile(userId);
-    const passwordHash = await hashPassword(newPassword);
-    await rpc("nipto_native_migrate_account", {
-      p_user_id: userId,
-      p_password_hash: passwordHash,
+    const consumed = await rpc("nipto_oidc_consume_transaction", {
+      p_id: transactionId,
+      p_csrf_hash: await sha256Hex(csrfToken),
     });
+    if (consumed !== true) throw new ApiError("This sign-in request expired. Try again.", 410);
 
-    // Remove the legacy Auth identity only after the Nipto credential has been
-    // committed. The migration SQL first removes profiles.id -> auth.users.id;
-    // all social records continue to reference the preserved profile UUID.
-    const deleteResponse = await fetch(
-      env("SUPABASE_URL").replace(/\/$/, "") + "/auth/v1/admin/users/" + userId,
-      {
-        method: "DELETE",
-        headers: {
-          apikey: env("SUPABASE_SERVICE_ROLE_KEY"),
-          Authorization: "Bearer " + env("SUPABASE_SERVICE_ROLE_KEY"),
-        },
-      },
-    );
-    if (!deleteResponse.ok && deleteResponse.status !== 404) {
-      return json({
-        error: "Your Nipto password was created, but legacy account cleanup is still pending. Retry migration while this device remains signed in.",
-      }, 503);
-    }
-    return json(await createSession(profile, stringField(input.device_label, 80)));
-  }
-  if (path.endsWith("/login") && method === "POST") {
-    const input = await body(request);
-    const niptoId = stringField(input.nipto_id, 24).trim().toLowerCase().replace(/^@/, "");
-    const password = stringField(input.password, 128);
-    if (!isValidNiptoId(niptoId) || password.length < 1) return json({ error: "Invalid Nipto ID or password." }, 400);
-    await enforceRateLimit(request, niptoId);
-    const account = await accountRecord(niptoId);
-    const dummy = await dummyHash();
-    const matched = await verifyPassword(password, account?.password_hash ?? dummy);
-    if (!account || !matched) return json({ error: "Invalid Nipto ID or password." }, 401);
-    return json(await createSession(account, stringField(input.device_label, 80)));
-  }
-  if (path.endsWith("/refresh") && method === "POST") {
-    const input = await body(request);
-    const oldToken = stringField(input.refresh_token, 256);
-    if (oldToken.length < 40) return json({ error: "Session expired. Sign in again." }, 401);
-    await enforceRateLimit(request, "refresh:" + await sha256Hex(oldToken));
-    const newToken = randomToken(48);
-    const rows = await rpc("nipto_native_rotate_session", {
-      p_old_refresh_token_hash: await sha256Hex(oldToken),
-      p_new_refresh_token_hash: await sha256Hex(newToken),
-      p_new_expires_at: new Date(Date.now() + REFRESH_TOKEN_DAYS * 86_400_000).toISOString(),
+    const code = randomToken(32);
+    await rpc("nipto_oidc_create_code", {
+      p_code_hash: await sha256Hex(code),
+      p_identity_id: identityId,
+      p_client_id: String(tx.client_id),
+      p_redirect_uri: String(tx.redirect_uri),
+      p_nonce: String(tx.nonce),
+      p_code_challenge: String(tx.code_challenge),
     });
-    const session = Array.isArray(rows) ? rows[0] : rows;
-    if (!session?.user_id || !session?.session_id) return json({ error: "Session expired. Sign in again." }, 401);
-    const profileRows = await fetchProfile(session.user_id);
-    return json({
-      access_token: await signAccessToken(profileRows, session.session_id),
-      refresh_token: newToken,
-      session_id: session.session_id,
-      expires_in: ACCESS_TOKEN_SECONDS,
-      token_type: "Bearer",
-      user: { id: profileRows.user_id, nipto_id: profileRows.nipto_id, display_name: profileRows.display_name },
-    });
+    const destination = new URL(String(tx.redirect_uri));
+    destination.searchParams.set("code", code);
+    destination.searchParams.set("state", String(tx.state));
+    return redirect(destination.toString());
+  } catch (error) {
+    const message = error instanceof ApiError ? error.message : "Nipto could not complete sign-in. Try again.";
+    return html(renderAuthorizePage({
+      transactionId,
+      csrfToken,
+      screen,
+      error: message,
+      switchUrl,
+    }), error instanceof ApiError ? error.status : 400);
   }
-  if (path.endsWith("/sessions") && method === "GET") {
-    const claims = await verifyAccessToken(request);
-    const sessions = await rpc("nipto_native_list_sessions", {
-      p_user_id: claims.sub,
-    });
-    return json({ sessions: sessions ?? [], current_session_id: claims.sid });
+}
+
+function parseBasicAuth(value: string): { id: string; secret: string } | null {
+  if (!value.startsWith("Basic ")) return null;
+  try {
+    const decoded = atob(value.slice(6));
+    const index = decoded.indexOf(":");
+    if (index < 0) return null;
+    return { id: decoded.slice(0, index), secret: decoded.slice(index + 1) };
+  } catch { return null; }
+}
+async function tokenEndpoint(request: Request): Promise<Response> {
+  const form = await request.formData();
+  const basic = parseBasicAuth(request.headers.get("authorization") ?? "");
+  const clientId = basic?.id ?? String(form.get("client_id") ?? "");
+  const clientSecret = basic?.secret ?? String(form.get("client_secret") ?? "");
+  if (clientId !== oidcClientId() || !constantTimeEqual(clientSecret, oidcClientSecret())) {
+    return json({ error: "invalid_client" }, 401, { "WWW-Authenticate": "Basic" });
   }
-  if (path.endsWith("/sessions/revoke") && method === "POST") {
-    const claims = await verifyAccessToken(request);
-    const input = await body(request);
-    const sessionId = stringField(input.session_id, 36);
-    await enforceRateLimit(request, "session-revoke:" + claims.nipto_id);
-    if (!/^[0-9a-f-]{36}$/i.test(sessionId)) {
-      return json({ error: "Invalid session." }, 400);
-    }
-    const revoked = await rpc("nipto_native_revoke_session", {
-      p_user_id: claims.sub,
-      p_session_id: sessionId,
-    });
-    return json({ ok: revoked === true, current_session: sessionId === claims.sid });
+  if (String(form.get("grant_type") ?? "") !== "authorization_code") {
+    return json({ error: "unsupported_grant_type" }, 400);
   }
-  if (path.endsWith("/logout") && method === "POST") {
-    const claims = await verifyAccessToken(request);
-    await rpc("nipto_native_revoke_session", {
-      p_user_id: claims.sub,
-      p_session_id: claims.sid,
-    });
-    return json({ ok: true });
+  const code = String(form.get("code") ?? "");
+  const redirectUri = String(form.get("redirect_uri") ?? "");
+  const verifier = String(form.get("code_verifier") ?? "");
+  if (!code || redirectUri !== oidcRedirectUri()
+    || !/^[A-Za-z0-9._~-]{43,128}$/.test(verifier)) {
+    return json({ error: "invalid_grant" }, 400);
   }
-  if (path.endsWith("/logout-all") && method === "POST") {
-    const claims = await verifyAccessToken(request);
-    await rpc("nipto_native_revoke_all_sessions", { p_user_id: claims.sub });
-    return json({ ok: true });
+  const challenge = await sha256Base64Url(verifier);
+  const rows = await rpc("nipto_oidc_consume_code", {
+    p_code_hash: await sha256Hex(code),
+    p_client_id: clientId,
+    p_redirect_uri: redirectUri,
+    p_code_challenge: challenge,
+  });
+  const row = firstRow(rows);
+  if (!row) return json({ error: "invalid_grant" }, 400);
+
+  const now = Math.floor(Date.now() / 1000);
+  const common = {
+    iss: issuer(),
+    sub: String(row.identity_id),
+    aud: clientId,
+    iat: now,
+    nipto_id: String(row.nipto_id),
+    preferred_username: String(row.nipto_id),
+    display_name: String(row.display_name),
+    name: String(row.display_name),
+  };
+  const idToken = await signJwt({
+    ...common,
+    exp: now + 300,
+    auth_time: now,
+    nonce: String(row.nonce),
+  });
+  const accessToken = await signJwt({
+    ...common,
+    exp: now + 3600,
+    scope: "openid profile",
+    token_use: "userinfo",
+  });
+  return json({
+    access_token: accessToken,
+    id_token: idToken,
+    token_type: "Bearer",
+    expires_in: 3600,
+    scope: "openid profile",
+  }, 200, { Pragma: "no-cache" });
+}
+async function userInfo(request: Request): Promise<Response> {
+  const authorization = request.headers.get("authorization") ?? "";
+  const token = authorization.replace(/^Bearer\s+/i, "");
+  if (!token || token === authorization) throw new ApiError("Bearer token required", 401);
+  const claims = await verifyJwt(token, "userinfo");
+  return json({
+    sub: claims.sub,
+    nipto_id: claims.nipto_id,
+    preferred_username: claims.preferred_username,
+    name: claims.name,
+    display_name: claims.display_name,
+  });
+}
+
+async function handleRoute(request: Request): Promise<Response> {
+  const url = new URL(request.url);
+  const path = url.pathname;
+  const method = request.method;
+
+  if (method === "OPTIONS") return json({ ok: true });
+  if (path.endsWith("/.well-known/openid-configuration") && method === "GET") {
+    return json(discoveryDocument());
   }
+  if (path.endsWith("/jwks") && method === "GET") return json({ keys: publicJwkSet() });
+  if (path.endsWith("/authorize") && method === "GET") return await authorizeGet(request);
+  if (path.endsWith("/authorize") && method === "POST") return await authorizePost(request);
+  if (path.endsWith("/token") && method === "POST") return await tokenEndpoint(request);
+  if (path.endsWith("/userinfo") && method === "GET") return await userInfo(request);
+
   if (path.endsWith("/turn-credentials") && method === "GET") {
-    const claims = await verifyAccessToken(request);
-    await enforceRateLimit(request, "turn-credentials:" + claims.nipto_id);
-    const sharedSecret = Deno.env.get("TURN_SHARED_SECRET");
-    const turnUrls = (Deno.env.get("TURN_URLS") ?? "")
-      .split(",")
-      .map((value) => value.trim())
-      .filter((value) => value.startsWith("turn:") || value.startsWith("turns:"));
-    const stunUrl = Deno.env.get("TURN_STUN_URL") ?? "";
+    const userId = await authenticatedUserId(request);
+    await enforceRateLimit(request, "turn-credentials:" + userId);
+    const secret = Deno.env.get("TURN_SHARED_SECRET");
+    const urls = (Deno.env.get("TURN_URLS") ?? "").split(",").map((x) => x.trim())
+      .filter((x) => x.startsWith("turn:") || x.startsWith("turns:"));
+    const stun = Deno.env.get("TURN_STUN_URL") ?? "";
     const iceServers: Json[] = [];
-    if (stunUrl.startsWith("stun:")) iceServers.push({ urls: stunUrl });
-
+    if (stun.startsWith("stun:")) iceServers.push({ urls: stun });
     let expiresAt: number | null = null;
-    if (sharedSecret && turnUrls.length > 0) {
-      expiresAt = Math.floor(Date.now() / 1000) + 3_600;
-      const username = expiresAt + ":" + claims.sub;
+    if (secret && urls.length) {
+      expiresAt = Math.floor(Date.now() / 1000) + 3600;
+      const username = expiresAt + ":" + userId;
       const key = await crypto.subtle.importKey(
-        "raw",
-        encoder.encode(sharedSecret),
-        { name: "HMAC", hash: "SHA-1" },
-        false,
-        ["sign"],
+        "raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-1" }, false, ["sign"],
       );
-      const signature = await crypto.subtle.sign(
-        "HMAC",
-        key,
-        encoder.encode(username),
-      );
+      const signed = await crypto.subtle.sign("HMAC", key, encoder.encode(username));
       iceServers.push({
-        urls: turnUrls,
-        username,
-        credential: base64Standard(new Uint8Array(signature)),
-        credentialType: "password",
+        urls, username, credential: base64Standard(new Uint8Array(signed)), credentialType: "password",
       });
     }
-    return json({
-      ice_servers: iceServers,
-      turn_available: Boolean(sharedSecret && turnUrls.length > 0),
-      expires_at: expiresAt,
-    });
+    return json({ ice_servers: iceServers, turn_available: Boolean(secret && urls.length), expires_at: expiresAt });
   }
-  if (path.endsWith("/userinfo") && method === "GET") {
-    const claims = await verifyAccessToken(request);
-    return json({
-      sub: claims.sub,
-      preferred_username: claims.nipto_id,
-      name: claims.display_name,
-    });
-  }
+
   if (path.endsWith("/recovery/start") && method === "POST") {
-    const input = await body(request);
-    const niptoId = stringField(input.nipto_id, 24).trim().toLowerCase().replace(/^@/, "");
-    await enforceRateLimit(request, "recovery-start:" + (isValidNiptoId(niptoId) ? niptoId : "unknown"));
+    const input = await requestBody(request);
+    const niptoId = String(input.nipto_id ?? "").trim().replace(/^@/, "").toLowerCase();
+    await enforceRateLimit(request, "recovery-start:" + niptoId);
     const challengeSecret = randomToken(32);
-    const challengeHash = await sha256Hex(challengeSecret);
-    const rows = isValidNiptoId(niptoId)
-      ? await rpc("nipto_native_start_recovery", {
-          p_nipto_id: niptoId,
-          p_challenge_hash: challengeHash,
-        })
-      : [];
-    const created = Array.isArray(rows) ? rows[0] : rows;
+    const rows = await rpc("nipto_native_start_recovery", {
+      p_nipto_id: niptoId,
+      p_challenge_hash: await sha256Hex(challengeSecret),
+    });
+    const row = firstRow(rows);
     return json({
-      message: "If this account can be recovered, its trusted Nipto account will receive an in-app request.",
-      challenge_id: created?.challenge_id ?? uuid(),
+      status: "pending",
+      challenge_id: row ? String(row.challenge_id) : crypto.randomUUID(),
       challenge_secret: challengeSecret,
     });
   }
+
   if (path.endsWith("/recovery/claim") && method === "POST") {
-    const input = await body(request);
-    const challengeId = stringField(input.challenge_id, 36);
-    const challengeSecret = stringField(input.challenge_secret, 128);
-    if (!/^[0-9a-f-]{36}$/i.test(challengeId) || challengeSecret.length < 40) {
-      return json({ status: "pending" });
-    }
+    const input = await requestBody(request);
+    const challengeId = String(input.challenge_id ?? "");
+    const challengeSecret = String(input.challenge_secret ?? "");
     await enforceRateLimit(request, "recovery-claim:" + challengeId);
     const challengeHash = await sha256Hex(challengeSecret);
     const status = await rpc("nipto_native_recovery_status", {
-      p_challenge_id: challengeId,
-      p_challenge_hash: challengeHash,
+      p_challenge_id: challengeId, p_challenge_hash: challengeHash,
     });
     if (status === "rejected") return json({ status: "rejected" });
     if (status === "expired") return json({ status: "expired" });
     if (status !== "approved") return json({ status: "pending" });
-
-    const grantSecret = randomToken(32);
-    const ownerId = await rpc("nipto_native_claim_reset_grant", {
+    const grant = randomToken(32);
+    const owner = await rpc("nipto_native_claim_reset_grant", {
       p_challenge_id: challengeId,
       p_challenge_hash: challengeHash,
-      p_grant_hash: await sha256Hex(grantSecret),
+      p_grant_hash: await sha256Hex(grant),
     });
-    return ownerId
-      ? json({ status: "approved", reset_grant: grantSecret })
-      : json({ status: "pending" });
+    return owner ? json({ status: "approved", reset_grant: grant }) : json({ status: "pending" });
   }
+
   if (path.endsWith("/recovery/reset") && method === "POST") {
-    const input = await body(request);
-    const grant = stringField(input.reset_grant, 128);
-    const password = stringField(input.new_password, 128);
-    if (grant.length < 40 || !isValidPassword(password)) {
-      return json({ error: "The recovery request is invalid or expired." }, 400);
+    const input = await requestBody(request);
+    const grant = String(input.reset_grant ?? "");
+    const password = String(input.new_password ?? "");
+    if (password.length < 12 || password.length > 128) {
+      throw new ApiError("Use a password between 12 and 128 characters.");
     }
     await enforceRateLimit(request, "recovery-reset:" + await sha256Hex(grant));
     const userId = await rpc("nipto_native_consume_reset_grant", {
       p_grant_hash: await sha256Hex(grant),
       p_new_password_hash: await hashPassword(password),
     });
-    if (!userId) return json({ error: "The recovery request is invalid or expired." }, 400);
-    return json({ ok: true, message: "Password updated. Sign in with your new password." });
+    if (typeof userId !== "string") throw new ApiError("This reset request is invalid or expired.", 400);
+    await rpc("nipto_native_revoke_all_sessions", { p_user_id: userId });
+    return json({ ok: true });
   }
+
   if (path.endsWith("/recovery/contacts") && method === "GET") {
-    const claims = await verifyAccessToken(request);
-    const rows = await rpc("nipto_native_list_recovery_contacts", { p_user_id: claims.sub });
-    return json({ contacts: rows ?? [] });
-  }
-  if (path.endsWith("/recovery/link") && method === "POST") {
-    const claims = await verifyAccessToken(request);
-    const input = await body(request);
-    const recoveryId = stringField(input.recovery_nipto_id, 24).trim().toLowerCase().replace(/^@/, "");
-    await enforceRateLimit(request, "recovery-link:" + claims.nipto_id);
-    if (!isValidNiptoId(recoveryId) || recoveryId === claims.nipto_id) {
-      return json({ error: "Enter another valid Nipto ID." }, 400);
-    }
-    const requestId = await rpc("nipto_native_request_recovery_contact", {
-      p_owner_id: claims.sub,
-      p_nipto_id: recoveryId,
-    });
-    return json({ request_id: requestId, status: "pending" });
-  }
-  if (path.endsWith("/recovery/contact-response") && method === "POST") {
-    const claims = await verifyAccessToken(request);
-    const input = await body(request);
-    await enforceRateLimit(request, "recovery-contact-response:" + claims.nipto_id);
-    const ok = await rpc("nipto_native_respond_recovery_contact", {
-      p_request_id: stringField(input.request_id, 36),
-      p_recovery_user_id: claims.sub,
-      p_accept: input.accept === true,
-    });
-    return json({ ok: ok === true });
+    const userId = await authenticatedUserId(request);
+    const contacts = await rpc("nipto_native_list_recovery_contacts", { p_user_id: userId });
+    return json({ contacts: contacts ?? [] });
   }
   if (path.endsWith("/recovery/requests") && method === "GET") {
-    const claims = await verifyAccessToken(request);
-    const rows = await rpc("nipto_native_list_recovery_requests", {
-      p_recovery_user_id: claims.sub,
+    const userId = await authenticatedUserId(request);
+    const requests = await rpc("nipto_native_list_recovery_requests", { p_recovery_user_id: userId });
+    return json({ requests: requests ?? [] });
+  }
+  if (path.endsWith("/recovery/link") && method === "POST") {
+    const userId = await authenticatedUserId(request);
+    const input = await requestBody(request);
+    const requestId = await rpc("nipto_native_request_recovery_contact", {
+      p_owner_user_id: userId,
+      p_nipto_id: String(input.recovery_nipto_id ?? "").trim().replace(/^@/, "").toLowerCase(),
     });
-    return json({ requests: rows ?? [] });
+    return json({ request_id: requestId });
+  }
+  if (path.endsWith("/recovery/contact-response") && method === "POST") {
+    const userId = await authenticatedUserId(request);
+    const input = await requestBody(request);
+    const ok = await rpc("nipto_native_respond_recovery_contact", {
+      p_request_id: String(input.request_id ?? ""),
+      p_recovery_user_id: userId,
+      p_accept: input.accept === true,
+    });
+    if (ok !== true) throw new ApiError("Recovery request is no longer available.", 404);
+    return json({ ok: true });
+  }
+  if (path.endsWith("/recovery/contact-remove") && method === "POST") {
+    const userId = await authenticatedUserId(request);
+    const input = await requestBody(request);
+    const ok = await rpc("nipto_native_remove_recovery_contact", {
+      p_user_id: userId,
+      p_request_id: String(input.request_id ?? ""),
+    });
+    if (ok !== true) throw new ApiError("Recovery contact not found.", 404);
+    return json({ ok: true });
   }
   if (path.endsWith("/recovery/respond") && method === "POST") {
-    const claims = await verifyAccessToken(request);
-    const input = await body(request);
-    await enforceRateLimit(request, "recovery-response:" + claims.nipto_id);
+    const userId = await authenticatedUserId(request);
+    const input = await requestBody(request);
     const ok = await rpc("nipto_native_respond_password_recovery", {
-      p_challenge_id: stringField(input.challenge_id, 36),
-      p_recovery_user_id: claims.sub,
+      p_challenge_id: String(input.challenge_id ?? ""),
+      p_recovery_user_id: userId,
       p_approve: input.approve === true,
     });
-    return json({ ok: ok === true });
+    if (ok !== true) throw new ApiError("This recovery request is no longer available.", 404);
+    return json({ ok: true });
   }
+
   if (path.endsWith("/change-password") && method === "POST") {
-    const claims = await verifyAccessToken(request);
-    const input = await body(request);
-    const currentPassword = stringField(input.current_password, 128);
-    const newPassword = stringField(input.new_password, 128);
-    await enforceRateLimit(request, "password-change:" + claims.nipto_id);
-    if (!isValidPassword(newPassword)) return json({ error: "Use at least 12 characters for your new password." }, 400);
-    const account = await accountRecord(claims.nipto_id);
-    if (!account || account.user_id !== claims.sub
-        || !(await verifyPassword(currentPassword, account.password_hash))) {
-      return json({ error: "Current password is incorrect." }, 401);
+    const userId = await authenticatedUserId(request);
+    const input = await requestBody(request);
+    const currentPassword = String(input.current_password ?? "");
+    const newPassword = String(input.new_password ?? "");
+    if (newPassword.length < 12 || newPassword.length > 128) {
+      throw new ApiError("Use a password between 12 and 128 characters.");
+    }
+    const account = firstRow(await rpc("nipto_native_account_for_user", { p_user_id: userId }));
+    if (!account || typeof account.password_hash !== "string"
+      || !await verifyPassword(currentPassword, account.password_hash)) {
+      throw new ApiError("Your current password is incorrect.", 401);
     }
     const ok = await rpc("nipto_native_change_password", {
-      p_user_id: claims.sub,
-      p_new_password_hash: await hashPassword(newPassword),
+      p_identity_id: account.identity_id,
+      p_password_hash: await hashPassword(newPassword),
     });
-    return json({ ok: ok === true, message: "Password changed. Sign in again on your devices." });
+    if (ok !== true) throw new ApiError("Password could not be updated.", 400);
+    return json({ ok: true });
+  }
+
+  if (path.endsWith("/account/link") && method === "POST") {
+    const userId = await authenticatedUserId(request);
+    const input = await requestBody(request);
+    const niptoId = String(input.nipto_id ?? "").trim().replace(/^@/, "").toLowerCase();
+    await rpc("nipto_oidc_link_user", { p_nipto_id: niptoId, p_user_id: userId });
+    await rpcAsUser(request, "nipto_native_clear_legacy_email");
+    return json({ ok: true });
+  }
+
+  if (path.endsWith("/sessions") && method === "GET") {
+    const userId = await authenticatedUserId(request);
+    const sessions = await rpc("nipto_native_list_sessions", { p_user_id: userId });
+    return json({ sessions: sessions ?? [] });
+  }
+  if (path.endsWith("/sessions/revoke") && method === "POST") {
+    const userId = await authenticatedUserId(request);
+    const input = await requestBody(request);
+    const ok = await rpc("nipto_native_revoke_session", {
+      p_user_id: userId,
+      p_session_id: String(input.session_id ?? ""),
+    });
+    if (ok !== true) throw new ApiError("That session is no longer active.", 404);
+    return json({ ok: true });
   }
 
   return json({ error: "Not found" }, 404);
 }
 
-let dummyHashPromise: Promise<string> | undefined;
-function dummyHash(): Promise<string> {
-  dummyHashPromise ??= hashPassword(randomToken(32));
-  return dummyHashPromise;
-}
-
-async function fetchProfile(userId: string): Promise<any> {
-  const url = env("SUPABASE_URL").replace(/\/$/, "");
-  const key = env("SUPABASE_SERVICE_ROLE_KEY");
-  const response = await fetch(url + "/rest/v1/profiles?id=eq." + encodeURIComponent(userId)
-    + "&select=id,nipto_id,display_name,account_state", {
-    headers: { apikey: key, Authorization: "Bearer " + key },
-  });
-  if (!response.ok) throw new Error("Unable to load account");
-  const rows = await response.json();
-  const profile = Array.isArray(rows) ? rows[0] : null;
-  if (!profile || profile.account_state !== "active") throw new Error("Account unavailable");
-  return {
-    user_id: profile.id,
-    nipto_id: profile.nipto_id,
-    display_name: profile.display_name,
-  };
-}
-
 Deno.serve(async (request: Request) => {
   try {
-    const response = await route(request);
-    return response;
+    return await handleRoute(request);
   } catch (error) {
-    if (error instanceof ApiError) return json({ error: error.message }, error.statusCode);
-    if (error instanceof SyntaxError) return json({ error: "Invalid request." }, 400);
-    if (error instanceof Error && error.message === "RATE_LIMITED") {
-      return new Response(JSON.stringify({ error: "Too many attempts. Try again later." }), {
-        status: 429,
-        headers: { ...corsHeaders, "Retry-After": "900" },
-      });
-    }
-    // Do not log request bodies, credentials, tokens, hashes, or provider payloads.
-    return json({ error: "Nipto identity service is temporarily unavailable." }, 503);
+    if (error instanceof ApiError) return json({ error: error.message }, error.status);
+    return json({ error: "Nipto could not complete the request. Please try again." }, 500);
   }
 });
