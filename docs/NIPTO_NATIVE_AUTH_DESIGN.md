@@ -138,3 +138,17 @@ Do not delete or overwrite existing Supabase Auth identities until a verified mi
 - Do not expose service-role credentials or password hashes to the client.
 - Do not claim recovery is complete until the full one-time reset protocol is implemented and tested.
 - This decision does not require changing the existing social product model, profile UUIDs, or feature data model.
+
+
+## 9. Supabase-hosted platform feasibility gate (must be resolved before implementation)
+
+The target Supabase project is a hosted Supabase Cloud project, not a self-hosted stack. Supabase's current third-party-auth documentation states that hosted first-class integrations cover a defined set of providers (Clerk, Firebase Auth, Auth0, AWS Cognito, WorkOS), require asymmetric OIDC JWTs, and do not allow Supabase Auth to be disabled. The custom OAuth/OIDC provider administration guide is explicitly for self-hosted Supabase Auth.
+
+Consequences:
+- Do not assume that creating a Nipto JWT signing key and publishing a JWKS endpoint is sufficient to make the hosted project trust an arbitrary Nipto issuer.
+- Do not deploy this migration or mint tokens until the exact hosted-project trust configuration is confirmed with a working proof of concept.
+- Do not claim the custom Nipto password database alone can authorize existing PostgREST, Storage, and Realtime calls. Existing RLS relies on Supabase-verified JWT claims.
+- A private Nipto OIDC issuer may be a viable design only if the hosted project can be configured to trust it without an email claim and the proof of concept verifies PostgREST, Storage, Realtime, RPC, and RLS. If that is not supported, the compliant alternatives are (a) self-host the relevant Supabase Auth stack with a Nipto-owned OIDC provider, or (b) move all user-scoped data/media/realtime access behind a Nipto-owned backend/API and stop using direct Supabase client access. Option (b) is a substantial architecture migration.
+- The user requirement forbids email, phone, external social identity providers, and synthetic addresses. Do not quietly substitute one of them.
+
+The native-auth schema in this branch is a staged design artifact. It is not production-ready and must not be applied to the hosted production database until this platform gate is passed.
