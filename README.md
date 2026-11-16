@@ -24,7 +24,7 @@ This repository is the first implementation of Nipto Social. The former ride-hai
 | Layer | Choice |
 |---|---|
 | Android app | Flutter + Dart |
-| Authentication | Legacy Supabase Auth email flow (not compliant with the new requirement); migration planned to Nipto-owned ID/password OIDC provider |
+| Authentication | Nipto ID/password identity issuer (implementation in progress; production cutover gated on OIDC configuration and migration tests) |
 | Database | Supabase PostgreSQL |
 | Authorization | PostgreSQL Row Level Security |
 | Live messaging | Supabase Realtime |
@@ -88,7 +88,7 @@ The initial social schema and security migrations are applied to the connected N
 
 ## Current implementation status
 
-The repository contains a Flutter Android app foundation and a live Supabase schema. Implemented app areas include Nipto ID registration/sign-in, profile editing and avatar uploads, photo posts, Nipto ID discovery and follow requests, direct/group conversation flows, text messages and basic media attachments, 24-hour statuses with owner-only viewer lists and Close Friends audience controls, Shorts upload/feed interactions, Home feed, in-app notifications, privacy controls, blocking/reporting, and private user feedback intake/history. Some flows still need deeper end-to-end, device and moderation validation. Recovery Nipto account requests and consent/approval are implemented as a trusted-contact relationship; assisted password recovery through that contact is not implemented yet, so password reset continues to use the private Supabase Auth account email.
+The repository contains a Flutter Android app and a Supabase-backed social schema. Implemented app areas include profile editing and avatar uploads, photo posts, Nipto ID discovery and follow requests, direct/group conversations, text messages and basic media attachments, 24-hour statuses with viewer lists and Close Friends controls, Shorts upload/feed interactions, Home feed, in-app notifications, privacy controls, blocking/reporting, and private feedback intake/history. The Nipto-native authentication branch now contains the Nipto ID/password UI, secure session manager, OIDC issuer, and recovery request/approval code. These new authentication components are not yet production-validated or deployed. Other app areas still require deeper end-to-end, device, moderation, and performance validation.
 
 The feedback subsystem is separate from abuse reports. Signed-in users can submit app-experience ratings, bug reports, feature ideas or support requests and view their own submission status. Feedback is protected by RLS and limited to five submissions per account per 24 hours. A trusted staff-role backend, moderation queues, audit logging and user response notifications are implemented. A role-gated staff console for feedback, reports and content review is implemented, including private signed media previews. Formatting, static analysis, unit/widget tests and Android debug APK CI have passed. Production staff-session acceptance testing remains an operational gate.
 
@@ -100,7 +100,7 @@ GitHub Actions generates the Android platform project, then runs Dart formatting
 
 - Verify the latest commit's full CI run and test critical flows on physical Android devices.
 - Verify secure encrypted session persistence against the exact Supabase Flutter SDK API; the attempted adapter was reverted after CI exposed an API mismatch.
-- Replace the legacy email-dependent Supabase Auth flow with the Nipto-owned OIDC identity provider and hosted Supabase project with Custom OIDC before release. The current email reset screen is legacy and must be replaced by the in-app recovery Nipto account approval and one-time reset flow.
+- Replace the legacy email-dependent Supabase Auth flow with the Nipto-owned OIDC identity provider and hosted Supabase project with Custom OIDC before release. The previous email reset flow has been replaced in the implementation branch by in-app recovery Nipto account approval and one-time reset grants; production cutover remains gated on deployment and testing.
 - Implement push delivery and notification routing.
 - Implement video scanning/transcoding, thumbnails and resilient upload processing.
 - Build the role-gated staff console for an appropriately staffed adult operations team; the staff backend, audit log, review RPCs and user notifications are already provisioned.
