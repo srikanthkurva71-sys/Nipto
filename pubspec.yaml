@@ -14,9 +14,10 @@ dependencies:
   image_picker: ^1.2.4
 
 dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^5.0.0
-
-flutter:
-  uses-material-design: true
+  flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/branding/nipto_launcher.png
+  adaptive_icon_background: "#101C50"
+  adaptive_icon_foreground: assets/branding/nipto_launcher_foreground.png
+  min_sdk_android: 23
