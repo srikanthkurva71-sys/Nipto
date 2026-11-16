@@ -187,6 +187,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
+  Future<void> _signOutEverywhere() async {
+    final shouldSignOut = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Sign out on all devices?'),
+        content: const Text(
+          'Nipto will revoke this account’s refresh sessions. Devices may remain signed in briefly until their current access tokens expire.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Sign out everywhere'),
+          ),
+        ],
+      ),
+    );
+    if (shouldSignOut != true) return;
+    try {
+      await _client.auth.signOut(scope: SignOutScope.global);
+      if (mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not revoke other sessions. Please try again.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -341,6 +375,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     leading: Icon(Icons.verified_user_outlined),
                     title: Text('Secure sign-in'),
                     subtitle: Text('Nipto uses Supabase Auth sessions and server-verified passwords.'),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.devices_outlined),
+                    title: const Text('Sign out on all devices'),
+                    subtitle: const Text('Revoke refresh sessions on other devices.'),
+                    onTap: _signOutEverywhere,
                   ),
                 ],
               ),
