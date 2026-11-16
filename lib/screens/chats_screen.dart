@@ -86,7 +86,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
     final latestMessages = await _client
         .from('messages')
-        .select('conversation_id, body, message_type, sender_id, created_at, deleted_at')
+        .select('conversation_id, body, message_type, sender_id, created_at, deleted_at, media_path')
         .inFilter('conversation_id', ids)
         .order('created_at', ascending: false)
         .limit(ids.length * 4);
@@ -115,9 +115,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
         subtitle: isDirect
             ? '@' + (profile?['nipto_id'] as String? ?? 'member')
             : 'Group conversation',
-        message: lastByConversation[row['id']]?['deleted_at'] != null
-            ? 'Message deleted'
-            : (lastByConversation[row['id']]?['body'] as String? ?? 'Start a conversation'),
+        message: _messagePreview(lastByConversation[row['id']]),
         initials: _initials(
           isDirect
               ? (profile?['display_name'] as String? ?? 'N')
@@ -126,6 +124,23 @@ class _ChatsScreenState extends State<ChatsScreen> {
         updatedAt: DateTime.tryParse(row['updated_at'] as String? ?? ''),
       );
     }).toList();
+  }
+
+  String _messagePreview(Map<String, dynamic>? message) {
+    if (message == null) return 'Start a conversation';
+    if (message['deleted_at'] != null) return 'Message deleted';
+    switch (message['message_type']) {
+      case 'image':
+        return '📷 Photo';
+      case 'video':
+        return '🎬 Video';
+      case 'audio':
+        return '🎤 Voice message';
+      case 'file':
+        return '📎 Attachment';
+      default:
+        return message['body'] as String? ?? 'New message';
+    }
   }
 
   Future<void> _handleSafetyAction(Map<String, dynamic> profile, String action) async {
