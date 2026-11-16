@@ -113,33 +113,36 @@ class NiptoSessionManager {
   Future<void> _loadLegacySession() async {
     _legacyAccessToken = await _storage.read(key: _legacyAccessKey);
     _legacyRefreshToken = await _storage.read(key: _legacyRefreshKey);
-    if (_legacyRefreshToken != null) return;
 
     final storageKey = _legacyStorageKey;
-    if (storageKey == null) return;
-    final raw = await _legacyPreferences.getString(storageKey);
-    if (raw == null || raw.isEmpty) return;
-
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) return;
-      _legacySessionData = Map<String, dynamic>.from(decoded);
-      final access = decoded['access_token'];
-      final refresh = decoded['refresh_token'];
-      if (access is! String || refresh is! String || refresh.isEmpty) return;
-
-      _legacyAccessToken = access;
-      _legacyRefreshToken = refresh;
-      final expiresAt = decoded['expires_at'];
-      if (expiresAt is int) {
-        _legacyExpiresAt =
-            DateTime.fromMillisecondsSinceEpoch(expiresAt * 1000);
+    final raw = storageKey == null
+        ? null
+        : await _legacyPreferences.getString(storageKey);
+    if (raw != null && raw.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) {
+          _legacySessionData = Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {
+        _legacySessionData = null;
       }
-      await _storage.write(key: _legacyAccessKey, value: access);
-      await _storage.write(key: _legacyRefreshKey, value: refresh);
-    } catch (_) {
-      // Ignore malformed legacy session data; never infer identity from it.
     }
+
+    if (_legacyRefreshToken != null || _legacySessionData == null) return;
+    final access = _legacySessionData!['access_token'];
+    final refresh = _legacySessionData!['refresh_token'];
+    if (access is! String || refresh is! String || refresh.isEmpty) return;
+
+    _legacyAccessToken = access;
+    _legacyRefreshToken = refresh;
+    final expiresAt = _legacySessionData!['expires_at'];
+    if (expiresAt is int) {
+      _legacyExpiresAt =
+          DateTime.fromMillisecondsSinceEpoch(expiresAt * 1000);
+    }
+    await _storage.write(key: _legacyAccessKey, value: access);
+    await _storage.write(key: _legacyRefreshKey, value: refresh);
   }
 
   Future<void> _refreshLegacySession() async {
