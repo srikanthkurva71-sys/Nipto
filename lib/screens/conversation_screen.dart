@@ -26,7 +26,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
   final _picker = ImagePicker();
+  static const _messagePageSize = 50;
+  final List<Map<String, dynamic>> _olderMessages = [];
   bool _sending = false;
+  bool _loadingOlder = false;
+  bool _hasMoreOlder = true;
   bool _markReadInFlight = false;
   bool _markReadAgain = false;
   int? _lastObservedMessageCount;
@@ -41,7 +45,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
         .from('messages')
         .stream(primaryKey: ['id'])
         .eq('conversation_id', widget.conversationId)
-        .order('created_at');
+        .order('created_at', ascending: false)
+        .order('id', ascending: false)
+        .limit(_messagePageSize);
   }
 
   @override
@@ -73,6 +79,82 @@ class _ConversationScreenState extends State<ConversationScreen> {
       } while (_markReadAgain && mounted);
     } finally {
       _markReadInFlight = false;
+    }
+  }
+
+  Future<void> _loadOlderMessages(List<Map<String, dynamic>> latestMessages) async {
+    if (_loadingOlder || !_hasMoreOlder) return;
+
+    final cursor = _olderMessages.isNotEmpty
+        ? _olderMessages.first
+        : (latestMessages.isNotEmpty ? latestMessages.last : null);
+    if (cursor == null) {
+      setState(() => _hasMoreOlder = false);
+      return;
+    }
+
+    final createdAt = cursor['created_at'] as String?;
+    final id = cursor['id'] as String?;
+    if (createdAt == null || id == null) return;
+
+    final previousPixels =
+        _scrollController.hasClients ? _scrollController.position.pixels : 0.0;
+    final previousMaxExtent = _scrollController.hasClients
+        ? _scrollController.position.maxScrollExtent
+        : 0.0;
+
+    setState(() {
+      _loadingOlder = true;
+    });
+
+    try {
+      final rows = await _client
+          .from('messages')
+          .select()
+          .eq('conversation_id', widget.conversationId)
+          .or('created_at.lt.$createdAt,and(created_at.eq.$createdAt,id.lt.$id)')
+          .order('created_at', ascending: false)
+          .order('id', ascending: false)
+          .limit(_messagePageSize);
+
+      final page = List<Map<String, dynamic>>.from(rows)
+        ..sort((a, b) {
+          final byDate = (a['created_at'] as String)
+              .compareTo(b['created_at'] as String);
+          return byDate != 0
+              ? byDate
+              : (a['id'] as String).compareTo(b['id'] as String);
+        });
+
+      if (!mounted) return;
+      setState(() {
+        final knownIds = _olderMessages.map((message) => message['id']).toSet();
+        for (final message in page) {
+          if (knownIds.add(message['id'])) {
+            _olderMessages.add(message);
+          }
+        }
+        _hasMoreOlder = rows.length == _messagePageSize;
+        _loadingOlder = false;
+      });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) return;
+        final addedExtent =
+            _scrollController.position.maxScrollExtent - previousMaxExtent;
+        _scrollController.jumpTo(
+          (previousPixels + addedExtent)
+              .clamp(0.0, _scrollController.position.maxScrollExtent),
+        );
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingOlder = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Older messages could not be loaded. Please try again.'),
+        ),
+      );
     }
   }
 
@@ -233,8 +315,27 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final messages = snapshot.data!;
-                final messageCount = messages.length;
+                final latestMessages = snapshot.data!;
+                if (latestMessages.length < _messagePageSize &&
+                    _olderMessages.isEmpty) {
+                  _hasMoreOlder = false;
+                }
+                final combinedById = <String, Map<String, dynamic>>{
+                  for (final message in _olderMessages)
+                    message['id'] as String: message,
+                  for (final message in latestMessages)
+                    message['id'] as String: message,
+                };
+                final messages = combinedById.values.toList()
+                  ..sort((a, b) {
+                    final byDate = (a['created_at'] as String)
+                        .compareTo(b['created_at'] as String);
+                    return byDate != 0
+                        ? byDate
+                        : (a['id'] as String).compareTo(b['id'] as String);
+                  });
+
+                final messageCount = latestMessages.length;
                 if (_lastObservedMessageCount != messageCount) {
                   _lastObservedMessageCount = messageCount;
                   final shouldStayAtBottom = !_scrollController.hasClients ||
@@ -270,9 +371,35 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 return ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.fromLTRB(16, 18, 16, 20),
-                  itemCount: messages.length,
+                  itemCount: messages.length + (_hasMoreOlder ? 1 : 0),
                   itemBuilder: (context, index) {
-                    final message = messages[index];
+                    if (_hasMoreOlder && index == 0) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 14),
+                          child: TextButton.icon(
+                            onPressed: _loadingOlder
+                                ? null
+                                : () => _loadOlderMessages(latestMessages),
+                            icon: _loadingOlder
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Icon(Icons.history_rounded),
+                            label: Text(
+                              _loadingOlder
+                                  ? 'Loading earlier messages…'
+                                  : 'Load earlier messages',
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                    final messageIndex =
+                        index - (_hasMoreOlder ? 1 : 0);
+                    final message = messages[messageIndex];
                     final mine = message['sender_id'] == currentUserId;
                     final deleted = message['deleted_at'] != null;
                     final isImage = !deleted && message['message_type'] == 'image' &&
