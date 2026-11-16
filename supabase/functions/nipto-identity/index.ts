@@ -289,12 +289,20 @@ async function route(request: Request): Promise<Response> {
     }
     await enforceRateLimit(request, "register:" + niptoId);
     const passwordHash = await hashPassword(password);
-    const rows = await rpc("nipto_native_register", {
-      p_nipto_id: niptoId,
-      p_display_name: displayName,
-      p_password_hash: passwordHash,
-      p_recovery_nipto_id: recoveryId || null,
-    });
+    let rows: any;
+    try {
+      rows = await rpc("nipto_native_register", {
+        p_nipto_id: niptoId,
+        p_display_name: displayName,
+        p_password_hash: passwordHash,
+        p_recovery_nipto_id: recoveryId || null,
+      });
+    } catch (error) {
+      if (error instanceof Error && (error.message.includes("23505") || error.message.includes("duplicate key"))) {
+        return json({ error: "That Nipto ID is already in use." }, 409);
+      }
+      throw error;
+    }
     const account = Array.isArray(rows) ? rows[0] : rows;
     if (!account?.user_id) return json({ error: "Account could not be created." }, 409);
     return json(await createSession({
@@ -375,6 +383,7 @@ async function route(request: Request): Promise<Response> {
     const input = await body(request);
     const oldToken = stringField(input.refresh_token, 256);
     if (oldToken.length < 40) return json({ error: "Session expired. Sign in again." }, 401);
+    await enforceRateLimit(request, "refresh:" + await sha256Hex(oldToken));
     const newToken = randomToken(48);
     const rows = await rpc("nipto_native_rotate_session", {
       p_old_refresh_token_hash: await sha256Hex(oldToken),
@@ -457,6 +466,7 @@ async function route(request: Request): Promise<Response> {
     if (grant.length < 40 || !isValidPassword(password)) {
       return json({ error: "The recovery request is invalid or expired." }, 400);
     }
+    await enforceRateLimit(request, "recovery-reset:" + await sha256Hex(grant));
     const userId = await rpc("nipto_native_consume_reset_grant", {
       p_grant_hash: await sha256Hex(grant),
       p_new_password_hash: await hashPassword(password),
