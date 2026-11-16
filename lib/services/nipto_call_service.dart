@@ -132,9 +132,6 @@ class NiptoCallService {
     };
     _peer!.onTrack = (event) {
       if (event.streams.isNotEmpty) onRemoteStream(event.streams.first);
-      _ringTimeout?.cancel();
-      _connectTimeout?.cancel();
-      onPhaseChanged(NiptoCallPhase.connected);
     };
     _peer!.onConnectionState = (state) {
       if (_closed) return;
@@ -216,7 +213,7 @@ class NiptoCallService {
       } else if (type == 'offer' && !isCaller) {
         final sdp = payload['sdp'];
         final sdpType = payload['sdpType'];
-        if (sdp is! String || sdpType is! String) return;
+        if (sdp is! String || sdp.isEmpty || sdp.length > 65536 || sdpType != 'offer') return;
         await _peer!.setRemoteDescription(RTCSessionDescription(sdp, sdpType));
         _remoteDescriptionSet = true;
         await _flushCandidates();
@@ -231,7 +228,7 @@ class NiptoCallService {
       } else if (type == 'answer' && isCaller) {
         final sdp = payload['sdp'];
         final sdpType = payload['sdpType'];
-        if (sdp is! String || sdpType is! String) return;
+        if (sdp is! String || sdp.isEmpty || sdp.length > 65536 || sdpType != 'answer') return;
         await _peer!.setRemoteDescription(RTCSessionDescription(sdp, sdpType));
         _remoteDescriptionSet = true;
         await _flushCandidates();
@@ -240,7 +237,8 @@ class NiptoCallService {
         onPhaseChanged(NiptoCallPhase.connecting);
       } else if (type == 'ice') {
         final candidate = payload['candidate'];
-        if (candidate is! String) return;
+        if (candidate is! String || candidate.isEmpty || candidate.length > 4096) return;
+        if (!_remoteDescriptionSet && _pendingCandidates.length >= 256) return;
         final index = payload['sdpMLineIndex'];
         final ice = RTCIceCandidate(
           candidate,
@@ -311,12 +309,16 @@ class NiptoCallService {
     _disconnectTimeout?.cancel();
     try {
       await _sendSignal({'type': 'hangup'});
+    } catch (_) {
+      // Backend call control must still run if realtime signaling is unavailable.
+    }
+    try {
       await _client.rpc('end_nipto_call', params: {
         'p_call_id': callId,
         'p_reason': reason,
       });
     } catch (_) {
-      // Release local media even if the network is unavailable.
+      // The session may already be terminal or the network may be unavailable.
     } finally {
       onPhaseChanged(NiptoCallPhase.ended);
       await dispose();
@@ -329,20 +331,44 @@ class NiptoCallService {
     _ringTimeout?.cancel();
     _connectTimeout?.cancel();
     _disconnectTimeout?.cancel();
+
     final channel = _channel;
     _channel = null;
-    if (channel != null) await _client.removeChannel(channel);
+    if (channel != null) {
+      try {
+        await _client.removeChannel(channel);
+      } catch (_) {
+        // Continue releasing local media if realtime teardown fails.
+      }
+    }
+
     final peer = _peer;
     _peer = null;
-    if (peer != null) await peer.close();
+    if (peer != null) {
+      try {
+        await peer.close();
+      } catch (_) {
+        // Continue cleanup; native peer teardown can fail during process shutdown.
+      }
+    }
+
     final stream = _localStream;
     _localStream = null;
     if (stream != null) {
       for (final track in stream.getTracks()) {
-        await track.stop();
+        try {
+          await track.stop();
+        } catch (_) {
+          // Stop remaining tracks even if one native track fails.
+        }
       }
-      await stream.dispose();
+      try {
+        await stream.dispose();
+      } catch (_) {
+        // Stream disposal is best-effort after every track has been stopped.
+      }
     }
+
     try {
       await Helper.clearAndroidCommunicationDevice();
     } catch (_) {
