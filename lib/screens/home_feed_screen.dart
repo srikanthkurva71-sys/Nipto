@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/nipto_session_manager.dart';
+
 import '../theme/nipto_theme.dart';
 
 class HomeFeedScreen extends StatefulWidget {
@@ -64,7 +66,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   Future<void> _toggleLike(Map<String, dynamic> post) async {
     final id = post['id'] as String;
     if (_busyLikes.contains(id)) return;
-    final userId = _client.auth.currentUser?.id;
+    final userId = NiptoSessionManager.instance.userId;
     if (userId == null) return;
     final liked = post['viewer_liked'] == true;
     setState(() {
@@ -309,7 +311,7 @@ class _PostCommentsSheetState extends State<_PostCommentsSheet> {
     if (body.isEmpty || _sending) return;
     setState(() => _sending = true);
     try {
-      await _client.from('post_comments').insert({'post_id': widget.postId, 'author_id': _client.auth.currentUser!.id, 'body': body});
+      await _client.from('post_comments').insert({'post_id': widget.postId, 'author_id': NiptoSessionManager.instance.userId!, 'body': body});
       _text.clear();
       if (mounted) setState(() {});
     } catch (_) {
@@ -332,7 +334,7 @@ class _PostCommentsSheetState extends State<_PostCommentsSheet> {
             if (snapshot.hasError) return const Center(child: Text('Comments could not load.'));
             final rows = snapshot.data ?? [];
             if (rows.isEmpty) return const Center(child: Text('Be the first to comment.', style: TextStyle(color: NiptoColors.muted)));
-            return ListView.separated(itemCount: rows.length, separatorBuilder: (_, __) => const Divider(height: 1), itemBuilder: (context, index) => ListTile(contentPadding: EdgeInsets.zero, leading: const CircleAvatar(backgroundColor: NiptoColors.violetSoft, child: Icon(Icons.person_outline_rounded, color: NiptoColors.violet)), title: Text(rows[index]['author_id'] == _client.auth.currentUser?.id ? 'You' : 'Nipto member'), subtitle: Text(rows[index]['body'] as String)));
+            return ListView.separated(itemCount: rows.length, separatorBuilder: (_, __) => const Divider(height: 1), itemBuilder: (context, index) => ListTile(contentPadding: EdgeInsets.zero, leading: const CircleAvatar(backgroundColor: NiptoColors.violetSoft, child: Icon(Icons.person_outline_rounded, color: NiptoColors.violet)), title: Text(rows[index]['author_id'] == NiptoSessionManager.instance.userId ? 'You' : 'Nipto member'), subtitle: Text(rows[index]['body'] as String)));
           },
         )),
         Row(children: [
