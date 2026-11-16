@@ -382,10 +382,14 @@ class _StatusPageState extends State<_StatusPage> {
   String? _signedUrl;
   VideoPlayerController? _video;
   bool _failed = false;
+  late Future<List<Map<String, dynamic>>> _viewers;
 
   @override
   void initState() {
     super.initState();
+    _viewers = Supabase.instance.client.auth.currentUser?.id == widget.ownerId
+        ? _loadViewers()
+        : Future.value([]);
     _markViewed();
     _loadMedia();
   }
@@ -480,7 +484,7 @@ class _StatusPageState extends State<_StatusPage> {
               ),
               Expanded(
                 child: FutureBuilder<List<Map<String, dynamic>>>(
-                  future: _loadViewers(),
+                  future: _viewers,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
