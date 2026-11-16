@@ -22,6 +22,7 @@
 ## Phase 2 — Messaging
 - [x] Inbox, direct conversations and group invitations.
 - [x] Realtime text messages, image attachments and basic read receipts.
+- [x] Batch conversation read-receipt updates through a membership-checked server RPC; avoid per-message client update loops.
 - [x] Private chat media and signed access.
 - [ ] Complete message requests, retries, pagination, audio/video/file attachments and multi-device delivery.
 
