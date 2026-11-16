@@ -5,7 +5,7 @@
 - [x] Establish product scope and three-tab navigation.
 - [x] Create schema for identity, follows, blocks, chat, statuses, posts, Shorts, notifications and reports.
 - [x] Enable RLS and private media buckets.
-- [x] Add Nipto ID-to-Auth lookup restricted to service role.
+- [x] Add Nipto ID-to-Auth lookup restricted to service role (legacy flow; to be retired).
 - [x] Add Nipto ID login Edge Function and attempt limiting.
 - [x] Implement four-destination Flutter app shell (Home, Chats, Shorts, You) and initial Nipto ID auth UX.
 - [x] Add Android platform scaffolding and verify debug build in CI.
@@ -13,12 +13,12 @@
 - [x] Align design tokens with Nipto logo palette.
 
 ## Phase 1 — Identity and discovery
-- [x] Registration, email confirmation and Nipto ID sign-in endpoint.
+- [x] Legacy registration, email confirmation and Nipto ID sign-in endpoint (not compliant with the updated no-email requirement; migration required).
 - [x] Profile editing, unique handle validation and prefix search.
 - [x] Follow requests, private profiles, blocks and profile visibility.
 - [x] Message privacy and notification preference controls.
-- [x] Add optional trusted Recovery Nipto ID at signup and consent-based recovery-contact management in Settings; recovery requests and approvals notify both accounts.
-- [ ] Complete verified-email password recovery deep-link acceptance and per-device session inventory.
+- [x] Add optional trusted Recovery Nipto ID at signup and consent-based recovery-contact management in Settings; this is relationship management only, not password recovery.
+- [ ] Replace email password reset with complete in-app recovery Nipto account approval and one-time password-reset grants.
 - [x] Add a user-confirmed global sign-out action that revokes refresh sessions; current access tokens may remain valid until expiry.
 
 ## Phase 2 — Messaging
@@ -74,3 +74,4 @@
 ## Definition of done
 
 A feature is done only when its UI, database access, failure handling, authorization tests and Android behavior have been verified. A deployed table or visible screen alone is not a completed feature.
+\n\n## Updated critical path — email-free Nipto identity\n\n- [ ] Build Nipto-owned OIDC issuer (Nipto ID/password, Argon2id, PKCE, JWKS, discovery, key rotation, audit).\n- [ ] Build a self-hosted Supabase stack and configure its Auth service with the Nipto custom OIDC provider; no email or phone claim may be collected.\n- [ ] Prove no-email user provisioning, stable UUID mapping, RLS, PostgREST, Storage, Realtime and RPC behavior in staging.\n- [ ] Implement optional recovery Nipto account during registration and in Settings, with explicit acceptance.\n- [ ] Implement in-app forgot-password requests, approval, one-time expiring reset grants, rate limits, replay protection and session revocation.\n- [ ] Migrate existing accounts/data with backups, preserve profile UUIDs, and retain a tested rollback path.\n- [ ] Remove legacy email fields, email lookup, email reset UI and old login Edge Function only after the replacement is proven.\n\nThe current hosted Supabase project is not modified by this plan. Production infrastructure provisioning is a separate decision requiring an approved hosting budget.\n
