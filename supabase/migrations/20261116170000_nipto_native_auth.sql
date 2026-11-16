@@ -92,6 +92,8 @@ alter table public.profiles drop constraint if exists profiles_id_fkey;
 
 -- Retire the legacy Nipto-ID-to-email lookup used by the old login function.
 drop function if exists public.resolve_nipto_login(text);
+revoke all on function public.request_recovery_contact(text) from public, anon, authenticated;
+revoke all on function public.respond_recovery_contact(uuid, boolean) from public, anon, authenticated;
 
 -- Application ownership and moderation history must reference the stable Nipto
 -- profile UUID, not the legacy Supabase Auth row. This allows the legacy Auth
