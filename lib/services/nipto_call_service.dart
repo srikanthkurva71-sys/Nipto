@@ -33,6 +33,7 @@ class NiptoCallService {
   bool _remoteDescriptionSet = false;
   Future<void> _signalQueue = Future<void>.value();
   Timer? _ringTimeout;
+  Timer? _connectTimeout;
   Completer<void>? _remoteReady;
 
   static const Map<String, dynamic> _rtcConfiguration = {
@@ -110,12 +111,15 @@ class NiptoCallService {
     };
     _peer!.onTrack = (event) {
       if (event.streams.isNotEmpty) onRemoteStream(event.streams.first);
+      _ringTimeout?.cancel();
+      _connectTimeout?.cancel();
       onPhaseChanged(NiptoCallPhase.connected);
     };
     _peer!.onConnectionState = (state) {
       if (_closed) return;
       if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
         _ringTimeout?.cancel();
+        _connectTimeout?.cancel();
         onPhaseChanged(NiptoCallPhase.connected);
       } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
         onError('The call connection failed. Check your network and try again.');
@@ -146,6 +150,17 @@ class NiptoCallService {
   bool get isConnected => _peer?.connectionState ==
       RTCPeerConnectionState.RTCPeerConnectionStateConnected;
 
+  void _armConnectTimeout() {
+    _connectTimeout?.cancel();
+    _connectTimeout = Timer(const Duration(seconds: 30), () {
+      if (!_closed && !isConnected) {
+        onError('The call could not connect. Check your network and try again.');
+        onPhaseChanged(NiptoCallPhase.failed);
+        unawaited(end(reason: 'connection_lost'));
+      }
+    });
+  }
+
   void _handleSignal(Map<String, dynamic> message) {
     _signalQueue = _signalQueue.then((_) => _processSignal(message)).catchError((_) {
       onError('A call signaling message could not be processed.');
@@ -174,6 +189,7 @@ class NiptoCallService {
         });
         await _peer!.setLocalDescription(answer);
         await _sendSignal({'type': 'answer', 'sdp': answer.sdp, 'sdpType': answer.type});
+        _armConnectTimeout();
         onPhaseChanged(NiptoCallPhase.connecting);
       } else if (type == 'answer' && isCaller) {
         final sdp = payload['sdp'];
@@ -183,6 +199,7 @@ class NiptoCallService {
         _remoteDescriptionSet = true;
         await _flushCandidates();
         _ringTimeout?.cancel();
+        _armConnectTimeout();
         onPhaseChanged(NiptoCallPhase.connecting);
       } else if (type == 'ice') {
         final candidate = payload['candidate'];
@@ -245,6 +262,7 @@ class NiptoCallService {
   Future<void> end({String reason = 'hangup'}) async {
     if (_closed) return;
     _ringTimeout?.cancel();
+    _connectTimeout?.cancel();
     try {
       await _sendSignal({'type': 'hangup'});
       await _client.rpc('end_nipto_call', params: {
@@ -263,6 +281,7 @@ class NiptoCallService {
     if (_closed) return;
     _closed = true;
     _ringTimeout?.cancel();
+    _connectTimeout?.cancel();
     final channel = _channel;
     _channel = null;
     if (channel != null) await _client.removeChannel(channel);
