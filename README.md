@@ -56,17 +56,21 @@ flutter analyze
 flutter test
 ~~~
 
-Run with the Nipto Supabase project:
+The repository includes `config/dev.json` with the Nipto project URL and its client-safe publishable key. This is a public client key, not a secret; Supabase Row Level Security remains mandatory. Do not put service-role or secret keys in this file.
+
+Run locally using the checked-in config:
 
 ~~~bash
-flutter run --dart-define=SUPABASE_URL=https://advmjribduqzyuwktkod.supabase.co --dart-define=SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
+flutter run --dart-define-from-file=config/dev.json
 ~~~
 
-Build a release APK:
+Build a release APK using the same config:
 
 ~~~bash
-flutter build apk --release --dart-define=SUPABASE_URL=https://advmjribduqzyuwktkod.supabase.co --dart-define=SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
+flutter build apk --release --dart-define-from-file=config/dev.json
 ~~~
+
+In VS Code, select **Nipto (Android)** in Run and Debug and press F5. The launch configuration loads `config/dev.json` automatically. For a local checkout, fetch the latest repository changes once with `git pull origin main`; after that, normal VS Code runs do not require opening GitHub in a browser.
 
 The publishable key is intended for client applications; RLS is the security boundary. Secret/service-role keys are backend-only.
 
