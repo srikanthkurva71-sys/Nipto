@@ -46,8 +46,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             .single(),
       ]);
       if (!mounted) return;
-      final profile = results[0] as Map<String, dynamic>;
-      final preferences = results[1] as Map<String, dynamic>;
+      final profile = results[0];
+      final preferences = results[1];
       setState(() {
         _isPrivate = profile['is_private'] as bool? ?? false;
         _messageAccess = preferences['message_access'] as String? ?? 'mutuals';
@@ -363,5 +363,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
       default:
         return 'Only people you follow who follow you back can start a chat.';
     }
+  }
+}
+
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: NiptoColors.muted,
+          fontSize: 11,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 1.4,
+        ),
+      ),
+    );
   }
 }
