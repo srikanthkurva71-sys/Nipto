@@ -100,7 +100,7 @@ GitHub Actions generates the Android platform project, then runs Dart formatting
 
 - Verify the latest commit's full CI run and test critical flows on physical Android devices.
 - Verify secure encrypted session persistence against the exact Supabase Flutter SDK API; the attempted adapter was reverted after CI exposed an API mismatch.
-- Replace the legacy email-dependent Supabase Auth flow with the Nipto-owned OIDC identity provider and self-hosted Supabase stack before release. The current email reset screen is legacy and must be replaced by the in-app recovery Nipto account approval and one-time reset flow.
+- Replace the legacy email-dependent Supabase Auth flow with the Nipto-owned OIDC identity provider and hosted Supabase project with Custom OIDC before release. The current email reset screen is legacy and must be replaced by the in-app recovery Nipto account approval and one-time reset flow.
 - Implement push delivery and notification routing.
 - Implement video scanning/transcoding, thumbnails and resilient upload processing.
 - Build the role-gated staff console for an appropriately staffed adult operations team; the staff backend, audit log, review RPCs and user notifications are already provisioned.
