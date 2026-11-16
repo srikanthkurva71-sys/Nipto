@@ -90,7 +90,7 @@ GitHub Actions generates the Android platform project, then runs Dart formatting
 
 - Verify the latest commit's full CI run and test critical flows on physical Android devices.
 - Verify secure encrypted session persistence against the exact Supabase Flutter SDK API; the attempted adapter was reverted after CI exposed an API mismatch.
-- Configure and test verified email recovery, Android deep links and production Auth policies.
+- Complete end-to-end verified email recovery: the app now requests the `nipto://auth-callback` redirect, handles Supabase password-recovery events, and provides a new-password screen; the Supabase Auth redirect allowlist and real-device email-link acceptance test remain required.
 - Implement push delivery and notification routing.
 - Implement video scanning/transcoding, thumbnails and resilient upload processing.
 - Build the role-gated staff console for an appropriately staffed adult operations team; the staff backend, audit log, review RPCs and user notifications are already provisioned.
