@@ -10,7 +10,9 @@ import 'connections_screen.dart';
 import 'notifications_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  const ProfileScreen({super.key, this.unreadCount = 0});
+
+  final int unreadCount;
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -341,7 +343,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         onPressed: () => Navigator.of(context).push(
                           MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()),
                         ),
-                        icon: const Icon(Icons.notifications_none_rounded),
+                        icon: widget.unreadCount > 0
+                            ? Badge(
+                                label: Text(widget.unreadCount > 99 ? '99+' : widget.unreadCount.toString()),
+                                child: const Icon(Icons.notifications_none_rounded),
+                              )
+                            : const Icon(Icons.notifications_none_rounded),
                       ),
                       IconButton(
                         tooltip: 'Settings',
