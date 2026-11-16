@@ -104,7 +104,7 @@ class _ShortsScreenState extends State<ShortsScreen> {
         'video_path': path,
         'caption': '',
         'duration_seconds': duration,
-        'visibility': 'public',
+        'visibility': 'followers',
       });
 
       if (!mounted) return;
