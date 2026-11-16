@@ -178,6 +178,13 @@ async function verifyAccessToken(request: Request): Promise<Claims> {
       || claims.exp > now + ACCESS_TOKEN_SECONDS + 60) {
     throw new ApiError("Invalid or expired session", 401);
   }
+  const active = await rpc("nipto_native_is_session_active", {
+    p_user_id: claims.sub,
+    p_session_id: claims.sid,
+  });
+  if (active !== true) {
+    throw new ApiError("Session expired or revoked. Sign in again.", 401);
+  }
   return claims;
 }
 
