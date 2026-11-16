@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../services/nipto_session_manager.dart';
 import 'package:video_player/video_player.dart';
 
 import '../theme/nipto_theme.dart';
@@ -164,7 +166,7 @@ class _StatusTrayState extends State<StatusTray> {
     controller.dispose();
     if (text == null || text.isEmpty || !mounted) return;
     try {
-      final userId = _client.auth.currentUser!.id;
+      final userId = NiptoSessionManager.instance.userId!;
       await _client.from('statuses').insert({
         'owner_id': userId,
         'status_type': 'text',
@@ -212,7 +214,7 @@ class _StatusTrayState extends State<StatusTray> {
 
     setState(() => _uploading = true);
     try {
-      final userId = _client.auth.currentUser!.id;
+      final userId = NiptoSessionManager.instance.userId!;
       final path = userId + '/' + DateTime.now().microsecondsSinceEpoch.toString() + '.' + extension;
       await _client.storage.from('statuses').upload(
         path,
@@ -270,7 +272,7 @@ class _StatusTrayState extends State<StatusTray> {
                 onTap: _showCreateOptions,
               ),
               ...groups.map((group) => _StatusAvatar(
-                    label: group.ownerId == _client.auth.currentUser?.id ? 'Your update' : group.name,
+                    label: group.ownerId == NiptoSessionManager.instance.userId ? 'Your update' : group.name,
                     initials: _initials(group.name),
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute<void>(
@@ -408,7 +410,7 @@ class _StatusPageState extends State<_StatusPage> {
   @override
   void initState() {
     super.initState();
-    _viewers = Supabase.instance.client.auth.currentUser?.id == widget.ownerId
+    _viewers = NiptoSessionManager.instance.userId == widget.ownerId
         ? _loadViewers()
         : Future.value([]);
     _markViewed();
@@ -416,7 +418,7 @@ class _StatusPageState extends State<_StatusPage> {
   }
 
   Future<void> _markViewed() async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
+    final userId = NiptoSessionManager.instance.userId;
     if (userId == null || userId == widget.ownerId) return;
     try {
       await Supabase.instance.client.from('status_views').insert({
@@ -622,7 +624,7 @@ class _StatusPageState extends State<_StatusPage> {
       content = const Center(child: CircularProgressIndicator(color: Colors.white));
     }
 
-    final isOwner = Supabase.instance.client.auth.currentUser?.id == widget.ownerId;
+    final isOwner = NiptoSessionManager.instance.userId == widget.ownerId;
     return SizedBox.expand(
       child: Stack(
         fit: StackFit.expand,
