@@ -57,10 +57,14 @@ function base64Standard(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-function fromBase64url(value: string): Uint8Array {
+function fromBase64url(value: string): ArrayBuffer {
   const normalized = value.replaceAll("-", "+").replaceAll("_", "/");
   const binary = atob(normalized + "=".repeat((4 - normalized.length % 4) % 4));
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes.buffer;
 }
 
 function randomToken(bytes = 32): string {
