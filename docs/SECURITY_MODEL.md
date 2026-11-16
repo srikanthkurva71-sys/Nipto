@@ -11,7 +11,7 @@
 ## Credential handling
 
 - Passwords are sent only to Supabase Auth over TLS.
-- Public profiles contain no recovery email, phone number or password material.
+- Public profiles contain no account email, recovery Nipto account details, phone number or password material. The account email remains private inside Supabase Auth and is not a recovery-contact relationship.
 - Nipto ID resolution is server-side. resolve_nipto_login is executable only by service_role.
 - nipto-login returns session tokens only after Supabase Auth accepts the password.
 - The Edge Function applies a digest-keyed 15-minute attempt limit. It returns the same authentication error for unknown IDs and wrong passwords.
@@ -49,7 +49,7 @@ Storage object paths are documented in the core migration. Access checks join ob
 
 ## Outstanding release controls
 
-- Configure verified recovery email templates and Android redirect/deep-link allow-list.
+- Configure Supabase Auth account-email verification/reset templates and the Android redirect/deep-link allow-list. Keep the optional recovery Nipto account workflow separate from Auth email delivery.
 - Review Auth password policy, email confirmation, captcha/abuse controls and session lifetime in Supabase Dashboard.
 - Add push provider credentials as Edge Function secrets only.
 - Enable Supabase Auth leaked-password protection and verify the configured password policy in the Dashboard.
