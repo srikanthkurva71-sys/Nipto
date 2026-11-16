@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/nipto_session_manager.dart';
+
 import '../theme/nipto_theme.dart';
 import 'chats_screen.dart';
 import 'call_screen.dart';
@@ -47,7 +49,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           filter: PostgresChangeFilter(
             type: PostgresChangeFilterType.eq,
             column: 'recipient_id',
-            value: Supabase.instance.client.auth.currentUser!.id,
+            value: NiptoSessionManager.instance.userId!,
           ),
           callback: (_) => _loadUnreadCount(),
         )
@@ -63,7 +65,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
 
   Future<void> _pollIncomingCalls() async {
     if (!mounted || _incomingDialogOpen || _pollingIncomingCalls ||
-        Supabase.instance.client.auth.currentUser == null) {
+        NiptoSessionManager.instance.userId == null) {
       return;
     }
     _pollingIncomingCalls = true;
@@ -164,7 +166,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   }
 
   Future<void> _loadUnreadCount() async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
+    final userId = NiptoSessionManager.instance.userId;
     if (userId == null) return;
     try {
       final rows = await Supabase.instance.client
