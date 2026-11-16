@@ -1,4 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:video_player/video_player.dart';
 
@@ -13,6 +17,11 @@ class ShortsScreen extends StatefulWidget {
 
 class _ShortsScreenState extends State<ShortsScreen> {
   late Future<List<Map<String, dynamic>>> _clips;
+  final _picker = ImagePicker();
+  bool _uploading = false;
+  int _activeIndex = 0;
+
+  SupabaseClient get _client => Supabase.instance.client;
 
   @override
   void initState() {
@@ -21,8 +30,7 @@ class _ShortsScreenState extends State<ShortsScreen> {
   }
 
   Future<List<Map<String, dynamic>>> _loadClips() async {
-    final client = Supabase.instance.client;
-    final rows = await client
+    final rows = await _client
         .from('shorts')
         .select('id, creator_id, video_path, thumbnail_path, caption, duration_seconds')
         .eq('moderation_state', 'approved')
@@ -32,13 +40,100 @@ class _ShortsScreenState extends State<ShortsScreen> {
     final clips = <Map<String, dynamic>>[];
     for (final raw in rows as List) {
       final clip = Map<String, dynamic>.from(raw);
-      final url = await client.storage
+      final profile = await _client
+          .from('profiles')
+          .select('display_name, nipto_id, avatar_path')
+          .eq('id', clip['creator_id'])
+          .maybeSingle();
+      clip['creator_name'] = profile?['display_name'] ?? 'Nipto creator';
+      clip['creator_nipto_id'] = profile?['nipto_id'] ?? '';
+      final url = await _client.storage
           .from('shorts')
           .createSignedUrl(clip['video_path'] as String, 3600);
       clip['signed_url'] = url;
       clips.add(clip);
     }
     return clips;
+  }
+
+  Future<void> _uploadShort() async {
+    if (_uploading) return;
+    final file = await _picker.pickVideo(
+      source: ImageSource.gallery,
+      maxDuration: const Duration(minutes: 3),
+    );
+    if (file == null || !mounted) return;
+
+    final extension = file.name.split('.').last.toLowerCase();
+    if (extension != 'mp4') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('For now, Shorts uploads must be MP4 videos.')),
+      );
+      return;
+    }
+
+    final size = await file.length();
+    if (size > 195 * 1024 * 1024) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choose a video smaller than 195 MB.')),
+      );
+      return;
+    }
+
+    setState(() => _uploading = true);
+    VideoPlayerController? preview;
+    try {
+      preview = VideoPlayerController.file(File(file.path));
+      await preview.initialize();
+      final duration = preview.value.duration.inMilliseconds / 1000.0;
+      await preview.dispose();
+      preview = null;
+      if (duration <= 0 || duration > 180) {
+        throw const FormatException('Short videos must be 3 minutes or less.');
+      }
+
+      final userId = _client.auth.currentUser!.id;
+      final path = userId + '/' + DateTime.now().microsecondsSinceEpoch.toString() + '.mp4';
+      await _client.storage.from('shorts').uploadBinary(
+        path,
+        await file.readAsBytes(),
+        fileOptions: const FileOptions(contentType: 'video/mp4', upsert: false),
+      );
+      await _client.from('shorts').insert({
+        'creator_id': userId,
+        'video_path': path,
+        'caption': '',
+        'duration_seconds': duration,
+        'visibility': 'public',
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Short submitted. It will appear after review.')),
+      );
+    } on FormatException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message)),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Short upload failed. Please try again.')),
+      );
+    } finally {
+      await preview?.dispose();
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  Future<void> _showComments(Map<String, dynamic> clip) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => _ShortCommentsSheet(shortId: clip['id'] as String),
+    );
   }
 
   @override
@@ -59,18 +154,64 @@ class _ShortsScreenState extends State<ShortsScreen> {
         }
         final clips = snapshot.data ?? [];
         if (clips.isEmpty) {
-          return const _ShortsEmpty(
+          return _ShortsEmpty(
             icon: Icons.play_circle_outline_rounded,
             title: 'A new kind of feed',
-            subtitle: 'Short videos from people you follow will appear here.',
+            subtitle: 'Approved short videos from Nipto creators will appear here.',
+            actionLabel: 'Share a Short',
+            onRetry: _uploadShort,
           );
         }
-        return PageView.builder(
-          scrollDirection: Axis.vertical,
-          itemCount: clips.length,
-          itemBuilder: (context, index) {
-            return _ShortTile(clip: clips[index]);
-          },
+        return Stack(
+          children: [
+            PageView.builder(
+              scrollDirection: Axis.vertical,
+              itemCount: clips.length,
+              onPageChanged: (index) => setState(() => _activeIndex = index),
+              itemBuilder: (context, index) => _ShortTile(
+                key: ValueKey(clips[index]['id']),
+                clip: clips[index],
+                isActive: _activeIndex == index,
+                onComment: () => _showComments(clips[index]),
+              ),
+            ),
+            Positioned(
+              top: 12,
+              left: 20,
+              right: 14,
+              child: SafeArea(
+                child: Row(
+                  children: const [
+                    Text(
+                      'Shorts',
+                      style: TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              top: 12,
+              right: 12,
+              child: SafeArea(
+                child: IconButton.filledTonal(
+                  tooltip: 'Upload a Short',
+                  onPressed: _uploading ? null : _uploadShort,
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.black45,
+                    foregroundColor: Colors.white,
+                  ),
+                  icon: _uploading
+                      ? const SizedBox(
+                          width: 19,
+                          height: 19,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.add_rounded),
+                ),
+              ),
+            ),
+          ],
         );
       },
     );
@@ -78,9 +219,16 @@ class _ShortsScreenState extends State<ShortsScreen> {
 }
 
 class _ShortTile extends StatefulWidget {
-  const _ShortTile({required this.clip});
+  const _ShortTile({
+    super.key,
+    required this.clip,
+    required this.isActive,
+    required this.onComment,
+  });
 
   final Map<String, dynamic> clip;
+  final bool isActive;
+  final VoidCallback onComment;
 
   @override
   State<_ShortTile> createState() => _ShortTileState();
@@ -92,12 +240,28 @@ class _ShortTileState extends State<_ShortTile> with WidgetsBindingObserver {
   bool _failed = false;
   bool _liked = false;
   bool _likeBusy = false;
+  int _likeCount = 0;
+
+  SupabaseClient get _client => Supabase.instance.client;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _initializeVideo();
+    _loadLikeState();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ShortTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.isActive != widget.isActive && _ready) {
+      if (widget.isActive) {
+        _controller?.play();
+      } else {
+        _controller?.pause();
+      }
+    }
   }
 
   Future<void> _initializeVideo() async {
@@ -108,10 +272,28 @@ class _ShortTileState extends State<_ShortTile> with WidgetsBindingObserver {
       _controller = controller;
       await controller.initialize();
       await controller.setLooping(true);
-      await controller.play();
+      if (widget.isActive) await controller.play();
       if (mounted) setState(() => _ready = true);
     } catch (_) {
       if (mounted) setState(() => _failed = true);
+    }
+  }
+
+  Future<void> _loadLikeState() async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      final rows = await _client
+          .from('short_likes')
+          .select('user_id')
+          .eq('short_id', widget.clip['id']);
+      if (!mounted) return;
+      setState(() {
+        _likeCount = (rows as List).length;
+        _liked = rows.any((row) => row['user_id'] == userId);
+      });
+    } catch (_) {
+      // The video remains playable when engagement metadata is unavailable.
     }
   }
 
@@ -119,32 +301,39 @@ class _ShortTileState extends State<_ShortTile> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) {
       _controller?.pause();
-    } else if (_ready) {
+    } else if (_ready && widget.isActive) {
       _controller?.play();
     }
   }
 
   Future<void> _toggleLike() async {
     if (_likeBusy) return;
-    final client = Supabase.instance.client;
-    final userId = client.auth.currentUser?.id;
+    final userId = _client.auth.currentUser?.id;
     if (userId == null) return;
-    setState(() => _likeBusy = true);
+    final next = !_liked;
+    setState(() {
+      _likeBusy = true;
+      _liked = next;
+      _likeCount = (_likeCount + (next ? 1 : -1)).clamp(0, 1 << 30);
+    });
     try {
-      if (_liked) {
-        await client.from('short_likes').delete().match({
+      if (next) {
+        await _client.from('short_likes').insert({
           'short_id': widget.clip['id'],
           'user_id': userId,
         });
       } else {
-        await client.from('short_likes').insert({
+        await _client.from('short_likes').delete().match({
           'short_id': widget.clip['id'],
           'user_id': userId,
         });
       }
-      if (mounted) setState(() => _liked = !_liked);
     } catch (_) {
       if (mounted) {
+        setState(() {
+          _liked = !next;
+          _likeCount = (_likeCount + (next ? -1 : 1)).clamp(0, 1 << 30);
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Could not update your reaction.')),
         );
@@ -164,15 +353,28 @@ class _ShortTileState extends State<_ShortTile> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final caption = widget.clip['caption'] as String? ?? '';
+    final creator = widget.clip['creator_name'] as String? ?? 'Nipto creator';
+    final handle = widget.clip['creator_nipto_id'] as String? ?? '';
+
     return Stack(
       fit: StackFit.expand,
       children: [
         Container(color: const Color(0xFF171827)),
         if (_ready && _controller != null)
-          Center(
-            child: AspectRatio(
-              aspectRatio: _controller!.value.aspectRatio,
-              child: VideoPlayer(_controller!),
+          GestureDetector(
+            onTap: () {
+              if (_controller!.value.isPlaying) {
+                _controller!.pause();
+              } else if (widget.isActive) {
+                _controller!.play();
+              }
+              setState(() {});
+            },
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: _controller!.value.aspectRatio,
+                child: VideoPlayer(_controller!),
+              ),
             ),
           )
         else
@@ -192,21 +394,15 @@ class _ShortTileState extends State<_ShortTile> with WidgetsBindingObserver {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'NIPTO SHORTS',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 2,
-                      ),
-                    ),
+                    Text(creator, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                    if (handle.isNotEmpty)
+                      Text('@' + handle, style: const TextStyle(color: Colors.white70, fontSize: 11)),
                     const SizedBox(height: 8),
                     Text(
                       caption.isEmpty ? 'A little moment, shared.' : caption,
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                      style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -216,42 +412,161 @@ class _ShortTileState extends State<_ShortTile> with WidgetsBindingObserver {
                 children: [
                   _ActionIcon(
                     icon: _liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                    label: 'Like',
+                    label: _likeCount == 0 ? 'Like' : _likeCount.toString(),
                     color: _liked ? NiptoColors.coral : Colors.white,
-                    onTap: _toggleLike,
+                    onTap: _likeBusy ? null : _toggleLike,
                   ),
                   const SizedBox(height: 17),
                   _ActionIcon(
                     icon: Icons.mode_comment_outlined,
                     label: 'Comment',
-                    onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Comments are coming in the next Shorts update.')),
-                    ),
+                    onTap: widget.onComment,
                   ),
                   const SizedBox(height: 17),
                   _ActionIcon(
                     icon: Icons.share_outlined,
-                    label: 'Share',
-                    onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Sharing will be enabled with the creator tools.')),
-                    ),
+                    label: 'Copy ID',
+                    onTap: () async {
+                      await Clipboard.setData(ClipboardData(text: widget.clip['id'] as String));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Short ID copied.')),
+                        );
+                      }
+                    },
                   ),
                 ],
               ),
             ],
           ),
         ),
-        Positioned(
-          top: 18,
-          left: 20,
-          child: SafeArea(
-            child: Text(
-              'Shorts',
-              style: const TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w800),
-            ),
+      ],
+    );
+  }
+}
+
+class _ShortCommentsSheet extends StatefulWidget {
+  const _ShortCommentsSheet({required this.shortId});
+
+  final String shortId;
+
+  @override
+  State<_ShortCommentsSheet> createState() => _ShortCommentsSheetState();
+}
+
+class _ShortCommentsSheetState extends State<_ShortCommentsSheet> {
+  final _controller = TextEditingController();
+  bool _sending = false;
+
+  SupabaseClient get _client => Supabase.instance.client;
+
+  Future<List<Map<String, dynamic>>> _loadComments() async {
+    final rows = await _client
+        .from('short_comments')
+        .select('id, author_id, body, created_at')
+        .eq('short_id', widget.shortId)
+        .order('created_at')
+        .limit(100);
+    return (rows as List).map((row) => Map<String, dynamic>.from(row)).toList();
+  }
+
+  Future<void> _send() async {
+    final body = _controller.text.trim();
+    final userId = _client.auth.currentUser?.id;
+    if (body.isEmpty || userId == null || _sending) return;
+    setState(() => _sending = true);
+    try {
+      await _client.from('short_comments').insert({
+        'short_id': widget.shortId,
+        'author_id': userId,
+        'body': body,
+      });
+      _controller.clear();
+      if (mounted) setState(() {});
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Comment could not be sent.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(18, 8, 18, MediaQuery.viewInsetsOf(context).bottom + 12),
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.62,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Comments', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 12),
+              Expanded(
+                child: FutureBuilder<List<Map<String, dynamic>>>(
+                  future: _loadComments(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final comments = snapshot.data!;
+                    if (comments.isEmpty) {
+                      return const Center(
+                        child: Text('Be the first to comment.', style: TextStyle(color: NiptoColors.muted)),
+                      );
+                    }
+                    return ListView.separated(
+                      itemCount: comments.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, index) => ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const CircleAvatar(
+                          backgroundColor: NiptoColors.violetSoft,
+                          child: Icon(Icons.person_outline_rounded, color: NiptoColors.violet),
+                        ),
+                        title: Text(comments[index]['author_id'] == _client.auth.currentUser?.id ? 'You' : 'Nipto member'),
+                        subtitle: Text(comments[index]['body'] as String),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      maxLength: 2000,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        hintText: 'Write a comment…',
+                        counterText: '',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    onPressed: _sending ? null : _send,
+                    icon: _sending
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.arrow_upward_rounded),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -266,7 +581,7 @@ class _ActionIcon extends StatelessWidget {
 
   final IconData icon;
   final String label;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final Color color;
 
   @override
@@ -294,12 +609,14 @@ class _ShortsEmpty extends StatelessWidget {
     required this.title,
     required this.subtitle,
     this.onRetry,
+    this.actionLabel,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback? onRetry;
+  final String? actionLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -317,7 +634,7 @@ class _ShortsEmpty extends StatelessWidget {
             Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, height: 1.4)),
             if (onRetry != null) ...[
               const SizedBox(height: 18),
-              OutlinedButton(onPressed: onRetry, child: const Text('Try again')),
+              OutlinedButton(onPressed: onRetry, child: Text(actionLabel ?? 'Try again')),
             ],
           ],
         ),
