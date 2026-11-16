@@ -37,7 +37,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   Future<List<Map<String, dynamic>>> _loadHistory() async {
     final rows = await _client
         .from('user_feedback')
-        .select('id, category, subject, status, created_at')
+        .select('id, category, subject, status, response_message, created_at, reviewed_at')
         .order('created_at', ascending: false)
         .limit(20);
     return (rows as List).map((row) => Map<String, dynamic>.from(row)).toList();
@@ -266,7 +266,13 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                     return ListTile(
                       leading: const Icon(Icons.chat_bubble_outline_rounded, color: NiptoColors.violet),
                       title: Text(subject, maxLines: 2, overflow: TextOverflow.ellipsis),
-                      subtitle: Text(_categoryLabel(category)),
+                      subtitle: Text(
+                        (row['response_message'] as String?)?.trim().isNotEmpty == true
+                            ? _categoryLabel(category) + '\n' + (row['response_message'] as String)
+                            : _categoryLabel(category),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       trailing: Text(
                         _statusLabel(status),
                         style: const TextStyle(color: NiptoColors.muted, fontSize: 11),
