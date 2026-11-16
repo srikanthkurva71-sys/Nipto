@@ -95,11 +95,21 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) return;
 
-    final file = await _picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 88,
-      maxWidth: 1800,
-    );
+    XFile? file;
+    try {
+      file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 88,
+        maxWidth: 1800,
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open your photo library. Please try again.')),
+        );
+      }
+      return;
+    }
     if (file == null || !mounted) return;
 
     final extension = file.name.split('.').last.toLowerCase();
@@ -316,6 +326,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       controller: _controller,
                       minLines: 1,
                       maxLines: 5,
+                      maxLength: 10000,
                       textCapitalization: TextCapitalization.sentences,
                       onSubmitted: (_) => _send(),
                       decoration: const InputDecoration(
