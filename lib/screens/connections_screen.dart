@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/nipto_session_manager.dart';
+
 import '../theme/nipto_theme.dart';
 
 class ConnectionsScreen extends StatefulWidget {
@@ -45,7 +47,7 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     setState(() => _busy = true);
     try {
       await _client.from('follows').delete().match({
-        'follower_id': _client.auth.currentUser!.id,
+        'follower_id': NiptoSessionManager.instance.userId!,
         'following_id': profile['user_id'],
       });
       if (mounted) {
