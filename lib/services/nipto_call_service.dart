@@ -77,6 +77,16 @@ class NiptoCallService {
     } catch (error) {
       onError(_safeMessage(error));
       onPhaseChanged(NiptoCallPhase.failed);
+      try {
+        await _client.rpc('end_nipto_call', params: {
+          'p_call_id': callId,
+          'p_reason': error.toString().toLowerCase().contains('permission')
+              ? 'permission_denied'
+              : 'failed',
+        });
+      } catch (_) {
+        // The call may already have expired or been ended by the caller.
+      }
       await dispose();
     }
   }
