@@ -402,6 +402,7 @@ class _StatusPageState extends State<_StatusPage> {
   String? _signedUrl;
   VideoPlayerController? _video;
   bool _failed = false;
+  bool _deleting = false;
   late Future<List<Map<String, dynamic>>> _viewers;
 
   @override
@@ -468,6 +469,61 @@ class _StatusPageState extends State<_StatusPage> {
     return (rows as List)
         .map((row) => Map<String, dynamic>.from(row as Map))
         .toList();
+  }
+
+  Future<void> _deleteStatus() async {
+    if (_deleting) return;
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete this status?'),
+        content: const Text('This status will be removed for everyone who can see it.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: FilledButton.styleFrom(backgroundColor: NiptoColors.danger),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (shouldDelete != true || !mounted) return;
+
+    setState(() => _deleting = true);
+    var mediaCleanupFailed = false;
+    try {
+      final client = Supabase.instance.client;
+      final deleted = await client
+          .from('statuses')
+          .delete()
+          .eq('id', widget.status['id'])
+          .select('id');
+      if ((deleted as List).isEmpty) {
+        throw const PostgrestException(message: 'Status could not be deleted.');
+      }
+      final path = widget.status['media_path'] as String?;
+      if (path != null) {
+        try {
+          await client.storage.from('statuses').remove([path]);
+        } catch (_) {
+          mediaCleanupFailed = true;
+        }
+      }
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+      if (mediaCleanupFailed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Status deleted. Its media file could not be cleaned up yet.')),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _deleting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not delete this status. Please try again.')),
+      );
+    }
   }
 
   Future<void> _showViewers() async {
@@ -572,6 +628,25 @@ class _StatusPageState extends State<_StatusPage> {
         fit: StackFit.expand,
         children: [
           content,
+          if (isOwner)
+            Positioned(
+              right: 16,
+              bottom: 22,
+              child: SafeArea(
+                child: OutlinedButton.icon(
+                  onPressed: _deleting ? null : _deleteStatus,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    backgroundColor: const Color(0x99000000),
+                    side: const BorderSide(color: Colors.white54),
+                  ),
+                  icon: _deleting
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.delete_outline_rounded, size: 18),
+                  label: const Text('Delete'),
+                ),
+              ),
+            ),
           if (isOwner)
             Positioned(
               left: 16,
