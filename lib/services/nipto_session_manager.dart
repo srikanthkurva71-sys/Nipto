@@ -389,6 +389,9 @@ class NiptoSessionManager {
       {'session_id': sessionId},
       authenticated: true,
     );
+    if (response['ok'] != true) {
+      throw const NiptoAuthException('That session is no longer active.');
+    }
     if (response['current_session'] == true) {
       await _clearSession();
     }
