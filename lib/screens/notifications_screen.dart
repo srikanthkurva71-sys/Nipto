@@ -129,7 +129,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final kind = item['notification_type'] as String? ?? '';
 
     if (payload['kind'] == 'recovery_request' ||
-        payload['kind'] == 'recovery_accepted') {
+        payload['kind'] == 'recovery_accepted' ||
+        payload['kind'] == 'password_recovery_request') {
       if (!mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
@@ -201,6 +202,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         }
         if (payload['kind'] == 'recovery_accepted') {
           return '$name accepted your recovery-contact request.';
+        }
+        if (payload['kind'] == 'password_recovery_request') {
+          return '$name asked you to approve a password reset. Review it in Recovery Nipto account settings.';
+        }
+        if (payload['kind'] == 'password_recovery_approved') {
+          return 'Your trusted Nipto account approved your password recovery request.';
+        }
+        if (payload['kind'] == 'password_recovery_rejected') {
+          return 'Your trusted Nipto account declined your password recovery request.';
         }
         if (payload['kind'] == 'report_update') {
           final status = payload['status']?.toString() ?? 'updated';
