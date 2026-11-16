@@ -27,6 +27,10 @@ jobs:
       - name: Generate Android platform project
         run: flutter create --platforms=android --org com.nipto --project-name nipto .
 
+      - name: Configure Android plugin repositories
+        run: |
+          sed -i '/repositories {/a\        google()\n        mavenCentral()' android/settings.gradle.kts
+
       - name: Resolve dependencies
         run: flutter pub get
 
