@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/nipto_session_manager.dart';
+
 import '../theme/nipto_theme.dart';
 import 'feedback_screen.dart';
 import 'close_friends_screen.dart';
@@ -36,7 +38,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _loadSettings() async {
-    final userId = _client.auth.currentUser?.id;
+    final userId = NiptoSessionManager.instance.userId;
     if (userId == null) return;
     try {
       await _client.from('user_preferences').upsert(
@@ -78,7 +80,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _isPrivate = value;
     });
     try {
-      await _client.from('profiles').update({'is_private': value}).eq('id', _client.auth.currentUser!.id);
+      await _client.from('profiles').update({'is_private': value}).eq('id', NiptoSessionManager.instance.userId!);
     } catch (_) {
       if (!mounted) return;
       setState(() => _isPrivate = !value);
@@ -96,7 +98,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       await _client.from('user_preferences').update({key: value}).eq(
         'user_id',
-        _client.auth.currentUser!.id,
+        NiptoSessionManager.instance.userId!,
       );
       if (!mounted) return;
       setState(() {
@@ -159,7 +161,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (shouldUnblock != true) return;
     try {
       await _client.from('blocked_users').delete().match({
-        'blocker_id': _client.auth.currentUser!.id,
+        'blocker_id': NiptoSessionManager.instance.userId!,
         'blocked_id': profile['user_id'],
       });
       if (mounted) setState(() => _blocked = _loadBlocked());
@@ -184,7 +186,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (shouldSignOut != true) return;
-    await _client.auth.signOut();
+    await NiptoSessionManager.instance.signOut();
     if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
@@ -210,7 +212,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (shouldSignOut != true) return;
     try {
-      await _client.auth.signOut(scope: SignOutScope.global);
+      await NiptoSessionManager.instance.signOutEverywhere();
       if (mounted) {
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
