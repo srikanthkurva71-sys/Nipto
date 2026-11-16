@@ -12,6 +12,7 @@ dependencies:
   supabase_flutter: ^2.18.3
   video_player: ^2.11.1
   image_picker: ^1.2.4
+  flutter_webrtc: ^1.6.3
 
 dev_dependencies:
   flutter_test:
