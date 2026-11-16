@@ -24,7 +24,7 @@ This repository is the first implementation of Nipto Social. The former ride-hai
 | Layer | Choice |
 |---|---|
 | Android app | Flutter + Dart |
-| Authentication | Supabase Auth + Nipto ID lookup Edge Function |
+| Authentication | Legacy Supabase Auth email flow (not compliant with the new requirement); migration planned to Nipto-owned ID/password OIDC provider |
 | Database | Supabase PostgreSQL |
 | Authorization | PostgreSQL Row Level Security |
 | Live messaging | Supabase Realtime |
@@ -84,7 +84,7 @@ Nipto v1 is an Android app, not a web product. A browser preview at a `localhost
 
 The initial social schema and security migrations are applied to the connected Nipto Supabase project. See supabase/migrations/. The nipto-login Edge Function is deployed with JWT verification disabled because it is the unauthenticated sign-in endpoint; it has its own input validation and database-backed attempt limiting.
 
-New users register with a private account email, a Nipto ID and a password. The account email is used by Supabase Auth for verification and password resets; it is not the optional recovery Nipto account. A recovery Nipto account is optional and requires the other account's explicit approval. Supabase Auth verifies and stores credentials. The profile trigger stores only the public Nipto ID and display name. Login resolves the Nipto ID to the private Auth email on the server, then delegates password verification to Supabase Auth. The recovery email is never returned by the lookup function.
+**Authentication migration status:** The current deployed app still requires a private email in Supabase Auth and uses that email internally for login and password reset. This is a legacy implementation and does **not** meet the product requirement. The target is Nipto ID + Nipto password only, with no email or phone collected or stored for authentication. A recovery Nipto account is optional during registration and can be linked later in Settings after explicit approval. The complete target architecture and hosted-Supabase constraint are documented in `docs/NIPTO_NATIVE_AUTH_DESIGN.md`. Do not present the current authentication flow as the finished Nipto account system.
 
 ## Current implementation status
 
@@ -92,7 +92,7 @@ The repository contains a Flutter Android app foundation and a live Supabase sch
 
 The feedback subsystem is separate from abuse reports. Signed-in users can submit app-experience ratings, bug reports, feature ideas or support requests and view their own submission status. Feedback is protected by RLS and limited to five submissions per account per 24 hours. A trusted staff-role backend, moderation queues, audit logging and user response notifications are implemented. A role-gated staff console for feedback, reports and content review is implemented, including private signed media previews. Formatting, static analysis, unit/widget tests and Android debug APK CI have passed. Production staff-session acceptance testing remains an operational gate.
 
-All 21 public application tables currently have Row Level Security enabled. Anonymous table privileges were revoked and client writes were narrowed. Authenticated application and moderation SECURITY DEFINER RPCs are explicitly granted to signed-in users and validate access server-side; private policy helpers and staff tables are not client-readable. The Supabase advisor continues to report these authenticated RPCs for manual review.
+All public application tables currently have Row Level Security enabled. Anonymous table privileges were revoked and client writes were narrowed. Authenticated application and moderation SECURITY DEFINER RPCs are explicitly granted to signed-in users and validate access server-side; private policy helpers and staff tables are not client-readable. The Supabase advisor continues to report these authenticated RPCs for manual review.
 
 GitHub Actions generates the Android platform project, then runs Dart formatting, static analysis, tests and an Android debug APK build. The resulting `nipto-android-debug` APK is available as a workflow artifact. A passing CI run proves that the checked commit builds; it does not prove complete device-level or production readiness.
 
@@ -100,7 +100,7 @@ GitHub Actions generates the Android platform project, then runs Dart formatting
 
 - Verify the latest commit's full CI run and test critical flows on physical Android devices.
 - Verify secure encrypted session persistence against the exact Supabase Flutter SDK API; the attempted adapter was reverted after CI exposed an API mismatch.
-- Complete end-to-end verified email recovery: the app now requests the `nipto://auth-callback` redirect, handles Supabase password-recovery events, and provides a new-password screen; the Supabase Auth redirect allowlist and real-device email-link acceptance test remain required.
+- Replace the legacy email-dependent Supabase Auth flow with the Nipto-owned OIDC identity provider and self-hosted Supabase stack before release. The current email reset screen is legacy and must be replaced by the in-app recovery Nipto account approval and one-time reset flow.
 - Implement push delivery and notification routing.
 - Implement video scanning/transcoding, thumbnails and resilient upload processing.
 - Build the role-gated staff console for an appropriately staffed adult operations team; the staff backend, audit log, review RPCs and user notifications are already provisioned.
