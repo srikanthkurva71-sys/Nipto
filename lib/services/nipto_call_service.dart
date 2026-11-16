@@ -40,17 +40,9 @@ class NiptoCallService {
     ],
   };
 
-  Future<void> startOutgoing(String conversationId) async {
+  Future<void> startOutgoing() async {
     try {
       onPhaseChanged(NiptoCallPhase.preparing);
-      final result = await _client.rpc('start_nipto_call', params: {
-        'p_conversation_id': conversationId,
-        'p_media_type': mediaType,
-      });
-      final rows = List<Map<String, dynamic>>.from(result as List);
-      if (rows.isEmpty || rows.first['call_id']?.toString() != callId) {
-        throw StateError('The call could not be started.');
-      }
       await _prepareMediaAndChannel();
       final offer = await _peer!.createOffer({
         'offerToReceiveAudio': true,
