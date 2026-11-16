@@ -84,11 +84,11 @@ class _MainShellState extends State<MainShell> {
       body: PageView(
         controller: _pageController,
         onPageChanged: (value) => setState(() => _index = value),
-        children: const [
-          HomeFeedScreen(),
-          ChatsScreen(),
-          ShortsScreen(),
-          ProfileScreen(),
+        children: [
+          const HomeFeedScreen(),
+          const ChatsScreen(),
+          const ShortsScreen(),
+          ProfileScreen(unreadCount: _unreadCount),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -100,14 +100,9 @@ class _MainShellState extends State<MainShell> {
             selectedIcon: Icon(Icons.home_rounded),
             label: 'Home',
           ),
-          NavigationDestination(
-            icon: _unreadCount > 0
-                ? Badge(
-                    label: Text(_unreadCount > 99 ? '99+' : _unreadCount.toString()),
-                    child: const Icon(Icons.chat_bubble_outline_rounded),
-                  )
-                : const Icon(Icons.chat_bubble_outline_rounded),
-            selectedIcon: const Icon(Icons.chat_bubble_rounded),
+          const NavigationDestination(
+            icon: Icon(Icons.chat_bubble_outline_rounded),
+            selectedIcon: Icon(Icons.chat_bubble_rounded),
             label: 'Chats',
           ),
           const NavigationDestination(
