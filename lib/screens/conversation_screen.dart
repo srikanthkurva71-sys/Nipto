@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/nipto_session_manager.dart';
+
 import '../theme/nipto_theme.dart';
 import 'call_screen.dart';
 
@@ -61,7 +63,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   }
 
   Future<void> _markIncomingRead() async {
-    if (_client.auth.currentUser == null) return;
+    if (NiptoSessionManager.instance.userId == null) return;
     if (_markReadInFlight) {
       _markReadAgain = true;
       return;
@@ -163,7 +165,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   Future<void> _send() async {
     final text = _controller.text.trim();
-    final userId = _client.auth.currentUser?.id;
+    final userId = NiptoSessionManager.instance.userId;
     if (text.isEmpty || userId == null || _sending) return;
 
     setState(() => _sending = true);
@@ -188,7 +190,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   Future<void> _attachImage() async {
     if (_sending) return;
-    final userId = _client.auth.currentUser?.id;
+    final userId = NiptoSessionManager.instance.userId;
     if (userId == null) return;
 
     XFile? file;
@@ -268,7 +270,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   }
 
   Future<void> _startCall(String mediaType) async {
-    if (_client.auth.currentUser == null) return;
+    if (NiptoSessionManager.instance.userId == null) return;
     try {
       final result = await _client.rpc(
         'start_nipto_call',
@@ -306,7 +308,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final currentUserId = _client.auth.currentUser?.id;
+    final currentUserId = NiptoSessionManager.instance.userId;
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
