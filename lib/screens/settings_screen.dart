@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/nipto_theme.dart';
 import 'feedback_screen.dart';
+import 'close_friends_screen.dart';
 import 'staff_console_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -205,6 +206,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     title: const Text('Private account'),
                     subtitle: const Text('Approve follow requests before people can see follower-only updates.'),
                     activeThumbColor: NiptoColors.violet,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.people_alt_outlined, color: NiptoColors.violet),
+                    title: const Text('Close Friends'),
+                    subtitle: const Text('Choose who can see Close Friends-only statuses.'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(builder: (_) => const CloseFriendsScreen()),
+                    ),
                   ),
                   const Divider(height: 1),
                   ListTile(
