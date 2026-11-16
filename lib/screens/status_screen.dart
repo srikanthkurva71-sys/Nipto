@@ -441,29 +441,12 @@ class _StatusPageState extends State<_StatusPage> {
   }
 
   Future<List<Map<String, dynamic>>> _loadViewers() async {
-    final client = Supabase.instance.client;
-    final views = await client
-        .from('status_views')
-        .select('viewer_id, viewed_at')
-        .eq('status_id', widget.status['id'])
-        .order('viewed_at', ascending: false)
-        .limit(100);
-    final rows = (views as List)
-        .map((row) => Map<String, dynamic>.from(row))
-        .toList();
-    if (rows.isEmpty) return [];
-    final ids = rows.map((row) => row['viewer_id'] as String).toSet().toList();
-    final profiles = await client
-        .from('profiles')
-        .select('id, nipto_id, display_name')
-        .inFilter('id', ids);
-    final byId = <String, Map<String, dynamic>>{
-      for (final raw in profiles as List)
-        (raw['id'] as String): Map<String, dynamic>.from(raw),
-    };
-    return rows
-        .where((row) => byId.containsKey(row['viewer_id']))
-        .map((row) => {...byId[row['viewer_id']]!, 'viewed_at': row['viewed_at']})
+    final rows = await Supabase.instance.client.rpc(
+      'list_status_viewers',
+      params: {'p_status_id': widget.status['id']},
+    );
+    return (rows as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
         .toList();
   }
 
