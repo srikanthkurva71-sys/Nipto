@@ -751,6 +751,24 @@ async function handleRoute(request: Request): Promise<Response> {
     return json({ ok: true });
   }
 
+  if (path.endsWith("/migration/prepare") && method === "POST") {
+    const userId = await authenticatedUserId(request);
+    const profile = firstRow(await rpc("nipto_native_profile_for_user", { p_user_id: userId }));
+    if (!profile || typeof profile.nipto_id !== "string") {
+      throw new ApiError("This account cannot be migrated right now.", 400);
+    }
+    const migrationTicket = randomToken(32);
+    await rpc("nipto_oidc_create_migration_ticket", {
+      p_user_id: userId,
+      p_ticket_hash: await sha256Hex(migrationTicket),
+    });
+    return json({
+      migration_ticket: migrationTicket,
+      nipto_id: profile.nipto_id,
+      display_name: profile.display_name,
+    });
+  }
+
   if (path.endsWith("/account/link") && method === "POST") {
     const userId = await authenticatedUserId(request);
     const input = await requestBody(request);
