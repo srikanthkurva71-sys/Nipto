@@ -236,7 +236,7 @@ begin
 end;
 $$;
 revoke all on function public.nipto_oidc_create_transaction(text,text,text,text,text,text,text,text) from public, anon, authenticated;
-grant execute on function public.nipto_oidc_create_transaction(text,text,text,text,text,text,text) to service_role;
+grant execute on function public.nipto_oidc_create_transaction(text,text,text,text,text,text,text,text) to service_role;
 
 create or replace function public.nipto_oidc_get_transaction(p_id uuid,p_csrf_hash text)
 returns table(client_id text,redirect_uri text,scope text,state text,nonce text,code_challenge text,migration_ticket_hash text)
@@ -369,7 +369,7 @@ declare
   v_recovery_nipto_id text;
   v_recovery_user_id uuid;
 begin
-  if new.raw_app_meta_data->>'provider' <> 'custom:nipto' then
+  if new.raw_app_meta_data->>'provider' is distinct from 'custom:nipto' then
     raise exception 'Use your Nipto account to sign in';
   end if;
   if v_nipto_id !~ '^[a-z0-9_]{3,24}$'
