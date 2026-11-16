@@ -10,17 +10,23 @@ class NiptoSession {
     required this.userId,
     required this.niptoId,
     required this.displayName,
+    required this.sessionId,
   });
 
   final String userId;
   final String niptoId;
   final String displayName;
+  final String sessionId;
 
-  factory NiptoSession.fromJson(Map<String, dynamic> json) {
+  factory NiptoSession.fromJson(
+    Map<String, dynamic> json, {
+    required String sessionId,
+  }) {
     return NiptoSession(
       userId: json['id'] as String,
       niptoId: json['nipto_id'] as String,
       displayName: json['display_name'] as String,
+      sessionId: sessionId,
     );
   }
 }
@@ -372,6 +378,22 @@ class NiptoSessionManager {
     return _asMapList(response['requests']);
   }
 
+  Future<List<Map<String, dynamic>>> listSessions() async {
+    final response = await _get('sessions');
+    return _asMapList(response['sessions']);
+  }
+
+  Future<void> revokeSession(String sessionId) async {
+    final response = await _post(
+      'sessions/revoke',
+      {'session_id': sessionId},
+      authenticated: true,
+    );
+    if (response['current_session'] == true) {
+      await _clearSession();
+    }
+  }
+
   Future<void> requestRecoveryContact(String niptoId) async {
     await _post(
       'recovery/link',
@@ -433,8 +455,16 @@ class NiptoSessionManager {
       );
     }
 
-    final nextSession =
-        NiptoSession.fromJson(Map<String, dynamic>.from(user));
+    final sessionId = response['session_id'] as String?;
+    if (sessionId == null) {
+      throw const NiptoAuthException(
+        'The identity service returned an invalid session.',
+      );
+    }
+    final nextSession = NiptoSession.fromJson(
+      Map<String, dynamic>.from(user),
+      sessionId: sessionId,
+    );
     await _storage.write(key: _refreshTokenKey, value: refreshToken);
     _accessToken = accessToken;
     _refreshToken = refreshToken;
