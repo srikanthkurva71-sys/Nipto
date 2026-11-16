@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/nipto_session_manager.dart';
+
 import '../theme/nipto_theme.dart';
 
 class RecoveryContactsScreen extends StatefulWidget {
@@ -132,7 +134,7 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final myId = _client.auth.currentUser?.id;
+    final myId = NiptoSessionManager.instance.userId;
     return Scaffold(
       appBar: AppBar(title: const Text('Recovery Nipto account')),
       body: RefreshIndicator(
