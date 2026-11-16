@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/nipto_theme.dart';
@@ -14,6 +17,8 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   late Future<_ProfileData> _profile;
+  final _picker = ImagePicker();
+  bool _uploadingPost = false;
 
   SupabaseClient get _client => Supabase.instance.client;
 
@@ -58,6 +63,108 @@ class _ProfileScreenState extends State<ProfileScreen> {
       posts: (posts as List).map((row) => Map<String, dynamic>.from(row)).toList(),
       avatarUrl: avatarUrl,
     );
+  }
+
+  Future<void> _createPost() async {
+    if (_uploadingPost) return;
+    final file = await _picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 88,
+      maxWidth: 1800,
+    );
+    if (file == null || !mounted) return;
+
+    final extension = file.name.split('.').last.toLowerCase();
+    const mimeTypes = {
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'webp': 'image/webp',
+    };
+    final contentType = mimeTypes[extension];
+    if (contentType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choose a JPG, PNG or WebP image.')),
+      );
+      return;
+    }
+
+    final size = await file.length();
+    if (size > 20 * 1024 * 1024) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Choose an image smaller than 20 MB.')),
+      );
+      return;
+    }
+
+    final captionController = TextEditingController();
+    final caption = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Add a caption'),
+        content: TextField(
+          controller: captionController,
+          maxLength: 2200,
+          maxLines: 4,
+          decoration: const InputDecoration(hintText: 'Write something about this photo…'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, captionController.text.trim()),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    captionController.dispose();
+    if (caption == null || !mounted) return;
+
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) return;
+    final path = userId + '/' + DateTime.now().microsecondsSinceEpoch.toString() + '.' + extension;
+
+    setState(() => _uploadingPost = true);
+    var uploaded = false;
+    try {
+      await _client.storage.from('posts').upload(
+        path,
+        File(file.path),
+        fileOptions: FileOptions(contentType: contentType, upsert: false),
+      );
+      uploaded = true;
+
+      await _client.from('posts').insert({
+        'author_id': userId,
+        'caption': caption,
+        'media_path': path,
+        'media_type': 'image',
+        'visibility': 'followers',
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Photo submitted. It will appear to followers after review.')),
+      );
+      setState(() => _profile = _loadProfile());
+    } catch (_) {
+      if (uploaded) {
+        try {
+          await _client.storage.from('posts').remove([path]);
+        } catch (_) {
+          // Any failed cleanup remains private and inaccessible to other users.
+        }
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Photo could not be shared. Please try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _uploadingPost = false);
+    }
   }
 
   Future<void> _editProfile(_ProfileData data) async {
@@ -227,6 +334,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         label: const Text('Edit profile'),
                         style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
                       ),
+                      const SizedBox(height: 10),
+                      FilledButton.tonalIcon(
+                        onPressed: _uploadingPost ? null : _createPost,
+                        icon: _uploadingPost
+                            ? const SizedBox(
+                                width: 17,
+                                height: 17,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.add_photo_alternate_outlined, size: 18),
+                        label: Text(_uploadingPost ? 'Uploading photo…' : 'Share a photo'),
+                        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+                      ),
                     ],
                   ),
                 ),
@@ -264,21 +384,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
                         final post = data.posts[index];
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: NiptoColors.violetSoft,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Center(
-                            child: Icon(
-                              post['media_type'] == 'video'
-                                  ? Icons.play_circle_outline_rounded
-                                  : Icons.image_outlined,
-                              size: 34,
-                              color: NiptoColors.violet,
-                            ),
-                          ),
-                        );
+                        return _ProfilePostTile(post: post);
                       },
                       childCount: data.posts.length,
                     ),
@@ -338,6 +444,86 @@ class _Count extends StatelessWidget {
             Text(label, style: const TextStyle(color: NiptoColors.muted, fontSize: 12)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+
+class _ProfilePostTile extends StatefulWidget {
+  const _ProfilePostTile({required this.post});
+
+  final Map<String, dynamic> post;
+
+  @override
+  State<_ProfilePostTile> createState() => _ProfilePostTileState();
+}
+
+class _ProfilePostTileState extends State<_ProfilePostTile> {
+  late Future<String> _signedUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _signedUrl = _load();
+  }
+
+  Future<String> _load() {
+    return Supabase.instance.client.storage
+        .from('posts')
+        .createSignedUrl(widget.post['media_path'] as String, 1800);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = widget.post['moderation_state'] == 'pending';
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          FutureBuilder<String>(
+            future: _signedUrl,
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return Container(
+                  color: NiptoColors.violetSoft,
+                  child: const Center(
+                    child: Icon(Icons.image_outlined, color: NiptoColors.violet, size: 30),
+                  ),
+                );
+              }
+              return Image.network(
+                snapshot.data!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  color: NiptoColors.violetSoft,
+                  child: const Center(
+                    child: Icon(Icons.broken_image_outlined, color: NiptoColors.violet),
+                  ),
+                ),
+              );
+            },
+          ),
+          if (pending)
+            Positioned(
+              left: 4,
+              right: 4,
+              bottom: 4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'In review',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
