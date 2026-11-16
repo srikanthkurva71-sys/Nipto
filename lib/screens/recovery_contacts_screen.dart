@@ -18,6 +18,7 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
   final _niptoIdController = TextEditingController();
   bool _busy = false;
   late Future<List<Map<String, dynamic>>> _contacts;
+  late Future<List<Map<String, dynamic>>> _passwordRequests;
 
   SupabaseClient get _client => Supabase.instance.client;
 
@@ -26,6 +27,7 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
     super.initState();
     _niptoIdController.text = widget.initialNiptoId ?? '';
     _contacts = _loadContacts();
+    _passwordRequests = NiptoSessionManager.instance.listPasswordRecoveryRequests();
     if (widget.initialNiptoId != null && widget.initialNiptoId!.trim().isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _submitRequest());
     }
@@ -45,8 +47,60 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
   }
 
   Future<void> _refresh() async {
-    setState(() => _contacts = _loadContacts());
-    await _contacts;
+    setState(() {
+      _contacts = _loadContacts();
+      _passwordRequests = NiptoSessionManager.instance.listPasswordRecoveryRequests();
+    });
+    await Future.wait([_contacts, _passwordRequests]);
+  }
+
+  Future<void> _respondToPasswordRecovery(
+    Map<String, dynamic> request,
+    bool approve,
+  ) async {
+    final handle = request['owner_nipto_id'] as String? ?? 'this account';
+    if (approve) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Approve password recovery?'),
+          content: Text(
+            '@$handle will be allowed to set a new password. You will not see or choose that password.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Approve'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      await NiptoSessionManager.instance.respondPasswordRecovery(
+        challengeId: request['challenge_id'] as String,
+        approve: approve,
+      );
+      if (!mounted) return;
+      setState(() => _passwordRequests = NiptoSessionManager.instance.listPasswordRecoveryRequests());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(approve ? 'Password recovery approved.' : 'Password recovery declined.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('That password recovery request could not be updated.')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _submitRequest() async {
@@ -184,6 +238,89 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
               ),
             ),
             const SizedBox(height: 18),
+            Text('PASSWORD RECOVERY REQUESTS',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: NiptoColors.muted,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.2,
+                )),
+            const SizedBox(height: 8),
+            FutureBuilder<List<Map<String, dynamic>>>(
+              future: _passwordRequests,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Card(
+                    child: Padding(
+                      padding: EdgeInsets.all(18),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                  );
+                }
+                if (snapshot.hasError) {
+                  return Card(
+                    child: ListTile(
+                      title: const Text('Password recovery requests could not load'),
+                      trailing: TextButton(
+                        onPressed: () => setState(() => _passwordRequests =
+                            NiptoSessionManager.instance.listPasswordRecoveryRequests()),
+                        child: const Text('Retry'),
+                      ),
+                    ),
+                  );
+                }
+                final requests = snapshot.data ?? [];
+                if (requests.isEmpty) {
+                  return const Card(
+                    child: ListTile(
+                      leading: Icon(Icons.lock_outline_rounded),
+                      title: Text('No pending password recovery requests'),
+                      subtitle: Text('Requests from accounts that selected you will appear here.'),
+                    ),
+                  );
+                }
+                return Column(
+                  children: requests.map((request) {
+                    final name = request['owner_display_name'] as String? ?? 'Nipto member';
+                    final handle = request['owner_nipto_id'] as String? ?? '';
+                    return Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('$name  @$handle', style: const TextStyle(fontWeight: FontWeight.w700)),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'This person asked you to approve a password reset for their Nipto account. Approve only if you recognize and trust the request.',
+                              style: TextStyle(color: NiptoColors.muted, height: 1.4),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: _busy ? null : () => _respondToPasswordRecovery(request, false),
+                                    child: const Text('Decline'),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: FilledButton(
+                                    onPressed: _busy ? null : () => _respondToPasswordRecovery(request, true),
+                                    child: const Text('Approve reset'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+            const SizedBox(height: 20),
             Text('RECOVERY CONTACTS & REQUESTS',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: NiptoColors.muted,
@@ -272,7 +409,7 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
             ),
             const SizedBox(height: 16),
             const Text(
-              'Important: a recovery contact is an additional trusted-account link, not a password-reset method yet. Password resets still use your verified email. Nipto will not let another account change your password just because it is listed here.',
+              'Password recovery requires an explicit approval from your accepted recovery Nipto account. Approval only authorizes a one-time reset; the other person never sees or chooses your new password. If you do not have an accepted recovery account, add one here before you need it.',
               style: TextStyle(color: NiptoColors.muted, fontSize: 12, height: 1.45),
             ),
           ],
