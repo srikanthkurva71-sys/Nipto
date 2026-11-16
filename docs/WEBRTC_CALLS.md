@@ -1,6 +1,6 @@
 # Nipto Live Calls — WebRTC Architecture
 
-Status: architecture baseline; implementation and deployment are not yet complete.
+Status: partial implementation on main; not production-ready. Backend call control, private signaling authorization and foreground Flutter calling flows are implemented. TURN, push wake-up, network handoff and two-device verification remain release gates.
 
 ## Product scope
 
@@ -19,9 +19,9 @@ Nipto will support real-time voice and video calls from direct conversations. Th
 
 1. Caller starts a call from an accepted direct conversation.
 2. Backend validates caller membership, callee membership, active account state, block state and call rate limits.
-3. Backend creates a short-lived ringing call session and emits an incoming-call notification without SDP/ICE or secrets.
-4. Callee accepts or declines. Only the invited callee can accept; either participant can end.
-5. Both clients join a private call signaling channel and exchange offer/answer and trickled ICE candidates.
+3. Backend creates a short-lived ringing call session. The authenticated app shell polls the incoming-call RPC while foregrounded; push wake-up is not implemented yet.
+4. Callee accepts or declines. Only the invited callee can accept; either participant can end. Declines are sent over the private channel when available.
+5. Both clients join a private call signaling channel; the callee-ready handshake prevents the caller from sending an SDP offer before the callee has joined. They then exchange offer/answer and trickled ICE candidates.
 6. Clients establish the peer connection, request camera/microphone permission only after a user action, and display explicit mute/camera/hang-up controls.
 7. End, decline, timeout, disconnect and app-background transitions converge on an idempotent terminal state. Expired ringing sessions are cleaned up server-side.
 
@@ -46,6 +46,17 @@ Nipto will support real-time voice and video calls from direct conversations. Th
 - Add call UI for outgoing ringing, incoming call, connecting, active audio/video, reconnecting, declined, missed and ended states.
 - Provide accessible controls and a voice-only fallback when camera permission is unavailable.
 - Add tests for call authorization, state transitions, duplicate events, timeout, reconnect, blocks, rejected invites and resource cleanup.
+
+## Current implementation checkpoint
+
+- Flutter dependency: `flutter_webrtc: ^1.6.3`.
+- Android manifest generation in CI includes microphone, camera and network permissions; camera hardware is optional so voice-only devices remain eligible.
+- Direct conversation UI exposes voice/video call entry points; group conversations hide those controls.
+- Call service handles local media, peer connection, SDP, trickled ICE, serialized signaling, mute, camera enable/disable, camera switching, speaker/earpiece routing, ringing/connection/disconnect timeouts and cleanup.
+- Incoming calls are surfaced through authenticated foreground polling in the app shell, with accept/decline UI. This does not wake a terminated or backgrounded app.
+- The current development ICE configuration uses a public STUN server only. It is not a production NAT-traversal solution; TURN credentials must be provisioned server-side before release.
+- CI has passed static analysis and tests on the call UI integration commit, and the Android APK build completed successfully on that commit. Later small changes remain subject to their own CI runs.
+- No physical-device call test has been completed. Do not describe calling as production-ready.
 
 ## Release gates
 
