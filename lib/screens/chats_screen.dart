@@ -240,11 +240,27 @@ class _ChatsScreenState extends State<ChatsScreen> {
         params: {'p_query': query, 'p_limit': 20},
       );
       if (!mounted || version != _searchVersion) return;
-      setState(() {
-        _searchResults = (result as List)
-            .map((row) => Map<String, dynamic>.from(row))
-            .toList();
-      });
+      final profiles = (result as List)
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
+      final myId = _client.auth.currentUser?.id;
+      if (profiles.isNotEmpty && myId != null) {
+        final ids = profiles.map((profile) => profile['id'] as String).toList();
+        final existing = await _client
+            .from('follows')
+            .select('following_id, status')
+            .eq('follower_id', myId)
+            .inFilter('following_id', ids);
+        final states = <String, String>{};
+        for (final row in existing as List) {
+          states[row['following_id'] as String] = row['status'] as String;
+        }
+        for (final profile in profiles) {
+          profile['my_follow_state'] = states[profile['id']];
+        }
+      }
+      if (!mounted || version != _searchVersion) return;
+      setState(() => _searchResults = profiles);
     } catch (_) {
       if (!mounted || version != _searchVersion) return;
       setState(() => _searchError = 'Search is unavailable. Please try again.');
@@ -256,24 +272,37 @@ class _ChatsScreenState extends State<ChatsScreen> {
   Future<void> _follow(Map<String, dynamic> profile) async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) return;
+    final targetId = profile['id'] as String;
+    final handle = profile['nipto_id'] as String? ?? 'this account';
+    final state = profile['my_follow_state'] as String?;
     try {
-      await _client.from('follows').insert({
-        'follower_id': userId,
-        'following_id': profile['id'],
-      });
+      if (state == 'accepted' || state == 'pending') {
+        await _client.from('follows').delete().match({
+          'follower_id': userId,
+          'following_id': targetId,
+        });
+      } else {
+        await _client.from('follows').insert({
+          'follower_id': userId,
+          'following_id': targetId,
+        });
+      }
       if (!mounted) return;
+      final message = state == 'accepted'
+          ? 'Unfollowed @$handle.'
+          : state == 'pending'
+              ? 'Follow request cancelled.'
+              : profile['is_private'] == true
+                  ? 'Follow request sent.'
+                  : 'You are now following @$handle.';
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            profile['is_private'] == true ? 'Follow request sent.' : 'You are now following @' + (profile['nipto_id'] as String),
-          ),
-        ),
+        SnackBar(content: Text(message)),
       );
       await _search(_searchController.text);
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not follow this account.')),
+        const SnackBar(content: Text('Could not update this follow.')),
       );
     }
   }
@@ -553,7 +582,15 @@ class _ChatsScreenState extends State<ChatsScreen> {
               ),
               OutlinedButton(
                 onPressed: () => _follow(profile),
-                child: Text(profile['is_private'] == true ? 'Request' : 'Follow'),
+                child: Text(
+                  profile['my_follow_state'] == 'accepted'
+                      ? 'Following'
+                      : profile['my_follow_state'] == 'pending'
+                          ? 'Requested'
+                          : profile['is_private'] == true
+                              ? 'Request'
+                              : 'Follow',
+                ),
               ),
               PopupMenuButton<String>(
                 tooltip: 'Safety options',
