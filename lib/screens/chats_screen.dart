@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/nipto_session_manager.dart';
+
 import '../theme/nipto_theme.dart';
 import 'status_screen.dart';
 import 'conversation_screen.dart';
@@ -42,7 +44,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
   }
 
   Future<List<_ChatPreview>> _loadInbox() async {
-    final userId = _client.auth.currentUser?.id;
+    final userId = NiptoSessionManager.instance.userId;
     if (userId == null) return [];
 
     final memberships = await _client
@@ -146,7 +148,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
   Future<void> _handleSafetyAction(Map<String, dynamic> profile, String action) async {
     final targetId = profile['id'] as String;
     final handle = profile['nipto_id'] as String? ?? 'this account';
-    final myId = _client.auth.currentUser?.id;
+    final myId = NiptoSessionManager.instance.userId;
     if (myId == null) return;
 
     if (action == 'block') {
@@ -259,7 +261,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
       final profiles = (result as List)
           .map((row) => Map<String, dynamic>.from(row))
           .toList();
-      final myId = _client.auth.currentUser?.id;
+      final myId = NiptoSessionManager.instance.userId;
       if (profiles.isNotEmpty && myId != null) {
         final ids = profiles.map((profile) => profile['id'] as String).toList();
         final existing = await _client
@@ -286,7 +288,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
   }
 
   Future<void> _follow(Map<String, dynamic> profile) async {
-    final userId = _client.auth.currentUser?.id;
+    final userId = NiptoSessionManager.instance.userId;
     if (userId == null) return;
     final targetId = profile['id'] as String;
     final handle = profile['nipto_id'] as String? ?? 'this account';
