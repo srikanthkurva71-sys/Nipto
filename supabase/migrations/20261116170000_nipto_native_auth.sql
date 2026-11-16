@@ -135,7 +135,7 @@ begin
       and position('auth.uid()' in lower(pg_catalog.pg_get_functiondef(p.oid))) > 0
   loop
     v_definition := pg_catalog.pg_get_functiondef(v_function.oid);
-    v_definition := replace(v_definition, 'auth.uid()', 'private.nipto_uid()');
+    v_definition := regexp_replace(v_definition, 'auth[.]uid[(][)]', 'private.nipto_uid()', 'gi');
     execute v_definition;
   end loop;
 end;
