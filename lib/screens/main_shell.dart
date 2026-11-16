@@ -17,16 +17,53 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   late final PageController _pageController;
   int _index = 0;
+  int _unreadCount = 0;
+  RealtimeChannel? _notificationChannel;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: _index);
+    _loadUnreadCount();
+    _notificationChannel = Supabase.instance.client
+        .channel('nipto-notifications-badge')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'recipient_id',
+            value: Supabase.instance.client.auth.currentUser!.id,
+          ),
+          callback: (_) => _loadUnreadCount(),
+        )
+        .subscribe();
+  }
+
+  Future<void> _loadUnreadCount() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      final rows = await Supabase.instance.client
+          .from('notifications')
+          .select('id')
+          .eq('recipient_id', userId)
+          .isFilter('read_at', null)
+          .limit(100);
+      if (mounted) setState(() => _unreadCount = (rows as List).length);
+    } catch (_) {
+      // Badge failure must not block navigation.
+    }
   }
 
   @override
   void dispose() {
     _pageController.dispose();
+    final channel = _notificationChannel;
+    if (channel != null) {
+      Supabase.instance.client.removeChannel(channel);
+    }
     super.dispose();
   }
 
@@ -57,9 +94,14 @@ class _MainShellState extends State<MainShell> {
         selectedIndex: _index,
         onDestinationSelected: _selectPage,
         destinations: [
-          const NavigationDestination(
-            icon: Icon(Icons.chat_bubble_outline_rounded),
-            selectedIcon: Icon(Icons.chat_bubble_rounded),
+          NavigationDestination(
+            icon: _unreadCount > 0
+                ? Badge(
+                    label: Text(_unreadCount > 99 ? '99+' : _unreadCount.toString()),
+                    child: const Icon(Icons.chat_bubble_outline_rounded),
+                  )
+                : const Icon(Icons.chat_bubble_outline_rounded),
+            selectedIcon: const Icon(Icons.chat_bubble_rounded),
             label: 'Chats',
           ),
           const NavigationDestination(
