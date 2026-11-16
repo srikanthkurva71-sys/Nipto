@@ -40,10 +40,10 @@ Supabase's current Custom OIDC documentation explicitly supports any OIDC-compli
 Implement these endpoints under a stable HTTPS issuer URL:
 - `/.well-known/openid-configuration` — issuer metadata and endpoint URLs.
 - `/jwks` — public signing keys with `kid`; never expose private key material.
-- `/authorize` — Nipto ID/password login, authorization code issuance, PKCE S256, state and nonce.
-- `/token` — one-time authorization-code exchange, PKCE verification, signed short-lived ID/access token issuance.
 - `/userinfo` — minimal Nipto profile claims after validating the access token.
-- Nipto-specific registration, refresh, logout, password-change, and recovery endpoints protected by strict request validation and rate limits.
+- Nipto-specific `/register`, `/login`, `/refresh`, `/logout`, `/logout-all`, `/migrate`, password-change, device-session, and recovery endpoints protected by strict request validation and rate limits.
+
+The mobile app uses native Nipto ID/password screens and receives Nipto-issued JWTs directly. This is a JWT issuer integration, not an OAuth browser-login flow; the Custom OIDC integration is used by Supabase to discover the issuer and validate its asymmetric signatures.
 
 OIDC tokens must include:
 - `iss`: exact configured Nipto issuer URL.
