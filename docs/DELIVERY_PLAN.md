@@ -30,7 +30,8 @@
 - [x] 24-hour visibility expiry filtering and viewer inserts.
 - [x] Follower-only audience default.
 - [x] Add owner-only status viewer list with a minimal, server-authorized identity projection.
-- [ ] Add expiry cleanup job and close-friends audience UI.
+- [x] Add Close Friends management from accepted connections and per-status audience selection; database visibility checks enforce the selected audience.
+- [ ] Add scheduled expiry cleanup job for expired status rows and media.
 
 ## Phase 4 — Shorts and posts
 - [x] Image post picker, caption, visibility choice and private upload.
