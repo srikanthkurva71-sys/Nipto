@@ -3,6 +3,11 @@
 -- production until custom JWT signing-key verification and the account migration
 -- plan have passed in a non-production Supabase environment.
 
+-- Decouple the profile identity UUID from Supabase Auth. Existing profile UUIDs
+-- remain unchanged; native Nipto registration can now create profiles directly.
+-- Existing auth.users rows are intentionally not deleted by this migration.
+alter table public.profiles drop constraint if exists profiles_id_fkey;
+
 create table private.nipto_accounts (
   user_id uuid primary key references public.profiles(id) on delete cascade,
   password_hash text not null
