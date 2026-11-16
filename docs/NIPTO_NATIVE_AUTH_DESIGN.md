@@ -75,6 +75,12 @@ Nipto owns refresh sessions:
 - Keep access tokens short-lived (target 10 minutes); set explicit absolute and idle session expiry.
 - Store refresh tokens in Android secure storage; never store passwords.
 
+### Supabase issuer isolation
+
+The exact issuer is `https://advmjribduqzyuwktkod.supabase.co/functions/v1/nipto-identity`. The Supabase project must trust this HTTPS issuer through Third-Party Auth → Custom OIDC. The JWT must contain `sub` as the stable profile UUID, `role=authenticated`, and a `kid` header.
+
+Because Supabase Auth remains enabled for platform compatibility and legacy-session migration, the database migration adds an issuer-checked `private.nipto_uid()` helper. Existing public SECURITY DEFINER functions that use `auth.uid()` are rewritten to use this helper, and restrictive issuer policies are added to RLS-enabled public tables, Storage objects and Realtime messages. This prevents a legacy Supabase Auth JWT from being treated as a Nipto session. Keep the issuer value in this document, the Edge Function secret, and the database helper identical.
+
 ## 4. Password security
 
 - Use Argon2id with a reviewed, pinned implementation and parameters calibrated on supported server runtime; store the encoded hash including salt and parameters.
