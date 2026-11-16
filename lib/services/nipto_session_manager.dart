@@ -413,6 +413,11 @@ class NiptoSessionManager {
     return _asMapList(response['requests']);
   }
 
+  Future<List<Map<String, dynamic>>> getIceServers() async {
+    final response = await _get('turn-credentials');
+    return _asMapList(response['ice_servers']);
+  }
+
   Future<List<Map<String, dynamic>>> listSessions() async {
     final response = await _get('sessions');
     return _asMapList(response['sessions']);
