@@ -69,6 +69,14 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Thank you. Your feedback has been received.')),
       );
+    } on PostgrestException catch (error) {
+      if (!mounted) return;
+      final message = error.message.contains('Feedback limit reached')
+          ? 'You have reached the feedback limit for today. Please try again later.'
+          : 'Feedback could not be sent. Check your connection and try again.';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message)),
+      );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
