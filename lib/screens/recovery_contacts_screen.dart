@@ -114,7 +114,7 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
     }
     setState(() => _busy = true);
     try {
-      await _client.rpc('request_recovery_contact', params: {'p_nipto_id': handle});
+      await NiptoSessionManager.instance.requestRecoveryContact(handle);
       if (!mounted) return;
       _niptoIdController.clear();
       setState(() => _contacts = _loadContacts());
@@ -142,10 +142,10 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
   Future<void> _respond(String requestId, bool accept) async {
     setState(() => _busy = true);
     try {
-      await _client.rpc('respond_recovery_contact', params: {
-        'p_request_id': requestId,
-        'p_accept': accept,
-      });
+      await NiptoSessionManager.instance.respondRecoveryContact(
+        requestId: requestId,
+        accept: accept,
+      );
       if (mounted) setState(() => _contacts = _loadContacts());
     } catch (_) {
       if (mounted) {
