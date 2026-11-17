@@ -65,6 +65,22 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         self.assertIn("not private.is_blocked_between(owner_account.supabase_user_id,rc.recovery_user_id)", approval)
         self.assertIn("not private.is_blocked_between(rc.owner_id,rc.recovery_user_id)", contact)
 
+    def test_migration_tickets_are_serialized_and_single_active(self):
+        ticket = self.auth_sql.split(
+            "create or replace function public.nipto_oidc_create_migration_ticket", 1
+        )[1].split("create or replace function public.nipto_oidc_consume_migration_ticket", 1)[0]
+        self.assertIn("pg_advisory_xact_lock", ticket)
+        self.assertIn("hashtextextended(p_user_id::text, 1)", ticket)
+        self.assertIn("delete from private.nipto_migration_tickets where user_id=p_user_id", ticket)
+
+    def test_password_reset_revokes_sessions_atomically(self):
+        consume = self.auth_sql.split(
+            "create or replace function public.nipto_native_consume_reset_grant", 1
+        )[1].split("create or replace function public.nipto_native_account_for_user", 1)[0]
+        self.assertIn("update private.nipto_password_reset_grants set consumed_at", consume)
+        self.assertIn("update private.nipto_accounts set password_hash", consume)
+        self.assertIn("delete from auth.sessions where user_id=v_owner_user", consume)
+
     def test_sensitive_identity_rpcs_are_service_role_only(self):
         for signature in (
             "nipto_oidc_register(text,text,text,text)",
