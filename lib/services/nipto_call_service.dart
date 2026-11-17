@@ -77,11 +77,13 @@ class NiptoCallService {
       // Re-broadcast readiness briefly: private Realtime broadcasts are not
       // durable, so the caller may not have subscribed when the first signal lands.
       _readyRetryTimer?.cancel();
+      var readyAttempts = 0;
       _readyRetryTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (_closed || _remoteDescriptionSet) {
+        if (_closed || _remoteDescriptionSet || readyAttempts >= 15) {
           timer.cancel();
           return;
         }
+        readyAttempts += 1;
         unawaited(_sendSignal({'type': 'ready'}).catchError((Object _) {}));
       });
       onPhaseChanged(NiptoCallPhase.connecting);
