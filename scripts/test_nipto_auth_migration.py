@@ -11,6 +11,7 @@ RECOVERY_SETUP_MIGRATION = ROOT / "supabase/migrations/20261117150000_nipto_reco
 IDENTITY_FUNCTION = ROOT / "supabase/functions/nipto-identity/index.ts"
 RECOVERY_SCREEN = ROOT / "lib/screens/recovery_contacts_screen.dart"
 AUTH_SCREEN = ROOT / "lib/screens/auth_screen.dart"
+RECOVERY_CYCLE_MIGRATION = ROOT / "supabase/migrations/20261117160000_nipto_recovery_cycle_prevention.sql"
 
 
 class NiptoAuthMigrationTests(unittest.TestCase):
@@ -24,6 +25,7 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         cls.identity_source = IDENTITY_FUNCTION.read_text(encoding="utf-8")
         cls.recovery_screen = RECOVERY_SCREEN.read_text(encoding="utf-8")
         cls.auth_screen = AUTH_SCREEN.read_text(encoding="utf-8")
+        cls.recovery_cycle_sql = RECOVERY_CYCLE_MIGRATION.read_text(encoding="utf-8")
 
     def test_existing_auth_trigger_calls_replaced_public_handler(self):
         self.assertIn("create trigger on_auth_user_created_nipto", self.core_sql)
@@ -148,6 +150,16 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         self.assertIn("Sign in with Nipto", self.auth_screen)
         self.assertIn("Create Nipto account", self.auth_screen)
         self.assertIn("Recovery Nipto account is optional. You can add or change one later in Settings.", self.auth_screen)
+
+
+    def test_recovery_links_reject_cycles_and_serialize_graph_changes(self):
+        self.assertIn("pg_advisory_xact_lock", self.recovery_cycle_sql)
+        self.assertIn("nipto_recovery_relationship_graph", self.recovery_cycle_sql)
+        self.assertIn("with recursive recovery_chain(user_id,path)", self.recovery_cycle_sql)
+        self.assertIn("rc.status in ('pending','accepted')", self.recovery_cycle_sql)
+        self.assertIn("where user_id=p_owner_user_id", self.recovery_cycle_sql)
+        self.assertIn("circular recovery relationship", self.recovery_cycle_sql)
+        self.assertIn("grant execute on function public.nipto_native_request_recovery_contact(uuid,text)", self.recovery_cycle_sql)
 
     def test_nipto_id_constraints_use_canonical_handle_format(self):
         self.assertIn("nipto_id ~ '^[a-z0-9]+(_[a-z0-9]+)*$'", self.registration_sql)
