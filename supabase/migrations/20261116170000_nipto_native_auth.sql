@@ -478,6 +478,13 @@ begin
   from private.nipto_accounts a join public.profiles p on p.id=a.supabase_user_id
   where a.nipto_id=lower(trim(coalesce(p_nipto_id,''))) and a.status='active' and p.account_state='active';
   if v_identity is null or v_owner is null then return; end if;
+
+  -- Serialize recovery starts for one Nipto identity so parallel requests cannot
+  -- race past the pending-challenge check and hit the partial unique index.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(v_identity::text, 0)
+  );
+
   select rc.recovery_user_id into v_recovery
   from public.account_recovery_contacts rc
   join public.profiles rp on rp.id=rc.recovery_user_id
