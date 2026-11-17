@@ -60,27 +60,35 @@ flutter test
 
 The repository includes `config/dev.json` with the Nipto project URL and its client-safe publishable key. This is a public client key, not a secret; Supabase Row Level Security remains mandatory. Do not put service-role or secret keys in this file.
 
-Run locally using the checked-in config:
+Run a debug build with the default Nipto development configuration:
+
+~~~bash
+flutter run
+~~~
+
+You can still override the defaults explicitly when needed:
 
 ~~~bash
 flutter run --dart-define-from-file=config/dev.json
 ~~~
 
-Build a release APK using the same config:
+Release builds deliberately have no embedded development defaults. Supply the production or staging project values at build time:
 
 ~~~bash
-flutter build apk --release --dart-define-from-file=config/dev.json
+flutter build apk --release \\
+  --dart-define=SUPABASE_URL=https://YOUR_PROJECT.supabase.co \\
+  --dart-define=SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
 ~~~
 
 The manifest configuration script adds the `nipto://auth-callback` intent filter required for the Supabase OAuth return to the Android app. The Supabase Auth URL configuration must also allow `nipto://auth-callback` as a redirect URL.
 
-In VS Code, select **Nipto (Android)** in Run and Debug and press F5. The launch configuration loads `config/dev.json` automatically. For a local checkout, fetch the latest repository changes once with `git pull origin main`; after that, normal VS Code runs do not require opening GitHub in a browser.
+In VS Code, select **Nipto (Android)** in Run and Debug and press F5. The launch configuration may load `config/dev.json` explicitly; a normal debug `flutter run` also uses the client-safe development defaults. For a local checkout, fetch the latest repository changes once with `git pull origin main`; after that, normal VS Code runs do not require opening GitHub in a browser.
 
 The publishable key is intended for client applications; RLS is the security boundary. Secret/service-role keys are backend-only.
 
 ## Run from VS Code
 
-Open this repository folder in VS Code, install the Flutter and Dart extensions, connect an Android phone with USB debugging enabled (or start an Android emulator), and select that Android device in the VS Code device picker. Open Run and Debug and choose **Nipto (Android)**, then press F5. The checked-in `.vscode/launch.json` supplies the Supabase project URL and its client-safe publishable key through Dart defines.
+Open this repository folder in VS Code, install the Flutter and Dart extensions, connect an Android phone with USB debugging enabled (or start an Android emulator), and select that Android device in the VS Code device picker. Open Run and Debug and choose **Nipto (Android)**, then press F5. The checked-in `.vscode/launch.json` supplies the Supabase project URL and its client-safe publishable key through Dart defines. Normal debug runs also have development defaults; release builds require explicit environment-specific Dart defines.
 
 Nipto v1 is an Android app, not a web product. A browser preview at a `localhost` address is not the supported release target; use an Android emulator or physical Android device for feature and plugin testing. Never replace the publishable key with a Supabase secret or service-role key.
 
