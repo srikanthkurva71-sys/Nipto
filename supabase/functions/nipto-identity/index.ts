@@ -449,7 +449,7 @@ function renderAuthorizePage(input: {
             available = false;
             lastChecked = "";
             suggestions.replaceChildren();
-            if (!/^[a-z0-9_]{3,24}$/.test(value)) {
+            if (value.length < 3 || value.length > 24 || !/^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(value)) {
               feedback.textContent = "Use 3–24 letters, numbers or underscores.";
               feedback.className = "feedback";
               submit.disabled = true;
@@ -578,7 +578,8 @@ async function authorizePost(request: Request): Promise<Response> {
       throw new ApiError("Passwords do not match. Please confirm your password.", 400);
     }
     if (password.length < 12 || password.length > 128
-      || (action !== "link" && !/^[a-z0-9_]{3,24}$/.test(niptoId))) {
+      || (action !== "link" && (niptoId.length < 3 || niptoId.length > 24
+        || !/^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(niptoId)))) {
       throw new ApiError("Check your Nipto ID and password.", 400);
     }
     await enforceRateLimit(request, "oidc:" + (niptoId || transactionId));
