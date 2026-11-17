@@ -15,8 +15,21 @@ export function isValidNiptoId(value: string): boolean {
     && !RESERVED_IDS.has(value);
 }
 
+export function isValidRecoveryNiptoId(
+  value: string,
+  ownerNiptoId?: string,
+): boolean {
+  if (value === "") return true;
+  return isValidNiptoId(value)
+    && (ownerNiptoId === undefined || value !== ownerNiptoId);
+}
+
 export function isValidPassword(value: string): boolean {
   return value.length >= 12 && value.length <= 128;
+}
+
+export function passwordsMatch(password: string, confirmation: string): boolean {
+  return password === confirmation;
 }
 
 export function isAllowedOidcScope(value: string): boolean {
