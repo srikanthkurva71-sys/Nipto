@@ -110,7 +110,7 @@ create table private.nipto_security_events (
   event_type text not null check (event_type in (
     'account_created','account_linked','password_changed','password_reset',
     'recovery_requested','recovery_approved','recovery_rejected',
-    'email_identity_removed','session_revoked'
+    'email_identity_removed','legacy_auth_credentials_cleared','session_revoked'
   )),
   created_at timestamptz not null default pg_catalog.now(),
   metadata jsonb not null default '{}'::jsonb
