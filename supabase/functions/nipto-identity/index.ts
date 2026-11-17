@@ -589,7 +589,7 @@ async function authorizePost(request: Request): Promise<Response> {
     throw new ApiError("A form submission is required", 415);
   }
   const formBytes = await readLimitedBody(request);
-  const form = await new Response(formBytes, {
+  const form = await new Response(new TextDecoder().decode(formBytes), {
     headers: { "Content-Type": contentType },
   }).formData();
   const transactionId = String(form.get("transaction_id") ?? "");
