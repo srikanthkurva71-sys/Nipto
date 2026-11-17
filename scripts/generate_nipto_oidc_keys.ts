@@ -9,12 +9,14 @@ const pair = await crypto.subtle.generateKey(
 );
 
 const kid = `nipto-es256-${crypto.randomUUID().slice(0, 12)}`;
-const privateJwk = await crypto.subtle.exportKey("jwk", pair.privateKey);
+const exportedPrivateJwk = await crypto.subtle.exportKey("jwk", pair.privateKey);
 const publicJwk = await crypto.subtle.exportKey("jwk", pair.publicKey);
-
-privateJwk.kid = kid;
-privateJwk.alg = "ES256";
-privateJwk.use = "sig";
+const privateJwk = {
+  ...exportedPrivateJwk,
+  kid,
+  alg: "ES256",
+  use: "sig",
+};
 
 const publicKey = {
   kty: publicJwk.kty,
