@@ -577,6 +577,10 @@ async function authorizePost(request: Request): Promise<Response> {
     if ((action === "register" || action === "link") && password !== passwordConfirmation) {
       throw new ApiError("Passwords do not match. Please confirm your password.", 400);
     }
+    if (recoveryNiptoId && (recoveryNiptoId.length < 3 || recoveryNiptoId.length > 24
+      || !/^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(recoveryNiptoId))) {
+      throw new ApiError("Enter a valid recovery Nipto ID or leave this optional field empty.", 400);
+    }
     if (password.length < 12 || password.length > 128
       || (action !== "link" && (niptoId.length < 3 || niptoId.length > 24
         || !/^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(niptoId)))) {
