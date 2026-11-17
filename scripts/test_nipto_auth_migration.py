@@ -168,3 +168,18 @@ class NiptoAuthMigrationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_comment_editing_is_author_scoped_and_body_only(self):
+        migration = (ROOT / "supabase/migrations/20261117170000_nipto_comment_editing.sql").read_text()
+        self.assertIn("post_comments_update_own_body", migration)
+        self.assertIn("short_comments_update_own_body", migration)
+        self.assertIn("author_id = (select auth.uid())", migration)
+        self.assertIn("grant update (body) on public.post_comments to authenticated", migration)
+        self.assertIn("grant update (body) on public.short_comments to authenticated", migration)
+        self.assertIn("short_comments_updated_at", migration)
+        home = (ROOT / "lib/screens/home_feed_screen.dart").read_text()
+        shorts = (ROOT / "lib/screens/shorts_screen.dart").read_text()
+        self.assertIn("_editComment", home)
+        self.assertIn("_deleteComment", home)
+        self.assertIn("_editComment", shorts)
+        self.assertIn("_deleteComment", shorts)
