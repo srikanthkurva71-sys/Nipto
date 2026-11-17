@@ -166,8 +166,6 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         self.assertIn("grant execute on function public.nipto_oidc_check_id(text) to service_role;", self.registration_sql)
 
 
-if __name__ == "__main__":
-    unittest.main()
 
     def test_comment_editing_is_author_scoped_and_body_only(self):
         migration = (ROOT / "supabase/migrations/20261117170000_nipto_comment_editing.sql").read_text()
@@ -183,3 +181,7 @@ if __name__ == "__main__":
         self.assertIn("_deleteComment", home)
         self.assertIn("_editComment", shorts)
         self.assertIn("_deleteComment", shorts)
+
+
+if __name__ == "__main__":
+    unittest.main()
