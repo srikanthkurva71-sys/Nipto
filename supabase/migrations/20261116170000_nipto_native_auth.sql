@@ -537,6 +537,7 @@ as $$
   join public.account_recovery_contacts rc on rc.owner_id=a.supabase_user_id
     and rc.recovery_user_id=c.recovery_user_id and rc.status='accepted'
   join public.profiles rp on rp.id=c.recovery_user_id and rp.account_state='active'
+  join public.profiles op on op.id=a.supabase_user_id and op.account_state='active'
   where c.recovery_user_id=p_recovery_user_id and c.status='pending'
     and c.expires_at>pg_catalog.now()
     and not private.is_blocked_between(a.supabase_user_id,c.recovery_user_id)
@@ -556,9 +557,20 @@ begin
       rejected_at=case when p_approve then null else pg_catalog.now() end
   where c.id=p_challenge_id and c.recovery_user_id=p_recovery_user_id
     and c.status='pending' and c.expires_at>pg_catalog.now()
-    and exists(select 1 from public.account_recovery_contacts rc
-      where rc.owner_id=(select a.supabase_user_id from private.nipto_accounts a where a.identity_id=c.owner_identity_id)
-        and rc.recovery_user_id=c.recovery_user_id and rc.status='accepted')
+    and exists(
+      select 1
+      from public.account_recovery_contacts rc
+      join private.nipto_accounts owner_account on owner_account.identity_id=c.owner_identity_id
+      join public.profiles owner_profile on owner_profile.id=owner_account.supabase_user_id
+        and owner_profile.account_state='active'
+      join public.profiles recovery_profile on recovery_profile.id=rc.recovery_user_id
+        and recovery_profile.account_state='active'
+      where rc.owner_id=owner_account.supabase_user_id
+        and rc.recovery_user_id=c.recovery_user_id
+        and rc.status='accepted'
+        and owner_account.status='active'
+        and not private.is_blocked_between(owner_account.supabase_user_id,rc.recovery_user_id)
+    )
   returning c.owner_identity_id into v_owner_identity;
   if v_owner_identity is null then return false; end if;
   select supabase_user_id into v_owner_user from private.nipto_accounts where identity_id=v_owner_identity;
@@ -707,7 +719,8 @@ begin
   update public.account_recovery_contacts rc
   set status=case when p_accept then 'accepted' else 'rejected' end,updated_at=pg_catalog.now()
   where rc.id=p_request_id and rc.recovery_user_id=p_recovery_user_id and rc.status='pending'
-    and exists(select 1 from private.nipto_accounts a where a.supabase_user_id=p_recovery_user_id and a.status='active');
+    and exists(select 1 from private.nipto_accounts a where a.supabase_user_id=p_recovery_user_id and a.status='active')
+    and not private.is_blocked_between(rc.owner_id,rc.recovery_user_id);
   get diagnostics v_count=row_count;
   return v_count=1;
 end;
