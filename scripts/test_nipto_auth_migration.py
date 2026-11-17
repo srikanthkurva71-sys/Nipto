@@ -92,6 +92,25 @@ class NiptoAuthMigrationTests(unittest.TestCase):
             self.assertIn(f"revoke all on function public.{signature} from public,anon,authenticated;", self.auth_sql)
             self.assertIn(f"grant execute on function public.{signature} to service_role;", self.auth_sql)
 
+    def test_legacy_auth_contact_data_is_scrubbed_after_link(self):
+        cleanup = self.auth_sql.split(
+            "create or replace function public.nipto_native_clear_legacy_email", 1
+        )[1].split("create or replace function public.nipto_native_start_recovery", 1)[0]
+        for field in (
+            "email=null",
+            "phone=null",
+            "encrypted_password=''",
+            "confirmation_token=''",
+            "recovery_token=''",
+            "email_change_token_new=''",
+            "email_change_token_current=''",
+            "phone_change_token=''",
+            "reauthentication_token=''",
+            "- 'email' - 'phone' - 'email_verified' - 'phone_verified'",
+        ):
+            self.assertIn(field, cleanup)
+        self.assertIn("delete from auth.identities", cleanup)
+
     def test_nipto_id_constraints_use_canonical_handle_format(self):
         self.assertIn("nipto_id ~ '^[a-z0-9]+(_[a-z0-9]+)*$'", self.registration_sql)
         self.assertIn("grant execute on function public.nipto_oidc_check_id(text) to service_role;", self.registration_sql)
