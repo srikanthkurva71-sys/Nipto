@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 AUTH_MIGRATION = ROOT / "supabase/migrations/20261116170000_nipto_native_auth.sql"
 CORE_MIGRATION = ROOT / "supabase/migrations/20261116000100_nipto_social_core.sql"
 REGISTRATION_MIGRATION = ROOT / "supabase/migrations/20261117100000_nipto_registration_assistance.sql"
+FEED_MIGRATION = ROOT / "supabase/migrations/20261117130000_nipto_home_feed_stable_cursor.sql"
 
 
 class NiptoAuthMigrationTests(unittest.TestCase):
@@ -14,6 +15,7 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         cls.auth_sql = AUTH_MIGRATION.read_text(encoding="utf-8")
         cls.core_sql = CORE_MIGRATION.read_text(encoding="utf-8")
         cls.registration_sql = REGISTRATION_MIGRATION.read_text(encoding="utf-8")
+        cls.feed_sql = FEED_MIGRATION.read_text(encoding="utf-8")
 
     def test_existing_auth_trigger_calls_replaced_public_handler(self):
         self.assertIn("create trigger on_auth_user_created_nipto", self.core_sql)
@@ -111,6 +113,14 @@ class NiptoAuthMigrationTests(unittest.TestCase):
             self.assertIn(field, cleanup)
         self.assertIn("delete from auth.identities", cleanup)
         self.assertIn("'legacy_auth_credentials_cleared'", self.auth_sql)
+
+
+    def test_home_feed_uses_unique_composite_keyset_cursor(self):
+        self.assertIn("drop function if exists public.get_home_feed(integer, timestamptz);", self.feed_sql)
+        self.assertIn("p_before_id uuid default null", self.feed_sql)
+        self.assertIn("(p.created_at, p.id) < (p_before, p_before_id)", self.feed_sql)
+        self.assertIn("order by p.created_at desc, p.id desc", self.feed_sql)
+        self.assertIn("grant execute on function public.get_home_feed(integer, timestamptz, uuid) to authenticated, service_role;", self.feed_sql)
 
     def test_nipto_id_constraints_use_canonical_handle_format(self):
         self.assertIn("nipto_id ~ '^[a-z0-9]+(_[a-z0-9]+)*$'", self.registration_sql)
