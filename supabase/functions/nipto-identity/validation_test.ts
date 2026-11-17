@@ -14,6 +14,10 @@ Deno.test("Nipto ID rejects invalid and reserved handles", () => {
   assertEquals(isValidNiptoId("admin"), false);
   assertEquals(isValidNiptoId("with space"), false);
   assertEquals(isValidNiptoId("dot.name"), false);
+  assertEquals(isValidNiptoId("_abc"), false);
+  assertEquals(isValidNiptoId("abc_"), false);
+  assertEquals(isValidNiptoId("abc__def"), false);
+  assertEquals(isValidNiptoId("abc_def"), true);
 });
 
 Deno.test("Nipto password length policy is bounded", () => {
