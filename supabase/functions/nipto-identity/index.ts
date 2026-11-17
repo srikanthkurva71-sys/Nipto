@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { argon2id, argon2Verify } from "npm:hash-wasm@4.13.0";
-import { isAllowedOidcScope } from "./validation.ts";
+import { isAllowedOidcScope, isValidNiptoId, isValidPassword, isValidRecoveryNiptoId, passwordsMatch } from "./validation.ts";
 
 type Json = Record<string, unknown>;
 
@@ -577,16 +577,13 @@ async function authorizePost(request: Request): Promise<Response> {
   ), screen === "register" ? "login" : "register");
 
   try {
-    if ((action === "register" || action === "link") && password !== passwordConfirmation) {
+    if ((action === "register" || action === "link") && !passwordsMatch(password, passwordConfirmation)) {
       throw new ApiError("Passwords do not match. Please confirm your password.", 400);
     }
-    if (recoveryNiptoId && (recoveryNiptoId.length < 3 || recoveryNiptoId.length > 24
-      || !/^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(recoveryNiptoId))) {
+    if (!isValidRecoveryNiptoId(recoveryNiptoId, action === "register" ? niptoId : undefined)) {
       throw new ApiError("Enter a valid recovery Nipto ID or leave this optional field empty.", 400);
     }
-    if (password.length < 12 || password.length > 128
-      || (action !== "link" && (niptoId.length < 3 || niptoId.length > 24
-        || !/^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(niptoId)))) {
+    if (!isValidPassword(password) || (action !== "link" && !isValidNiptoId(niptoId))) {
       throw new ApiError("Check your Nipto ID and password.", 400);
     }
     await enforceRateLimit(request, "oidc:" + (niptoId || transactionId));
