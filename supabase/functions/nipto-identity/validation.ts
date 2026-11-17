@@ -10,7 +10,9 @@ const RESERVED_IDS = new Set([
 ]);
 
 export function isValidNiptoId(value: string): boolean {
-  return /^[a-z0-9_]{3,24}$/.test(value) && !RESERVED_IDS.has(value);
+  return value.length >= 3 && value.length <= 24
+    && /^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(value)
+    && !RESERVED_IDS.has(value);
 }
 
 export function isValidPassword(value: string): boolean {
