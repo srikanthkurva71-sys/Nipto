@@ -7,7 +7,7 @@
 ## 1. Product contract
 
 - Registration requires a unique Nipto ID, display name, password, and password confirmation.
-- A recovery Nipto account is optional. It may be selected during registration or added later in Settings.
+- Registration does not ask for a recovery account. After signing in, users may optionally link one from Settings → Security → Recovery Nipto account.
 - No email field, email verification, email reset link, phone OTP, or external identity provider is part of the Nipto account flow.
 - Sign-in accepts Nipto ID + password.
 - Forgot password starts an in-app recovery request to the account's already accepted recovery Nipto account.
@@ -104,7 +104,7 @@ The issuer URL is `https://advmjribduqzyuwktkod.supabase.co/functions/v1/nipto-i
 
 ### Linking
 
-- A user may add one recovery Nipto account at registration or later from Settings → Security.
+- A signed-in user may request one recovery Nipto account from Settings → Security → Recovery Nipto account. Recovery linking is never part of registration or sign-in.
 - The target account receives an in-app notification and must accept.
 - Pending, rejected, blocked, suspended, or removed contacts cannot recover the account.
 - Prevent self-linking and enforce the one-contact policy server-side.
@@ -156,7 +156,7 @@ The existing production project uses Supabase Auth identities. Do not delete or 
 - Supabase-issued access token accepted by PostgREST; RLS prevents cross-account reads/writes.
 - Supabase session expiry/refresh, device logout, and global logout.
 - Realtime topic authorization and Storage policies under Supabase-issued session JWTs.
-- Optional recovery omitted at registration and linked later in Settings.
+- Registration completes without any recovery-account field; recovery linking is available only after authenticated sign-in.
 - Pending/accepted/rejected/revoked recovery contact behavior.
 - Recovery request enumeration resistance, approval authorization, expiry, replay, concurrent redemption, rate limits, and password/session revocation.
 - Existing-user migration preserves UUIDs, profile content, messages, conversations, media ownership, notifications, and call history.
