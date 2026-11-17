@@ -38,6 +38,7 @@ class NiptoCallService {
   Timer? _ringTimeout;
   Timer? _connectTimeout;
   Timer? _disconnectTimeout;
+  Timer? _readyRetryTimer;
   Completer<void>? _remoteReady;
 
   Future<void> startOutgoing() async {
@@ -73,6 +74,16 @@ class NiptoCallService {
       await _prepareMediaAndChannel();
       if (_closed) return;
       await _sendSignal({'type': 'ready'});
+      // Re-broadcast readiness briefly: private Realtime broadcasts are not
+      // durable, so the caller may not have subscribed when the first signal lands.
+      _readyRetryTimer?.cancel();
+      _readyRetryTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (_closed || _remoteDescriptionSet) {
+          timer.cancel();
+          return;
+        }
+        unawaited(_sendSignal({'type': 'ready'}).catchError((Object _) {}));
+      });
       onPhaseChanged(NiptoCallPhase.connecting);
     } catch (error) {
       onError(_safeMessage(error));
@@ -228,6 +239,7 @@ class NiptoCallService {
         final sdp = payload['sdp'] as String;
         await _peer!.setRemoteDescription(RTCSessionDescription(sdp, 'offer'));
         _remoteDescriptionSet = true;
+        _readyRetryTimer?.cancel();
         await _flushCandidates();
         final answer = await _peer!.createAnswer({
           'offerToReceiveAudio': true,
@@ -343,6 +355,7 @@ class NiptoCallService {
     _ringTimeout?.cancel();
     _connectTimeout?.cancel();
     _disconnectTimeout?.cancel();
+    _readyRetryTimer?.cancel();
 
     final channel = _channel;
     _channel = null;
