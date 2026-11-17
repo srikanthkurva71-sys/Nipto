@@ -173,6 +173,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                             itemBuilder: (context, index) {
                               final post = _posts[index];
                               return _FeedPostCard(
+                                key: ValueKey<String>(post['id'] as String),
                                 post: post,
                                 timeAgo: _timeAgo(post['created_at'] as String?),
                                 onLike: () => _toggleLike(post),
