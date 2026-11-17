@@ -248,12 +248,9 @@ async function enforceRateLimit(request: Request, key: string): Promise<void> {
   });
   if (allowed !== true) throw new ApiError("Too many attempts. Please wait and try again.", 429);
 }
-async function requestBody(request: Request): Promise<Json> {
+async function readLimitedBody(request: Request, maxBytes = 16_384): Promise<Uint8Array> {
   const length = Number(request.headers.get("content-length") ?? "0");
-  if (length > 16_384) throw new ApiError("Request is too large", 413);
-  if (request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json") {
-    throw new ApiError("A JSON request body is required", 415);
-  }
+  if (length > maxBytes) throw new ApiError("Request is too large", 413);
   if (!request.body) throw new ApiError("Invalid request", 400);
 
   const reader = request.body.getReader();
@@ -263,7 +260,7 @@ async function requestBody(request: Request): Promise<Json> {
     const { done, value } = await reader.read();
     if (done) break;
     total += value.byteLength;
-    if (total > 16_384) {
+    if (total > maxBytes) {
       await reader.cancel();
       throw new ApiError("Request is too large", 413);
     }
@@ -276,7 +273,14 @@ async function requestBody(request: Request): Promise<Json> {
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
+  return bytes;
+}
 
+async function requestBody(request: Request): Promise<Json> {
+  if (request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json") {
+    throw new ApiError("A JSON request body is required", 415);
+  }
+  const bytes = await readLimitedBody(request);
   let value: unknown;
   try {
     value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
@@ -579,7 +583,15 @@ async function authorizeGet(request: Request): Promise<Response> {
   }));
 }
 async function authorizePost(request: Request): Promise<Response> {
-  const form = await request.formData();
+  const contentType = request.headers.get("content-type") ?? "";
+  if (!/^application\/x-www-form-urlencoded(?:;|$)/i.test(contentType)
+    && !/^multipart\/form-data;\s*boundary=/i.test(contentType)) {
+    throw new ApiError("A form submission is required", 415);
+  }
+  const formBytes = await readLimitedBody(request);
+  const form = await new Response(formBytes, {
+    headers: { "Content-Type": contentType },
+  }).formData();
   const transactionId = String(form.get("transaction_id") ?? "");
   const csrfToken = String(form.get("csrf_token") ?? "");
   const action = String(form.get("action") ?? "login");
