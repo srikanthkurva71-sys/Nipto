@@ -346,8 +346,11 @@ begin
   if exists(select 1 from private.nipto_accounts a where a.supabase_user_id=p_user_id and a.status='active') then
     raise exception 'Nipto identity is already linked';
   end if;
-  delete from private.nipto_migration_tickets
-  where user_id=p_user_id and (consumed_at is not null or expires_at<=pg_catalog.now());
+  -- Keep one live migration ticket per authenticated account, even under parallel taps.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(p_user_id::text, 1)
+  );
+  delete from private.nipto_migration_tickets where user_id=p_user_id;
   insert into private.nipto_migration_tickets(user_id,ticket_hash,expires_at)
   values(p_user_id,p_ticket_hash,pg_catalog.now()+interval '5 minutes')
   returning id into v_id;
@@ -651,6 +654,8 @@ begin
   update private.nipto_accounts set password_hash=p_new_password_hash,
     password_changed_at=pg_catalog.now(),updated_at=pg_catalog.now()
   where identity_id=v_grant.owner_identity_id and status='active';
+  -- Password update, grant consumption and session revocation are one transaction.
+  delete from auth.sessions where user_id=v_owner_user;
   insert into private.nipto_security_events(identity_id,event_type)
   values(v_grant.owner_identity_id,'password_reset');
   return v_owner_user;
