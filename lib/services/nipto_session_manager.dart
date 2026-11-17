@@ -97,7 +97,51 @@ class NiptoSessionManager {
   }
 
   Future<void> initialize(String supabaseUrl, String publishableKey) async {
-    _supabaseUrl = supabaseUrl.replaceFirst(RegExp(r'/
+    _supabaseUrl = supabaseUrl.replaceFirst(RegExp(r'/$'), '');
+    _publishableKey = publishableKey;
+    _baseUrl = '$_supabaseUrl/functions/v1/nipto-identity';
+    _authSubscription ??= _client.auth.onAuthStateChange.listen((event) {
+      final user = event.session?.user ?? _client.auth.currentUser;
+      if (user != null && _hasNiptoIdentity(user)) {
+        unawaited(_completeIdentityLink(user));
+      }
+    });
+    final currentUser = _client.auth.currentUser;
+    if (currentUser != null && _hasNiptoIdentity(currentUser)) {
+      unawaited(_completeIdentityLink(currentUser));
+    }
+  }
+
+  bool _hasNiptoIdentity(User user) {
+    final identities = user.identities ?? [];
+    return identities.any((identity) => identity.provider == 'custom:nipto');
+  }
+
+  Future<void> _completeIdentityLink(User user) async {
+    if (_linkCompletionInFlight || _linkedUserId == user.id) return;
+    _linkCompletionInFlight = true;
+    try {
+      final pendingId = await _storage.read(key: _pendingLinkNiptoIdKey);
+      final metadata = user.userMetadata ?? const <String, dynamic>{};
+      final niptoId = (pendingId ?? metadata['nipto_id'] ??
+              metadata['preferred_username'] ?? '')
+          .toString();
+      if (niptoId.isEmpty) return;
+      await _post('account/link', {'nipto_id': niptoId}, authenticated: true);
+      await _client.auth.refreshSession();
+      final refreshedUser = _client.auth.currentUser;
+      if (refreshedUser != null &&
+          refreshedUser.email == null &&
+          _hasNiptoIdentity(refreshedUser)) {
+        _linkedUserId = refreshedUser.id;
+        await _storage.delete(key: _pendingLinkNiptoIdKey);
+      }
+    } catch (_) {
+      // A later auth event or app restart retries the idempotent linking step.
+    } finally {
+      _linkCompletionInFlight = false;
+    }
+  }
 
   Future<void> signIn() => _startOidc(screen: 'login');
   Future<void> register() => _startOidc(screen: 'register');
