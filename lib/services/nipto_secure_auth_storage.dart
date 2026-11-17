@@ -1,4 +1,5 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Stores the Supabase Auth session in Android Keystore-backed secure storage.
@@ -7,7 +8,16 @@ class NiptoSecureSessionStorage extends LocalStorage {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
 
   @override
-  Future<void> initialize() async {}
+  Future<void> initialize() async {
+    // Preserve existing signed-in users when moving from Supabase's default
+    // SharedPreferences storage to Android Keystore-backed secure storage.
+    if (await _storage.containsKey(key: _sessionKey)) return;
+    final legacyPreferences = SharedPreferencesAsync();
+    final legacySession = await legacyPreferences.getString(supabasePersistSessionKey);
+    if (legacySession == null || legacySession.isEmpty) return;
+    await _storage.write(key: _sessionKey, value: legacySession);
+    await legacyPreferences.remove(supabasePersistSessionKey);
+  }
 
   @override
   Future<String?> accessToken() => _storage.read(key: _sessionKey);
