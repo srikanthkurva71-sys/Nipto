@@ -216,7 +216,17 @@ async function rpc(name: string, args: Json): Promise<any> {
     body: JSON.stringify(args),
   });
   const raw = await response.text();
-  if (!response.ok) throw new ApiError("Nipto service could not complete the request", 503);
+  if (!response.ok) {
+    let databaseCode = "";
+    try {
+      const failure = JSON.parse(raw);
+      databaseCode = typeof failure.code === "string" ? failure.code : "";
+    } catch { /* Keep database details private. */ }
+    if (response.status === 409 || databaseCode === "23505") {
+      throw new ApiError("That Nipto ID is no longer available. Choose another ID.", 409);
+    }
+    throw new ApiError("Nipto service could not complete the request", 503);
+  }
   return raw ? JSON.parse(raw) : null;
 }
 function firstRow(value: any): Json | null {
