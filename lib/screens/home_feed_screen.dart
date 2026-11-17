@@ -309,6 +309,7 @@ class _PostCommentsSheetState extends State<_PostCommentsSheet> {
   final _text = TextEditingController();
   late Future<List<Map<String, dynamic>>> _comments;
   bool _sending = false;
+  String? _editingCommentId;
   SupabaseClient get _client => Supabase.instance.client;
 
   @override
@@ -335,14 +336,23 @@ class _PostCommentsSheetState extends State<_PostCommentsSheet> {
     if (body.isEmpty || _sending || userId == null) return;
     setState(() => _sending = true);
     try {
-      await _client.from('post_comments').insert({
-        'post_id': widget.postId,
-        'author_id': userId,
-        'body': body,
-      });
+      final editingId = _editingCommentId;
+      if (editingId != null) {
+        await _client.from('post_comments').update({'body': body})
+            .eq('id', editingId).eq('author_id', userId);
+      } else {
+        await _client.from('post_comments').insert({
+          'post_id': widget.postId,
+          'author_id': userId,
+          'body': body,
+        });
+      }
       _text.clear();
       if (mounted) {
-        setState(() => _comments = _load());
+        setState(() {
+          _editingCommentId = null;
+          _comments = _load();
+        });
       }
     } catch (_) {
       if (mounted) {
@@ -352,6 +362,31 @@ class _PostCommentsSheetState extends State<_PostCommentsSheet> {
       }
     } finally {
       if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _editComment(Map<String, dynamic> comment) async {
+    _text.text = comment['body'] as String? ?? '';
+    setState(() => _editingCommentId = comment['id'] as String);
+  }
+
+  Future<void> _deleteComment(String id) async {
+    final userId = NiptoSessionManager.instance.userId;
+    if (userId == null) return;
+    try {
+      await _client.from('post_comments').delete()
+          .eq('id', id).eq('author_id', userId);
+      if (!mounted) return;
+      setState(() => _comments = _load());
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Comment deleted.')),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Comment could not be deleted.')),
+        );
+      }
     }
   }
 
@@ -374,11 +409,38 @@ class _PostCommentsSheetState extends State<_PostCommentsSheet> {
             if (snapshot.hasError) return const Center(child: Text('Comments could not load.'));
             final rows = snapshot.data ?? [];
             if (rows.isEmpty) return const Center(child: Text('Be the first to comment.', style: TextStyle(color: NiptoColors.muted)));
-            return ListView.separated(itemCount: rows.length, separatorBuilder: (_, __) => const Divider(height: 1), itemBuilder: (context, index) => ListTile(contentPadding: EdgeInsets.zero, leading: const CircleAvatar(backgroundColor: NiptoColors.violetSoft, child: Icon(Icons.person_outline_rounded, color: NiptoColors.violet)), title: Text(rows[index]['author_id'] == NiptoSessionManager.instance.userId ? 'You' : 'Nipto member'), subtitle: Text(rows[index]['body'] as String)));
+            return ListView.separated(
+              itemCount: rows.length,
+              separatorBuilder: (_, __) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final comment = rows[index];
+                final mine = comment['author_id'] == NiptoSessionManager.instance.userId;
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const CircleAvatar(
+                    backgroundColor: NiptoColors.violetSoft,
+                    child: Icon(Icons.person_outline_rounded, color: NiptoColors.violet),
+                  ),
+                  title: Text(mine ? 'You' : 'Nipto member'),
+                  subtitle: Text(comment['body'] as String),
+                  trailing: mine ? PopupMenuButton<String>(
+                    tooltip: 'Comment options',
+                    onSelected: (action) {
+                      if (action == 'edit') _editComment(comment);
+                      if (action == 'delete') _deleteComment(comment['id'] as String);
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'edit', child: Text('Edit comment')),
+                      PopupMenuItem(value: 'delete', child: Text('Delete comment')),
+                    ],
+                  ) : null,
+                );
+              },
+            );
           },
         )),
         Row(children: [
-          Expanded(child: TextField(controller: _text, maxLength: 2000, maxLines: 2, decoration: const InputDecoration(hintText: 'Write a comment…', counterText: ''))),
+          Expanded(child: TextField(controller: _text, maxLength: 2000, maxLines: 2, decoration: InputDecoration(hintText: _editingCommentId == null ? 'Write a comment…' : 'Edit your comment…', counterText: ''))),
           const SizedBox(width: 8),
           IconButton.filled(onPressed: _sending ? null : _send, icon: _sending ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.arrow_upward_rounded)),
         ]),
