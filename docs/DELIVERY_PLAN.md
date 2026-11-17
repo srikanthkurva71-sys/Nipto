@@ -106,7 +106,7 @@ The existing hosted Supabase project remains the target. Its Custom OIDC integra
 ## Latest implementation review — 2026-11-17
 
 - [x] Build and upload a CI debug APK artifact on commit `78794b2d83e5bb7f7b1019ad79def96ceb684812`; this is a debug artifact, not a signed release.
-- [x] Audit the auth migration trigger wiring and replace the existing public `auth.users` trigger function so new users are provisioned from `custom:nipto`.
+- [x] Audit the deployed auth trigger and normalize it to the private `auth.users` handler so new users are provisioned from `custom:nipto`.
 - [x] Serialize parallel password-recovery starts per Nipto identity.
 - [x] Restrict OIDC scopes to `openid` and optional `profile`; reject email and all unsupported scopes.
 - [x] Add static migration regression tests for trigger wiring, recovery serialization, single-use reset grants and service-role-only identity RPCs.
