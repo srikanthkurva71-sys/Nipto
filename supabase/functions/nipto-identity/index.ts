@@ -408,6 +408,7 @@ function renderAuthorizePage(input: {
             passwordFeedback.textContent = "Strong 20-character password generated on this device. Save it in a trusted password manager.";
             passwordFeedback.className = "feedback good";
             password.dispatchEvent(new Event("input", { bubbles: true }));
+            if (confirmation) confirmation.dispatchEvent(new Event("input", { bubbles: true }));
           });
           password.addEventListener("input", () => {
             const value = password.value;
