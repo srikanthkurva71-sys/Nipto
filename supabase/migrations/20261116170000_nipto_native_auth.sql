@@ -394,7 +394,9 @@ $$;
 revoke all on function public.nipto_oidc_link_user(text,uuid) from public,anon,authenticated;
 grant execute on function public.nipto_oidc_link_user(text,uuid) to service_role;
 
-create or replace function private.handle_new_nipto_user()
+-- Replace the existing public.handle_new_nipto_user trigger function.
+-- The existing on_auth_user_created_nipto trigger already invokes this function.
+create or replace function public.handle_new_nipto_user()
 returns trigger language plpgsql security definer set search_path=''
 as $$
 declare
@@ -406,7 +408,8 @@ begin
   if new.raw_app_meta_data->>'provider' is distinct from 'custom:nipto' then
     raise exception 'Use your Nipto account to sign in';
   end if;
-  if v_nipto_id !~ '^[a-z0-9_]{3,24}$'
+  if v_nipto_id !~ '^[a-z0-9]+(_[a-z0-9]+)*$'
+    or char_length(v_nipto_id) not between 3 and 24
     or v_nipto_id in ('admin','administrator','support','help','nipto','official','security','moderator') then
     raise exception 'A valid Nipto ID is required';
   end if;
@@ -439,7 +442,7 @@ begin
   return new;
 end;
 $$;
-revoke all on function private.handle_new_nipto_user() from public,anon,authenticated;
+revoke all on function public.handle_new_nipto_user() from public,anon,authenticated;
 
 create or replace function public.nipto_native_current_user()
 returns uuid language sql stable security invoker set search_path=''
