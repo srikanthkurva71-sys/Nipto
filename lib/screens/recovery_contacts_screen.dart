@@ -105,11 +105,19 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
 
   Future<void> _submitRequest() async {
     if (_busy) return;
-    final handle = _niptoIdController.text.trim().toLowerCase().replaceFirst(RegExp(r'^@'), '');
-    if (handle.length < 3 || handle.length > 24 ||
-        !RegExp(r'^[a-z0-9]+(?:_[a-z0-9]+)*
+    final handle = _niptoIdController.text
+        .trim()
+        .toLowerCase()
+        .replaceFirst(RegExp(r'^@'), '');
+    if (handle.length < 3 ||
+        handle.length > 24 ||
+        !RegExp(r'^[a-z0-9]+(?:_[a-z0-9]+)*$').hasMatch(handle)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Use 3–24 lowercase letters or numbers, with single underscores between parts.')),
+        const SnackBar(
+          content: Text(
+            'Use 3–24 lowercase letters or numbers, with single underscores between parts.',
+          ),
+        ),
       );
       return;
     }
@@ -120,7 +128,11 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
       _niptoIdController.clear();
       setState(() => _contacts = _loadContacts());
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Recovery request sent. The other account must accept it.')),
+        const SnackBar(
+          content: Text(
+            'Recovery request sent. The other account must accept it.',
+          ),
+        ),
       );
     } catch (error) {
       if (!mounted) return;
