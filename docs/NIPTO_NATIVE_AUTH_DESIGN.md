@@ -138,10 +138,10 @@ The recovery contact never receives the reset grant and cannot set the password.
 
 The existing production project uses Supabase Auth identities. Do not delete or overwrite them until the Nipto OIDC issuer and Supabase Custom OIDC integration have passed end-to-end staging tests.
 
-1. Deploy Nipto OIDC endpoints to a staging issuer and configure a Custom OIDC integration on a staging Supabase project.
-2. Verify discovery, JWKS, asymmetric JWT validation, `role`, audience, issuer, `sub`, expiry, nonce, and key rotation.
-3. Verify PostgREST, RLS, Storage, Realtime, RPC and private-channel authorization with Nipto-issued JWTs.
-4. Add native Nipto credential and refresh-session records without changing the production auth flow.
+1. Deploy Nipto OIDC endpoints to a staging issuer and configure a Custom OAuth/OIDC provider on a staging Supabase project.
+2. Verify discovery, JWKS, asymmetric ID-token validation, client audience, issuer, `sub`, expiry, nonce, and Supabase Auth session creation with email_optional enabled.
+3. Verify PostgREST, RLS, Storage, Realtime, RPC and private-channel authorization with Supabase-issued access tokens created after Nipto OIDC sign-in.
+4. Add Nipto credential records and link each Nipto identity to the existing Supabase Auth user UUID without changing the production auth flow.
 5. Migrate signed-in existing users through an explicit password re-entry flow. Verify the old credential once, create a new Argon2id hash, and preserve the existing profile UUID. Never copy Supabase Auth password hashes.
 6. Back up production data and storage metadata. Preserve profile IDs, messages, conversations, media ownership, notifications, call history, staff roles, and moderation records.
 7. Preserve the profile-to-`auth.users` foreign key and every existing profile UUID because Supabase Auth remains the app-session broker. Link each Nipto credential identity to the existing Supabase user UUID; do not recreate profiles or rewrite social-data ownership.
@@ -152,8 +152,8 @@ The existing production project uses Supabase Auth identities. Do not delete or 
 
 - Registration with no email, duplicate Nipto ID, reserved ID, malformed ID, weak/oversized password.
 - Login success, wrong password, unknown ID, disabled account, throttling, generic errors.
-- Access JWT accepted by PostgREST; RLS prevents cross-account reads/writes.
-- JWT expiry, refresh rotation, refresh replay detection, device logout, global logout.
+- Supabase access token accepted by PostgREST; RLS prevents cross-account reads/writes.
+- Supabase session expiry/refresh, device logout, and global logout.
 - Realtime topic authorization and Storage policies under native JWT.
 - Optional recovery omitted at registration and linked later in Settings.
 - Pending/accepted/rejected/revoked recovery contact behavior.
@@ -163,7 +163,7 @@ The existing production project uses Supabase Auth identities. Do not delete or 
 
 ## 8. Deployment gates and non-goals
 
-- Do not apply the profile foreign-key removal or native-auth schema to production before staging proof.
+- Preserve the profile-to-auth.users foreign key. Do not apply the Nipto credential schema to production before staging proof.
 - Do not use synthetic `@nipto.invalid` email addresses, fake phone numbers, email OTP, or external social login providers.
 - Do not expose OIDC signing keys, service-role credentials, refresh tokens, or password hashes to the client.
 - Do not claim recovery is complete until the full one-time reset protocol is implemented and tested.
@@ -172,11 +172,11 @@ The existing production project uses Supabase Auth identities. Do not delete or 
 
 ## 9. Supabase platform evidence
 
-Supabase's current Custom OIDC documentation confirms that any OIDC-compliant issuer can be configured as a third-party authentication provider for a hosted Supabase project. Requirements include HTTPS issuer discovery, asymmetric JWT signatures, a `kid` header, and a `role` claim. The integration is configured in the Dashboard under Authentication → Sign In / Providers → Third-Party Auth → Custom OIDC, or through the Management API.
+Supabase's current Custom OAuth/OIDC provider documentation confirms that an external OIDC identity provider can be connected to Supabase Auth. For Nipto, configure identifier `custom:nipto`, use the Nipto issuer and client credentials, request only `openid profile`, and set `email_optional=true`. Supabase Auth validates Nipto's ID token and issues the app's normal Supabase session. Configure the provider in Authentication → Sign In / Providers → Custom OAuth Providers or through the Auth admin API. Manual identity linking must also be enabled for the existing-account migration flow.
 
 References:
-- Custom OIDC provider for hosted Supabase: https://supabase.com/docs/guides/auth/third-party/custom-oidc
-- Third-party auth overview: https://supabase.com/docs/guides/auth/third-party/overview
+- Custom OAuth/OIDC providers and email_optional: https://supabase.com/docs/guides/auth/custom-oauth-providers
+- Supabase Auth identity linking: https://supabase.com/docs/guides/auth/auth-identity-linking
 
 This corrects the earlier assumption that custom OIDC was limited to self-hosted Supabase. Nipto can retain its hosted Supabase project if the custom OIDC integration is configured and the end-to-end tests pass. Supabase Auth itself remains enabled by the platform, but Nipto will not use its email or phone credential flows.
 
