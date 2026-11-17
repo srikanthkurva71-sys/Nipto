@@ -136,7 +136,7 @@ The recovery contact never receives the reset grant and cannot set the password.
 
 ## 6. Existing-account migration
 
-The existing production project uses Supabase Auth identities. Do not delete or overwrite them until the Nipto OIDC issuer and Supabase Custom OIDC integration have passed end-to-end staging tests.
+The existing production project uses Supabase Auth identities. Do not delete or overwrite them until the Nipto OIDC issuer and Supabase Custom OAuth/OIDC provider have passed end-to-end staging tests.
 
 1. Deploy Nipto OIDC endpoints to a staging issuer and configure a Custom OAuth/OIDC provider on a staging Supabase project.
 2. Verify discovery, JWKS, asymmetric ID-token validation, client audience, issuer, `sub`, expiry, nonce, and Supabase Auth session creation with email_optional enabled.
@@ -168,7 +168,7 @@ The existing production project uses Supabase Auth identities. Do not delete or 
 - Do not expose OIDC signing keys, service-role credentials, refresh tokens, or password hashes to the client.
 - Do not claim recovery is complete until the full one-time reset protocol is implemented and tested.
 - Preserve the existing social product model, profile UUIDs, and feature data model.
-- Use the existing Supabase project for data, storage and realtime. Configure only the Custom OIDC trust integration after staging verification.
+- Use the existing Supabase project for data, storage and realtime. Configure only the Custom OAuth/OIDC provider configuration after staging verification.
 
 ## 9. Supabase platform evidence
 
@@ -192,9 +192,9 @@ The Nipto identity Edge Function uses these server-only environment variables:
 
 The key-generation script prints a private JWK and its public counterpart. Store the private JWK securely, set the Edge Function secrets, and verify the public JWKS endpoint contains only public key coordinates. The issuer supports overlapping verification keys: on rotation, set the new private JWK and active key ID, and publish both the old and new public JWKs in `NIPTO_OIDC_PUBLIC_KEYS`. Retain the old public key for at least 30 minutes after rotation so Supabase's cached JWKS and still-valid 10-minute access tokens continue to verify; then remove it. Emergency key compromise response may take up to the provider's JWKS refresh interval.
 
-After deployment, configure Authentication → Sign In / Providers → Third-Party Auth → Custom OIDC with the exact `NIPTO_OIDC_ISSUER`. Supabase's issuer discovery must resolve the `jwks_uri`. Confirm the integration is active before using Nipto-issued tokens with Data API, Storage, or Realtime.
+After deployment, configure Authentication → Sign In / Providers → Custom OAuth Providers with the exact `NIPTO_OIDC_ISSUER`. Supabase's issuer discovery must resolve the `jwks_uri`. Confirm the integration is active before using Supabase-issued session tokens with Data API, Storage, or Realtime.
 
-The Edge Function is configured with `verify_jwt = false` because login, registration, and recovery-start are public endpoints and authenticated routes verify Nipto's ES256 JWT in the function itself. This does not disable authorization: every protected route must call the shared token verifier, and all database RPCs remain service-role-only. Do not add a route that accepts a caller-supplied user UUID as identity.
+The Edge Function is configured with `verify_jwt = false` because OIDC authorization/token endpoints and the Nipto ID availability check are public, while protected application routes validate the Supabase Auth access token by calling `nipto_native_current_user` with the caller's bearer token. Supabase verifies the session and `auth.uid()` supplies the authenticated user UUID. This does not disable authorization: every protected route must call `authenticatedUserId` before using a user-scoped RPC. Service-role RPCs must receive only that verified UUID, never a caller-supplied identity.
 
-The app initializes Supabase with the `accessToken` callback from `NiptoSessionManager`. In this configuration the Supabase Auth namespace is unavailable by design; application identity comes from the verified Nipto session manager. Refresh tokens are stored using Android secure storage, while access tokens remain in memory.
+The app initializes the normal Supabase Flutter client and uses `signInWithOAuth(OAuthProvider('custom:nipto'))` for Nipto sign-in and registration. Supabase Auth validates the Nipto OIDC ID token, then stores and refreshes its own app session. Application identity is read from the Supabase session and Nipto profile claims. The Supabase Flutter SDK manages its session persistence; Nipto passwords and OIDC private keys are never stored in the app.
 
