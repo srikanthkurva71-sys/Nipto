@@ -192,7 +192,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 }
 
 class _FeedPostCard extends StatefulWidget {
-  const _FeedPostCard({required this.post, required this.timeAgo, required this.onLike, required this.onComments});
+  const _FeedPostCard({super.key, required this.post, required this.timeAgo, required this.onLike, required this.onComments});
   final Map<String, dynamic> post;
   final String timeAgo;
   final VoidCallback onLike;
