@@ -29,11 +29,11 @@ Removing the visible email field without replacing these dependencies would brea
 
 ### Hosted Supabase integration
 
-Keep the current hosted Supabase project. Build a Nipto-owned OpenID Connect (OIDC) identity provider as a Supabase Edge Function and register its issuer as a **Custom OIDC third-party auth integration** in the Supabase project.
+Keep the hosted Supabase project and its Auth session model so existing `auth.uid()`, RLS, Storage, Realtime and profile foreign keys continue to work. Build Nipto's own OpenID Connect (OIDC) identity provider as a Supabase Edge Function and register it in Authentication → Sign In / Providers → Custom OAuth/OIDC Providers using identifier `custom:nipto`, with **email_optional=true** and scopes that do not request email.
 
-This is Nipto's own identity service, not Google, Apple, Facebook, a phone provider, or another external identity provider. Supabase Auth remains enabled as a platform component but is not used to collect credentials, create Nipto accounts, or send email. The Nipto app authenticates directly with the Nipto OIDC service; Supabase Data API, Storage, and Realtime validate the Nipto-issued asymmetric JWT through the configured Custom OIDC integration.
+This is Nipto's own identity service, not Google, Apple, Facebook, a phone provider, or another external identity provider. Nipto stores and verifies the Nipto ID/password credentials. Supabase Auth acts only as the session broker: the Flutter app opens the Nipto-hosted OIDC authorization page through `signInWithOAuth(OAuthProvider('custom:nipto'))`; after Nipto authenticates the user, Supabase Auth creates or resumes the platform session. The provider must not return an email claim, and Supabase must accept the provider without an email address.
 
-Supabase's current Custom OIDC documentation explicitly supports any OIDC-compliant issuer for a Supabase project, requires asymmetric JWT signing with a `kid` header and a `role` claim, and configures trust through the Dashboard or Management API. See section 9.
+The Supabase access token used by PostgREST, Storage and Realtime is issued by Supabase Auth and retains the stable Supabase user UUID. Nipto's OIDC ID token is only used by Supabase Auth to establish that session. This is intentionally different from configuring Nipto as a Supabase Third-Party Auth JWT issuer.
 
 ### Nipto OIDC issuer
 
@@ -43,7 +43,7 @@ Implement these endpoints under a stable HTTPS issuer URL:
 - `/userinfo` — minimal Nipto profile claims after validating the access token.
 - Nipto-specific `/register`, `/login`, `/refresh`, `/logout`, `/logout-all`, `/migrate`, password-change, device-session, and recovery endpoints protected by strict request validation and rate limits.
 
-The mobile app uses native Nipto ID/password screens and receives Nipto-issued JWTs directly. This is a JWT issuer integration, not an OAuth browser-login flow; the Custom OIDC integration is used by Supabase to discover the issuer and validate its asymmetric signatures.
+The Flutter app starts the Custom OAuth/OIDC authorization flow using Supabase Flutter. The Nipto-hosted authorization page collects Nipto ID and password, and the Nipto OIDC token endpoint returns a signed ID token to Supabase Auth. Supabase Auth then issues its normal access and refresh tokens to the app. No email scope or email claim is requested or required.
 
 OIDC tokens must include:
 - `iss`: exact configured Nipto issuer URL.
@@ -58,28 +58,34 @@ Use ES256 or RS256 with a reviewed WebCrypto implementation and a key-rotation p
 
 ### Supabase authorization
 
-Configure the project's Authentication → Sign In / Providers → Third-Party Auth → Custom OIDC integration with the exact Nipto issuer URL. Verify the integration is active before issuing production tokens. Supabase's Data API, Storage, and Realtime must accept the token and expose the stable `sub` through `auth.uid()`.
+Configure the project's Authentication → Sign In / Providers → Custom OAuth Providers with identifier `custom:nipto`, the exact Nipto issuer, client ID/secret, scopes `openid profile`, and **email_optional=true**. Verify discovery, JWKS, redirect URI, client credentials, issuer and audience before enabling the provider. Do not add an email scope. The OIDC provider must not fabricate an email address.
 
-Remove the `public.profiles.id → auth.users.id` foreign key only in a separately reviewed migration after staging proof. Preserve profile UUIDs and all dependent foreign keys. Supabase Auth user records are not required for Nipto identities in this architecture.
-
-All existing RLS policies using `auth.uid()` remain the authorization boundary. Never use the service-role key in the Flutter app. Never proxy user operations through service-role endpoints as a shortcut around RLS.
+Supabase Auth creates the application session with the same stable `auth.users.id` UUID used by `public.profiles.id`. Preserve the existing profile-to-auth-user foreign key and every profile UUID. Existing RLS policies using `auth.uid()` remain the authorization boundary; Supabase's own access token continues to authorize Data API, Storage and Realtime. Never use the service-role key in Flutter or proxy normal user operations through service-role endpoints.
 
 ### Session lifecycle
 
-Nipto owns refresh sessions:
-- Generate cryptographically random opaque refresh tokens on the server.
-- Store only SHA-256 hashes of refresh tokens in a private schema.
-- Rotate on every refresh; invalidate the previous token atomically.
-- Detect reuse of a rotated token and revoke the affected session family.
-- Support device-specific logout and global session revocation.
-- Keep access tokens short-lived (target 10 minutes); set explicit absolute and idle session expiry.
-- Store refresh tokens in Android secure storage; never store passwords.
+Supabase Auth owns the app's access and refresh token lifecycle. Nipto owns password verification and credential security:
+- Keep the Nipto password hash in the private schema and use Argon2id.
+- Supabase issues the app session only after Nipto's OIDC authorization succeeds.
+- Use Supabase Auth's refresh and revocation behavior for app sessions; provide Nipto device-session management through authenticated server-side operations.
+- Revoke Supabase sessions after password reset or password change.
+- Store the Supabase refresh session using the platform SDK's secure persistence; never store Nipto passwords.
 
-### Supabase issuer isolation
+### OIDC issuer and signing
 
-The exact issuer is `https://advmjribduqzyuwktkod.supabase.co/functions/v1/nipto-identity`. The Supabase project must trust this HTTPS issuer through Third-Party Auth → Custom OIDC. The JWT must contain `sub` as the stable profile UUID, `role=authenticated`, and a `kid` header.
+The issuer URL is `https://advmjribduqzyuwktkod.supabase.co/functions/v1/nipto-identity`. Supabase Auth fetches the issuer discovery document and JWKS to validate Nipto's signed ID tokens. ID tokens must contain stable Nipto identity claims, issuer, audience, expiry and nonce; include a `kid` header and use an asymmetric signing algorithm supported by Supabase Auth. Keep private signing keys only in Edge Function secrets and plan key rotation. Do not add email or phone claims.
 
-Because Supabase Auth remains enabled for platform compatibility and legacy-session migration, the database migration adds an issuer-checked `private.nipto_uid()` helper. Existing public SECURITY DEFINER functions that use `auth.uid()` are rewritten to use this helper, and restrictive issuer policies are added to RLS-enabled public tables, Storage objects and Realtime messages. This prevents a legacy Supabase Auth JWT from being treated as a Nipto session. Keep the issuer value in this document, the Edge Function secret, and the database helper identical.
+## 3.1 Registration experience
+
+- Normalize Nipto IDs to lowercase and validate 3–24 characters using letters, numbers and underscores only.
+- Reserve platform and impersonation-sensitive names (for example, admin, support, official and security).
+- Check availability against both existing public profiles and the private Nipto identity table.
+- Show a clear live state: checking, available, already taken, invalid, or temporarily unable to check.
+- When unavailable, suggest up to five available alternatives (for example, a suffix or numeric variant). Selecting a suggestion must trigger a fresh availability check.
+- Repeat the uniqueness/availability check on the server during account creation to prevent race conditions. The unique database constraint remains authoritative.
+- Offer a 20-character strong password suggestion generated locally with the browser cryptographic random generator. Do not send the suggested password to any third-party service.
+- Include show/hide, length/strength feedback, and a reminder to save the password in a trusted password manager. Password suggestion is optional; users can choose their own password.
+- Password minimum is 12 characters and maximum is 128. Password confirmation is required in the final native registration UX.
 
 ## 4. Password security
 
@@ -138,7 +144,7 @@ The existing production project uses Supabase Auth identities. Do not delete or 
 4. Add native Nipto credential and refresh-session records without changing the production auth flow.
 5. Migrate signed-in existing users through an explicit password re-entry flow. Verify the old credential once, create a new Argon2id hash, and preserve the existing profile UUID. Never copy Supabase Auth password hashes.
 6. Back up production data and storage metadata. Preserve profile IDs, messages, conversations, media ownership, notifications, call history, staff roles, and moderation records.
-7. Remove the profile-to-`auth.users` foreign key only after all active accounts are represented in the native Nipto identity store and the staging cutover passes.
+7. Preserve the profile-to-`auth.users` foreign key and every existing profile UUID because Supabase Auth remains the app-session broker. Link each Nipto credential identity to the existing Supabase user UUID; do not recreate profiles or rewrite social-data ownership.
 8. Switch Android to Nipto OIDC only after migration, rollback, security, and device tests succeed. Keep the old project auth state available through a verified rollback window.
 9. Remove old email lookup/reset Edge Function behavior, email-based UI, and unused Supabase Auth identities only after all migration checks are complete.
 
