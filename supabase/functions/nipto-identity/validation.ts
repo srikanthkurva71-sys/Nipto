@@ -18,3 +18,10 @@ export function isValidNiptoId(value: string): boolean {
 export function isValidPassword(value: string): boolean {
   return value.length >= 12 && value.length <= 128;
 }
+
+export function isAllowedOidcScope(value: string): boolean {
+  const scopes = value.trim().split(/\s+/).filter(Boolean);
+  return scopes.includes("openid")
+    && new Set(scopes).size === scopes.length
+    && scopes.every((scope) => scope === "openid" || scope === "profile");
+}
