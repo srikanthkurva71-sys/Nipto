@@ -184,5 +184,21 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         self.assertIn("_deleteComment", shorts)
 
 
+    def test_message_mutations_are_author_scoped_and_membership_checked(self):
+        migration = (ROOT / "supabase/migrations/20261117180000_nipto_message_edit_delete.sql").read_text()
+        self.assertIn("m.sender_id = v_user_id", migration)
+        self.assertIn("cm.membership_state = 'accepted'", migration)
+        self.assertIn("m.message_type = 'text'", migration)
+        self.assertIn("m.deleted_at is null", migration)
+        self.assertIn("revoke all on function public.edit_own_message(uuid, text) from public, anon", migration)
+        self.assertIn("grant execute on function public.edit_own_message(uuid, text) to authenticated", migration)
+        self.assertIn("grant execute on function public.delete_own_message(uuid) to authenticated", migration)
+        conversation = (APP_ROOT / "lib/screens/conversation_screen.dart").read_text()
+        self.assertIn("_showMessageActions", conversation)
+        self.assertIn("edit_own_message", conversation)
+        self.assertIn("delete_own_message", conversation)
+        self.assertIn("onLongPress", conversation)
+
+
 if __name__ == "__main__":
     unittest.main()
