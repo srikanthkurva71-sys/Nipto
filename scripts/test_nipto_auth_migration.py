@@ -149,7 +149,7 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         self.assertNotIn("_client.rpc", self.recovery_screen)
         self.assertIn("Sign in with Nipto", self.auth_screen)
         self.assertIn("Create Nipto account", self.auth_screen)
-        self.assertIn("Recovery Nipto account is optional. You can add or change one later in Settings.", self.auth_screen)
+        self.assertIn("A recovery Nipto account is optional. You can add or change one later in Settings.", self.auth_screen)
 
 
     def test_recovery_links_reject_cycles_and_serialize_graph_changes(self):
