@@ -366,6 +366,7 @@ function renderAuthorizePage(input: {
       ${fields}
       ${isLink ? "" : `<label>Nipto ID<input name="nipto_id" id="nipto-id" maxlength="24" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>${registrationTools}`}
       <label>Password<input name="password" id="nipto-password" type="password" minlength="12" maxlength="128" autocomplete="${isRegister || isLink ? "new-password" : "current-password"}" required></label>
+      ${isRegister || isLink ? `<label>Confirm password<input name="password_confirmation" id="nipto-password-confirmation" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label>` : ""}
       ${passwordTools}
       <button type="submit" id="submit-auth">${isRegister ? "Create account" : isLink ? "Link Nipto account" : "Sign in"}</button>
     </form>
@@ -376,6 +377,7 @@ function renderAuthorizePage(input: {
       (() => {
         const form = document.querySelector("form");
         const password = document.getElementById("nipto-password");
+        const confirmation = document.getElementById("nipto-password-confirmation");
         const suggest = document.getElementById("suggest-password");
         const toggle = document.getElementById("toggle-password");
         const passwordFeedback = document.getElementById("password-feedback");
@@ -399,7 +401,9 @@ function renderAuthorizePage(input: {
               const j = randomIndex(i + 1); [chars[i], chars[j]] = [chars[j], chars[i]];
             }
             password.value = chars.join("");
+            if (confirmation) confirmation.value = password.value;
             password.type = "text";
+            if (confirmation) confirmation.type = "text";
             if (toggle) toggle.textContent = "Hide";
             passwordFeedback.textContent = "Strong 20-character password generated on this device. Save it in a trusted password manager.";
             passwordFeedback.className = "feedback good";
@@ -418,8 +422,19 @@ function renderAuthorizePage(input: {
         }
         if (toggle && password) toggle.addEventListener("click", () => {
           password.type = password.type === "password" ? "text" : "password";
+          if (confirmation) confirmation.type = password.type;
           toggle.textContent = password.type === "password" ? "Show" : "Hide";
         });
+        if (confirmation && password) {
+          confirmation.addEventListener("input", () => {
+            confirmation.setCustomValidity(confirmation.value === password.value
+              ? "" : "Passwords do not match.");
+          });
+          password.addEventListener("input", () => {
+            if (confirmation.value) confirmation.setCustomValidity(
+              confirmation.value === password.value ? "" : "Passwords do not match.");
+          });
+        }
         const idInput = document.getElementById("nipto-id");
         const feedback = document.getElementById("id-feedback");
         const suggestions = document.getElementById("id-suggestions");
@@ -536,6 +551,7 @@ async function authorizePost(request: Request): Promise<Response> {
   const password = String(form.get("password") ?? "");
   const displayName = String(form.get("display_name") ?? "").trim();
   const recoveryNiptoId = String(form.get("recovery_nipto_id") ?? "").trim().replace(/^@/, "").toLowerCase();
+  const passwordConfirmation = String(form.get("password_confirmation") ?? "");
   const txRows = await rpc("nipto_oidc_get_transaction", {
     p_id: transactionId,
     p_csrf_hash: await sha256Hex(csrfToken),
@@ -557,6 +573,9 @@ async function authorizePost(request: Request): Promise<Response> {
   ), screen === "register" ? "login" : "register");
 
   try {
+    if ((action === "register" || action === "link") && password !== passwordConfirmation) {
+      throw new ApiError("Passwords do not match. Please confirm your password.", 400);
+    }
     if (password.length < 12 || password.length > 128
       || (action !== "link" && !/^[a-z0-9_]{3,24}$/.test(niptoId))) {
       throw new ApiError("Check your Nipto ID and password.", 400);
