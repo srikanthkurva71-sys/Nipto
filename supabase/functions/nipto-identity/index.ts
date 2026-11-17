@@ -276,7 +276,7 @@ async function rpcAsUser(request: Request, name: string): Promise<any> {
     body: "{}",
   });
   if (!response.ok) throw new ApiError("Account update could not be completed", 400);
-  return response.text() ? await response.json() : null;
+  return await response.json();
 }
 
 function discoveryDocument(): Json {
