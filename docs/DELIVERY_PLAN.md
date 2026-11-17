@@ -17,7 +17,7 @@
 - [x] Profile editing, unique handle validation and prefix search.
 - [x] Follow requests, private profiles, blocks and profile visibility.
 - [x] Message privacy and notification preference controls.
-- [x] Add optional trusted Recovery Nipto ID at signup and consent-based recovery-contact management in Settings; this is relationship management only, not password recovery.
+- [x] Add consent-based optional Recovery Nipto ID management after sign-in in Settings; registration does not collect a recovery account.
 - [x] Implement the email-free in-app recovery request, accepted recovery-account approval, and short-lived one-time password-reset grant path; staging replay/rate-limit/device validation remains open.
 - [x] Add a user-confirmed global sign-out action that revokes refresh sessions; current access tokens may remain valid until expiry.
 
@@ -81,7 +81,7 @@ A feature is done only when its UI, database access, failure handling, authoriza
 - [x] Add Nipto identity issuer source: Nipto ID/password, Argon2id, asymmetric ES256 JWT, JWKS/discovery, refresh rotation and recovery endpoints. Runtime validation and key deployment remain open.
 - [ ] Build a hosted Supabase project with Custom OIDC and configure its Auth service with the Nipto custom OIDC provider; no email or phone claim may be collected.
 - [ ] Prove no-email user provisioning, stable UUID mapping, RLS, PostgREST, Storage, Realtime and RPC behavior in staging.
-- [x] Implement optional recovery Nipto account during registration and Settings, with explicit acceptance. End-to-end backend and device tests remain open.
+- [x] Implement optional recovery Nipto account linking after sign-in in Settings, with explicit acceptance. Registration does not request recovery details. End-to-end backend and device tests remain open.
 - [x] Add in-app forgot-password request, approval inbox, one-time expiring reset-grant and password-reset code paths. End-to-end security tests, notification delivery and replay/rate-limit validation remain open.
 - [ ] Migrate existing accounts/data with backups, preserve profile UUIDs, and retain a tested rollback path.
 - [ ] Remove legacy email fields, email lookup, email reset UI and old login Edge Function only after the replacement is proven.
@@ -100,7 +100,8 @@ The existing hosted Supabase project remains the target. Its Custom OIDC integra
 - [x] Implement the legacy-account migration bridge, preserving existing profile UUIDs and clearing legacy Auth email/phone identities only after the Nipto identity is linked; staging and rollback validation remain open.
 - [ ] Validate the SQL migration in a disposable staging database; do not apply it to production yet.
 - [ ] Configure Edge Function secrets and the Supabase Custom OIDC trust integration.
-- [ ] Run Deno Edge Function tests, Flutter analysis/tests, Android APK build, and two-device security tests.
+- [x] Run Deno Edge Function tests, Flutter analysis/tests, Android debug APK build and artifact upload on the latest validated auth checkpoint.
+- [ ] Re-run CI for the follow-up comment-editing commits; two-device security tests remain open.
 
 
 ## Latest implementation review — 2026-11-17
