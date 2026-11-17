@@ -507,8 +507,16 @@ class _ShortCommentsSheet extends StatefulWidget {
 class _ShortCommentsSheetState extends State<_ShortCommentsSheet> {
   final _controller = TextEditingController();
   bool _sending = false;
+  String? _editingCommentId;
+  late Future<List<Map<String, dynamic>>> _comments;
 
   SupabaseClient get _client => Supabase.instance.client;
+
+  @override
+  void initState() {
+    super.initState();
+    _comments = _loadComments();
+  }
 
   Future<List<Map<String, dynamic>>> _loadComments() async {
     final rows = await _client
@@ -526,13 +534,24 @@ class _ShortCommentsSheetState extends State<_ShortCommentsSheet> {
     if (body.isEmpty || userId == null || _sending) return;
     setState(() => _sending = true);
     try {
-      await _client.from('short_comments').insert({
-        'short_id': widget.shortId,
-        'author_id': userId,
-        'body': body,
-      });
+      final editingId = _editingCommentId;
+      if (editingId != null) {
+        await _client.from('short_comments').update({'body': body})
+            .eq('id', editingId).eq('author_id', userId);
+      } else {
+        await _client.from('short_comments').insert({
+          'short_id': widget.shortId,
+          'author_id': userId,
+          'body': body,
+        });
+      }
       _controller.clear();
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() {
+          _editingCommentId = null;
+          _comments = _loadComments();
+        });
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -541,6 +560,31 @@ class _ShortCommentsSheetState extends State<_ShortCommentsSheet> {
       }
     } finally {
       if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _editComment(Map<String, dynamic> comment) async {
+    _controller.text = comment['body'] as String? ?? '';
+    setState(() => _editingCommentId = comment['id'] as String);
+  }
+
+  Future<void> _deleteComment(String id) async {
+    final userId = NiptoSessionManager.instance.userId;
+    if (userId == null) return;
+    try {
+      await _client.from('short_comments').delete()
+          .eq('id', id).eq('author_id', userId);
+      if (!mounted) return;
+      setState(() => _comments = _loadComments());
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Comment deleted.')),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Comment could not be deleted.')),
+        );
+      }
     }
   }
 
@@ -564,7 +608,7 @@ class _ShortCommentsSheetState extends State<_ShortCommentsSheet> {
               const SizedBox(height: 12),
               Expanded(
                 child: FutureBuilder<List<Map<String, dynamic>>>(
-                  future: _loadComments(),
+                  future: _comments,
                   builder: (context, snapshot) {
                     if (!snapshot.hasData) {
                       return const Center(child: CircularProgressIndicator());
@@ -578,15 +622,30 @@ class _ShortCommentsSheetState extends State<_ShortCommentsSheet> {
                     return ListView.separated(
                       itemCount: comments.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, index) => ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: const CircleAvatar(
-                          backgroundColor: NiptoColors.violetSoft,
-                          child: Icon(Icons.person_outline_rounded, color: NiptoColors.violet),
-                        ),
-                        title: Text(comments[index]['author_id'] == NiptoSessionManager.instance.userId ? 'You' : 'Nipto member'),
-                        subtitle: Text(comments[index]['body'] as String),
-                      ),
+                      itemBuilder: (context, index) {
+                        final comment = comments[index];
+                        final mine = comment['author_id'] == NiptoSessionManager.instance.userId;
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const CircleAvatar(
+                            backgroundColor: NiptoColors.violetSoft,
+                            child: Icon(Icons.person_outline_rounded, color: NiptoColors.violet),
+                          ),
+                          title: Text(mine ? 'You' : 'Nipto member'),
+                          subtitle: Text(comment['body'] as String),
+                          trailing: mine ? PopupMenuButton<String>(
+                            tooltip: 'Comment options',
+                            onSelected: (action) {
+                              if (action == 'edit') _editComment(comment);
+                              if (action == 'delete') _deleteComment(comment['id'] as String);
+                            },
+                            itemBuilder: (_) => const [
+                              PopupMenuItem(value: 'edit', child: Text('Edit comment')),
+                              PopupMenuItem(value: 'delete', child: Text('Delete comment')),
+                            ],
+                          ) : null,
+                        );
+                      },
                     );
                   },
                 ),
@@ -598,8 +657,8 @@ class _ShortCommentsSheetState extends State<_ShortCommentsSheet> {
                       controller: _controller,
                       maxLength: 2000,
                       maxLines: 2,
-                      decoration: const InputDecoration(
-                        hintText: 'Write a comment…',
+                      decoration: InputDecoration(
+                        hintText: _editingCommentId == null ? 'Write a comment…' : 'Edit your comment…',
                         counterText: '',
                       ),
                     ),
