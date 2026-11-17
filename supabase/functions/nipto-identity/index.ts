@@ -225,6 +225,9 @@ async function rpc(name: string, args: Json): Promise<any> {
     if (response.status === 409 || databaseCode === "23505") {
       throw new ApiError("That Nipto ID is no longer available. Choose another ID.", 409);
     }
+    if (databaseCode === "P0001") {
+      throw new ApiError("That Nipto account or recovery choice cannot be used for this action.", 400);
+    }
     throw new ApiError("Nipto service could not complete the request", 503);
   }
   return raw ? JSON.parse(raw) : null;
