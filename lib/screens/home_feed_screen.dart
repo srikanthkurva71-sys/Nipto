@@ -371,6 +371,18 @@ class _PostCommentsSheetState extends State<_PostCommentsSheet> {
   }
 
   Future<void> _deleteComment(String id) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete comment?'),
+        content: const Text('This comment will be removed from the conversation.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
     final userId = NiptoSessionManager.instance.userId;
     if (userId == null) return;
     try {
