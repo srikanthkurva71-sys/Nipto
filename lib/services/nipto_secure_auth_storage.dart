@@ -12,8 +12,8 @@ class NiptoSecureSessionStorage extends LocalStorage {
     // Preserve existing signed-in users when moving from Supabase's default
     // SharedPreferences storage to Android Keystore-backed secure storage.
     if (await _storage.containsKey(key: _sessionKey)) return;
-    final legacyPreferences = SharedPreferencesAsync();
-    final legacySession = await legacyPreferences.getString(supabasePersistSessionKey);
+    final legacyPreferences = await SharedPreferences.getInstance();
+    final legacySession = legacyPreferences.getString(supabasePersistSessionKey);
     if (legacySession == null || legacySession.isEmpty) return;
     await _storage.write(key: _sessionKey, value: legacySession);
     await legacyPreferences.remove(supabasePersistSessionKey);
