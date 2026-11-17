@@ -251,7 +251,38 @@ async function enforceRateLimit(request: Request, key: string): Promise<void> {
 async function requestBody(request: Request): Promise<Json> {
   const length = Number(request.headers.get("content-length") ?? "0");
   if (length > 16_384) throw new ApiError("Request is too large", 413);
-  const value = await request.json();
+  if (request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json") {
+    throw new ApiError("A JSON request body is required", 415);
+  }
+  if (!request.body) throw new ApiError("Invalid request", 400);
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > 16_384) {
+      await reader.cancel();
+      throw new ApiError("Request is too large", 413);
+    }
+    chunks.push(value);
+  }
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  let value: unknown;
+  try {
+    value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  } catch {
+    throw new ApiError("Invalid JSON request", 400);
+  }
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new ApiError("Invalid request", 400);
   }
@@ -529,6 +560,7 @@ async function authorizeGet(request: Request): Promise<Response> {
   if (screen === "link" && (!migrationTicket || !/^[A-Za-z0-9_-]{43,128}$/.test(migrationTicket))) {
     throw new ApiError("This account-link request is invalid. Return to Nipto and try again.", 400);
   }
+  await enforceRateLimit(request, "oidc-authorize:" + client);
   const transactionId = await rpc("nipto_oidc_create_transaction", {
     p_client_id: client,
     p_redirect_uri: redirectUri,
