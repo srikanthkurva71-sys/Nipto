@@ -862,6 +862,7 @@ async function handleRoute(request: Request): Promise<Response> {
     });
     if (status === "rejected") return json({ status: "rejected" });
     if (status === "expired") return json({ status: "expired" });
+    if (status === "consumed") return json({ status: "consumed" });
     if (status !== "approved") return json({ status: "pending" });
     const grant = randomToken(32);
     const owner = await rpc("nipto_native_claim_reset_grant", {
