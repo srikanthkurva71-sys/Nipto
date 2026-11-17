@@ -18,8 +18,9 @@ class NiptoAuthMigrationTests(unittest.TestCase):
     def test_existing_auth_trigger_calls_replaced_public_handler(self):
         self.assertIn("create trigger on_auth_user_created_nipto", self.core_sql)
         self.assertIn("execute function public.handle_new_nipto_user()", self.core_sql)
-        self.assertIn("create or replace function public.handle_new_nipto_user()", self.auth_sql)
-        self.assertNotIn("create or replace function private.handle_new_nipto_user()", self.auth_sql)
+        self.assertIn("create or replace function private.handle_new_nipto_user()", self.auth_sql)
+        self.assertIn("drop trigger if exists on_auth_user_created_nipto on auth.users;", self.auth_sql)
+        self.assertIn("execute function private.handle_new_nipto_user();", self.auth_sql)
         self.assertIn("new.raw_app_meta_data->>'provider' is distinct from 'custom:nipto'", self.auth_sql)
         self.assertIn("set supabase_user_id=new.id", self.auth_sql)
 
