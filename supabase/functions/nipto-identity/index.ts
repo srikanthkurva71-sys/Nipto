@@ -453,7 +453,7 @@ function renderAuthorizePage(input: {
             lastChecked = "";
             suggestions.replaceChildren();
             if (value.length < 3 || value.length > 24 || !/^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(value)) {
-              feedback.textContent = "Use 3–24 letters, numbers or underscores.";
+              feedback.textContent = "Use 3–24 lowercase letters or numbers, with single underscores between parts.";
               feedback.className = "feedback";
               submit.disabled = true;
               return;
