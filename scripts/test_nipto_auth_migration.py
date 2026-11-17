@@ -9,6 +9,8 @@ REGISTRATION_MIGRATION = ROOT / "supabase/migrations/20261117100000_nipto_regist
 FEED_MIGRATION = ROOT / "supabase/migrations/20261117130000_nipto_home_feed_stable_cursor.sql"
 RECOVERY_SETUP_MIGRATION = ROOT / "supabase/migrations/20261117150000_nipto_recovery_setup_after_registration.sql"
 IDENTITY_FUNCTION = ROOT / "supabase/functions/nipto-identity/index.ts"
+RECOVERY_SCREEN = ROOT / "lib/screens/recovery_contacts_screen.dart"
+AUTH_SCREEN = ROOT / "lib/screens/auth_screen.dart"
 
 
 class NiptoAuthMigrationTests(unittest.TestCase):
@@ -20,6 +22,8 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         cls.feed_sql = FEED_MIGRATION.read_text(encoding="utf-8")
         cls.recovery_setup_sql = RECOVERY_SETUP_MIGRATION.read_text(encoding="utf-8")
         cls.identity_source = IDENTITY_FUNCTION.read_text(encoding="utf-8")
+        cls.recovery_screen = RECOVERY_SCREEN.read_text(encoding="utf-8")
+        cls.auth_screen = AUTH_SCREEN.read_text(encoding="utf-8")
 
     def test_existing_auth_trigger_calls_replaced_public_handler(self):
         self.assertIn("create trigger on_auth_user_created_nipto", self.core_sql)
@@ -138,6 +142,12 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         recovery_link = self.identity_source.split('path.endsWith("/recovery/link") && method === "POST"', 1)[1].split('path.endsWith("/recovery/contact-response")', 1)[0]
         self.assertIn("authenticatedUserId(request)", recovery_link)
         self.assertIn("nipto_native_request_recovery_contact", recovery_link)
+        self.assertIn("listRecoveryContacts()", self.recovery_screen)
+        self.assertIn("removeRecoveryContact(requestId)", self.recovery_screen)
+        self.assertNotIn("_client.rpc", self.recovery_screen)
+        self.assertIn("Sign in with Nipto", self.auth_screen)
+        self.assertIn("Create Nipto account", self.auth_screen)
+        self.assertIn("Recovery Nipto account is optional. You can add or change one later in Settings.", self.auth_screen)
 
     def test_nipto_id_constraints_use_canonical_handle_format(self):
         self.assertIn("nipto_id ~ '^[a-z0-9]+(_[a-z0-9]+)*$'", self.registration_sql)
