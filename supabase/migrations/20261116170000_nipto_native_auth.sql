@@ -394,9 +394,8 @@ $$;
 revoke all on function public.nipto_oidc_link_user(text,uuid) from public,anon,authenticated;
 grant execute on function public.nipto_oidc_link_user(text,uuid) to service_role;
 
--- Replace the existing public.handle_new_nipto_user trigger function.
--- The existing on_auth_user_created_nipto trigger already invokes this function.
-create or replace function public.handle_new_nipto_user()
+-- Canonical private handler used by the deployed auth.users trigger.
+create or replace function private.handle_new_nipto_user()
 returns trigger language plpgsql security definer set search_path=''
 as $$
 declare
@@ -442,7 +441,13 @@ begin
   return new;
 end;
 $$;
-revoke all on function public.handle_new_nipto_user() from public,anon,authenticated;
+revoke all on function private.handle_new_nipto_user() from public,anon,authenticated;
+
+-- Normalize the trigger target across existing installations and clean installs.
+drop trigger if exists on_auth_user_created_nipto on auth.users;
+create trigger on_auth_user_created_nipto
+after insert on auth.users
+for each row execute function private.handle_new_nipto_user();
 
 create or replace function public.nipto_native_current_user()
 returns uuid language sql stable security invoker set search_path=''
