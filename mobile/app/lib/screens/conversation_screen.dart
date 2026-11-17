@@ -269,6 +269,148 @@ class _ConversationScreenState extends State<ConversationScreen> {
     }
   }
 
+  Future<void> _showMessageActions(Map<String, dynamic> message) async {
+    final userId = NiptoSessionManager.instance.userId;
+    if (userId == null ||
+        message['sender_id'] != userId ||
+        message['deleted_at'] != null) {
+      return;
+    }
+
+    final messageId = message['id'] as String;
+    final isText = message['message_type'] == 'text';
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isText)
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Edit message'),
+                onTap: () => Navigator.pop(sheetContext, 'edit'),
+              ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, color: NiptoColors.danger),
+              title: const Text('Delete message'),
+              onTap: () => Navigator.pop(sheetContext, 'delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+
+    if (action == 'edit' && isText) {
+      final controller = TextEditingController(
+        text: message['body'] as String? ?? '',
+      );
+      final updated = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Edit message'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLength: 10000,
+            maxLines: 5,
+            minLines: 1,
+            decoration: const InputDecoration(hintText: 'Write a message…'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(
+                dialogContext,
+                controller.text.trim(),
+              ),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      );
+      controller.dispose();
+      if (updated == null || updated.isEmpty || !mounted) return;
+
+      try {
+        await _client.rpc(
+          'edit_own_message',
+          params: {'p_message_id': messageId, 'p_body': updated},
+        );
+        for (final cached in _olderMessages) {
+          if (cached['id'] == messageId) cached['body'] = updated;
+        }
+        if (mounted) setState(() {});
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Message could not be edited. Please try again.')),
+        );
+      }
+      return;
+    }
+
+    if (action == 'delete') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Delete this message?'),
+          content: const Text(
+            'The message will be removed for everyone in this conversation.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: NiptoColors.danger,
+              ),
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+
+      final mediaPath = message['media_path'] as String?;
+      try {
+        await _client.rpc(
+          'delete_own_message',
+          params: {'p_message_id': messageId},
+        );
+        if (mediaPath != null) {
+          try {
+            await _client.storage.from('chat-media').remove([mediaPath]);
+          } catch (_) {
+            // The database removes the media reference first; inaccessible
+            // orphaned objects can be removed by the retention cleanup job.
+          }
+        }
+        for (final cached in _olderMessages) {
+          if (cached['id'] == messageId) {
+            cached['deleted_at'] = DateTime.now().toUtc().toIso8601String();
+            cached['body'] = null;
+            cached['media_path'] = null;
+          }
+        }
+        if (mounted) setState(() {});
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Message could not be deleted. Please try again.')),
+        );
+      }
+    }
+  }
+
   Future<void> _startCall(String mediaType) async {
     if (NiptoSessionManager.instance.userId == null) return;
     try {
@@ -465,9 +607,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
                         ? 'Message deleted'
                         : (message['body'] as String? ?? 'Media message');
 
-                    return Align(
-                      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Container(
+                    return GestureDetector(
+                      onLongPress: mine && !deleted
+                          ? () => _showMessageActions(message)
+                          : null,
+                      child: Align(
+                        alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+                        child: Container(
                         constraints: BoxConstraints(
                           maxWidth: MediaQuery.sizeOf(context).width * 0.78,
                         ),
@@ -494,6 +640,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
                                   fontStyle: deleted ? FontStyle.italic : FontStyle.normal,
                                 ),
                               ),
+                        ),
                       ),
                     );
                   },
