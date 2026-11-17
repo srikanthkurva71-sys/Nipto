@@ -33,23 +33,25 @@ Keep the hosted Supabase project and its Auth session model so existing `auth.ui
 
 This is Nipto's own identity service, not Google, Apple, Facebook, a phone provider, or another external identity provider. Nipto stores and verifies the Nipto ID/password credentials. Supabase Auth acts only as the session broker: the Flutter app opens the Nipto-hosted OIDC authorization page through `signInWithOAuth(OAuthProvider('custom:nipto'))`; after Nipto authenticates the user, Supabase Auth creates or resumes the platform session. The provider must not return an email claim, and Supabase must accept the provider without an email address.
 
-The Supabase access token used by PostgREST, Storage and Realtime is issued by Supabase Auth and retains the stable Supabase user UUID. Nipto's OIDC ID token is only used by Supabase Auth to establish that session. This is intentionally different from configuring Nipto as a Supabase Third-Party Auth JWT issuer.
+The Supabase access token used by PostgREST, Storage and Realtime is issued by Supabase Auth and retains the stable Supabase user UUID. The Nipto OIDC ID token's `sub` is the stable Nipto credential identity UUID; Supabase Auth maps that external identity to its own `auth.users.id`. The Supabase user UUID remains the profile and social-data owner. Nipto's OIDC ID token is only used by Supabase Auth to establish that session. This is intentionally different from configuring Nipto as a Supabase Third-Party Auth JWT issuer.
 
 ### Nipto OIDC issuer
 
 Implement these endpoints under a stable HTTPS issuer URL:
 - `/.well-known/openid-configuration` — issuer metadata and endpoint URLs.
 - `/jwks` — public signing keys with `kid`; never expose private key material.
-- `/userinfo` — minimal Nipto profile claims after validating the access token.
-- Nipto-specific `/register`, `/login`, `/refresh`, `/logout`, `/logout-all`, `/migrate`, password-change, device-session, and recovery endpoints protected by strict request validation and rate limits.
+- `/authorize` — validates the Supabase client, exact callback URI, supported scopes, state, nonce and PKCE S256 challenge; serves the Nipto-hosted login/registration/account-link page.
+- `/token` — authenticates the configured Supabase OIDC client, validates the authorization code and PKCE verifier, and returns a short-lived ES256 ID token plus a scoped userinfo access token.
+- `/userinfo` — returns minimal Nipto profile claims after validating the access token.
+- Nipto-specific account, password-change, device-session, migration and recovery routes are protected by strict request validation, verified Supabase user identity where required, and rate limits. Supabase Auth—not the Nipto issuer—owns the app's refresh-token lifecycle.
 
 The Flutter app starts the Custom OAuth/OIDC authorization flow using Supabase Flutter. The Nipto-hosted authorization page collects Nipto ID and password, and the Nipto OIDC token endpoint returns a signed ID token to Supabase Auth. Supabase Auth then issues its normal access and refresh tokens to the app. No email scope or email claim is requested or required.
 
 OIDC tokens must include:
 - `iss`: exact configured Nipto issuer URL.
-- `sub`: stable Nipto account UUID; equal to `public.profiles.id`.
-- `aud`: registered Nipto Supabase project client identifier / accepted audience.
-- `iat`, short `exp`, unique `jti`, and required OIDC `nonce` where applicable.
+- `sub`: stable Nipto credential identity UUID from `private.nipto_accounts.identity_id`; Supabase Auth maps this provider identity to its own stable `auth.users.id`.
+- `aud`: registered Supabase custom OIDC client identifier.
+- `iat`, short `exp`, `auth_time`, and the OIDC `nonce` for authorization-code flows.
 - A `kid` JWT header identifying the asymmetric public key in JWKS.
 - No `email`, `email_verified`, `phone_number`, or synthetic contact claims. Supabase Auth adds its own `role=authenticated` claim to the app session JWT.
 
@@ -141,7 +143,7 @@ The existing production project uses Supabase Auth identities. Do not delete or 
 2. Verify discovery, JWKS, asymmetric ID-token validation, client audience, issuer, `sub`, expiry, nonce, and Supabase Auth session creation with email_optional enabled.
 3. Verify PostgREST, RLS, Storage, Realtime, RPC and private-channel authorization with Supabase-issued access tokens created after Nipto OIDC sign-in.
 4. Add Nipto credential records and link each Nipto identity to the existing Supabase Auth user UUID without changing the production auth flow.
-5. Migrate signed-in existing users through an explicit password re-entry flow. Verify the old credential once, create a new Argon2id hash, and preserve the existing profile UUID. Never copy Supabase Auth password hashes.
+5. Migrate a user only from an already authenticated, valid legacy Supabase session. The user chooses a new Nipto password in the hosted Nipto authorization page; the server creates a new Argon2id hash. The short-lived migration ticket binds the operation to the existing Supabase user UUID. Never copy or attempt to read Supabase Auth password hashes.
 6. Back up production data and storage metadata. Preserve profile IDs, messages, conversations, media ownership, notifications, call history, staff roles, and moderation records.
 7. Preserve the profile-to-`auth.users` foreign key and every existing profile UUID because Supabase Auth remains the app-session broker. Link each Nipto credential identity to the existing Supabase user UUID; do not recreate profiles or rewrite social-data ownership.
 8. Switch Android to Nipto OIDC only after migration, rollback, security, and device tests succeed. Keep the old project auth state available through a verified rollback window.
@@ -151,9 +153,9 @@ The existing production project uses Supabase Auth identities. Do not delete or 
 
 - Registration with no email, duplicate Nipto ID, reserved ID, malformed ID, weak/oversized password.
 - Login success, wrong password, unknown ID, disabled account, throttling, generic errors.
-- Supabase access token accepted by PostgREST; RLS prevents cross-account reads/writes.
+- Supabase-issued access token accepted by PostgREST; RLS prevents cross-account reads/writes.
 - Supabase session expiry/refresh, device logout, and global logout.
-- Realtime topic authorization and Storage policies under native JWT.
+- Realtime topic authorization and Storage policies under Supabase-issued session JWTs.
 - Optional recovery omitted at registration and linked later in Settings.
 - Pending/accepted/rejected/revoked recovery contact behavior.
 - Recovery request enumeration resistance, approval authorization, expiry, replay, concurrent redemption, rate limits, and password/session revocation.
