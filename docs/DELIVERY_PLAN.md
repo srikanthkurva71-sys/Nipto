@@ -28,6 +28,7 @@
 - [x] Private chat media and signed access.
 - [x] Add newest-first 50-message conversation loading with cursor-based older-page retrieval while retaining the live latest-message stream.
 - [ ] Complete message requests, retries, audio/video/file attachments and multi-device delivery.
+- [ ] Validate the new author-scoped message edit/delete RPCs and long-press UI in CI and a disposable staging database before marking this slice complete.
 - [ ] Implement one-to-one WebRTC voice/video calls using private authenticated signaling, short-lived TURN credentials, push wake-up, call lifecycle controls and mobile network recovery; see `docs/WEBRTC_CALLS.md`.
 - [ ] Add group calling through an SFU only after one-to-one calling is stable; no production mesh fan-out.
 
