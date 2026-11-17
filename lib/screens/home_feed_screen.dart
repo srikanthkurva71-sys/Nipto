@@ -301,26 +301,59 @@ class _PostCommentsSheet extends StatefulWidget {
 
 class _PostCommentsSheetState extends State<_PostCommentsSheet> {
   final _text = TextEditingController();
+  late Future<List<Map<String, dynamic>>> _comments;
   bool _sending = false;
   SupabaseClient get _client => Supabase.instance.client;
-  Future<List<Map<String, dynamic>>> _load() async {
-    final rows = await _client.from('post_comments').select('id, author_id, body, created_at').eq('post_id', widget.postId).order('created_at').limit(100);
-    return (rows as List).map((row) => Map<String, dynamic>.from(row)).toList();
+
+  @override
+  void initState() {
+    super.initState();
+    _comments = _load();
   }
+
+  Future<List<Map<String, dynamic>>> _load() async {
+    final rows = await _client
+        .from('post_comments')
+        .select('id, author_id, body, created_at')
+        .eq('post_id', widget.postId)
+        .order('created_at')
+        .limit(100);
+    return (rows as List)
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
   Future<void> _send() async {
     final body = _text.text.trim();
-    if (body.isEmpty || _sending) return;
+    final userId = NiptoSessionManager.instance.userId;
+    if (body.isEmpty || _sending || userId == null) return;
     setState(() => _sending = true);
     try {
-      await _client.from('post_comments').insert({'post_id': widget.postId, 'author_id': NiptoSessionManager.instance.userId!, 'body': body});
+      await _client.from('post_comments').insert({
+        'post_id': widget.postId,
+        'author_id': userId,
+        'body': body,
+      });
       _text.clear();
-      if (mounted) setState(() {});
+      if (mounted) {
+        setState(() => _comments = _load());
+      }
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Comment could not be sent.')));
-    } finally { if (mounted) setState(() => _sending = false); }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Comment could not be sent.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
+
   @override
-  void dispose() { _text.dispose(); super.dispose(); }
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
   @override
   Widget build(BuildContext context) {
     return SafeArea(child: Padding(
@@ -329,7 +362,7 @@ class _PostCommentsSheetState extends State<_PostCommentsSheet> {
         const Text('Comments', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
         const SizedBox(height: 12),
         Expanded(child: FutureBuilder<List<Map<String, dynamic>>>(
-          future: _load(),
+          future: _comments,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
             if (snapshot.hasError) return const Center(child: Text('Comments could not load.'));
