@@ -8,9 +8,13 @@ import 'services/nipto_session_manager.dart';
 /// Client-safe defaults for local development. Production/release builds
 /// should override these values with environment-specific Dart defines.
 /// Never put a Supabase service-role or secret key in the Flutter app.
-const _defaultSupabaseUrl = 'https://advmjribduqzyuwktkod.supabase.co';
-const _defaultSupabasePublishableKey =
-    'sb_publishable_zxqki-GLfT6zi-BXT1h6zw_nWq9Nhye';
+const _isReleaseBuild = bool.fromEnvironment('dart.vm.product');
+const _defaultSupabaseUrl = _isReleaseBuild
+    ? ''
+    : 'https://advmjribduqzyuwktkod.supabase.co';
+const _defaultSupabasePublishableKey = _isReleaseBuild
+    ? ''
+    : 'sb_publishable_zxqki-GLfT6zi-BXT1h6zw_nWq9Nhye';
 
 const _supabaseUrl = String.fromEnvironment(
   'SUPABASE_URL',
