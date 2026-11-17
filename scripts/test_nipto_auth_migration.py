@@ -7,6 +7,8 @@ AUTH_MIGRATION = ROOT / "supabase/migrations/20261116170000_nipto_native_auth.sq
 CORE_MIGRATION = ROOT / "supabase/migrations/20261116000100_nipto_social_core.sql"
 REGISTRATION_MIGRATION = ROOT / "supabase/migrations/20261117100000_nipto_registration_assistance.sql"
 FEED_MIGRATION = ROOT / "supabase/migrations/20261117130000_nipto_home_feed_stable_cursor.sql"
+RECOVERY_SETUP_MIGRATION = ROOT / "supabase/migrations/20261117150000_nipto_recovery_setup_after_registration.sql"
+IDENTITY_FUNCTION = ROOT / "supabase/functions/nipto-identity/index.ts"
 
 
 class NiptoAuthMigrationTests(unittest.TestCase):
@@ -16,6 +18,8 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         cls.core_sql = CORE_MIGRATION.read_text(encoding="utf-8")
         cls.registration_sql = REGISTRATION_MIGRATION.read_text(encoding="utf-8")
         cls.feed_sql = FEED_MIGRATION.read_text(encoding="utf-8")
+        cls.recovery_setup_sql = RECOVERY_SETUP_MIGRATION.read_text(encoding="utf-8")
+        cls.identity_source = IDENTITY_FUNCTION.read_text(encoding="utf-8")
 
     def test_existing_auth_trigger_calls_replaced_public_handler(self):
         self.assertIn("create trigger on_auth_user_created_nipto", self.core_sql)
@@ -121,6 +125,19 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         self.assertIn("(p.created_at, p.id) < (p_before, p_before_id)", self.feed_sql)
         self.assertIn("order by p.created_at desc, p.id desc", self.feed_sql)
         self.assertIn("grant execute on function public.get_home_feed(integer, timestamptz, uuid) to authenticated, service_role;", self.feed_sql)
+
+
+    def test_recovery_setup_is_only_available_after_registration(self):
+        self.assertIn("drop function if exists public.nipto_oidc_register(text,text,text,text);", self.recovery_setup_sql)
+        self.assertIn("drop function if exists public.nipto_oidc_register_legacy(uuid,text,text,text,text);", self.recovery_setup_sql)
+        self.assertIn("create function public.nipto_oidc_register(\n  p_nipto_id text,\n  p_display_name text,\n  p_password_hash text", self.recovery_setup_sql)
+        self.assertNotIn("pending_recovery_nipto_id", self.recovery_setup_sql.split("create function public.nipto_oidc_register(", 1)[1].split("create function public.nipto_oidc_register_legacy(", 1)[0])
+        self.assertNotIn('name="recovery_nipto_id"', self.identity_source)
+        self.assertNotIn("p_recovery_nipto_id", self.identity_source)
+        self.assertIn('path.endsWith("/recovery/link") && method === "POST"', self.identity_source)
+        recovery_link = self.identity_source.split('path.endsWith("/recovery/link") && method === "POST"', 1)[1].split('path.endsWith("/recovery/contact-response")', 1)[0]
+        self.assertIn("authenticatedUserId(request)", recovery_link)
+        self.assertIn("nipto_native_request_recovery_contact", recovery_link)
 
     def test_nipto_id_constraints_use_canonical_handle_format(self):
         self.assertIn("nipto_id ~ '^[a-z0-9]+(_[a-z0-9]+)*$'", self.registration_sql)
