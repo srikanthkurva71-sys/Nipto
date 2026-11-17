@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { argon2id, argon2Verify } from "npm:hash-wasm@4.13.0";
+import { isAllowedOidcScope } from "./validation.ts";
 
 type Json = Record<string, unknown>;
 
@@ -516,8 +517,7 @@ async function authorizeGet(request: Request): Promise<Response> {
   const challenge = url.searchParams.get("code_challenge") ?? "";
   const method = url.searchParams.get("code_challenge_method") ?? "";
   if (client !== oidcClientId() || redirectUri !== oidcRedirectUri()
-    || responseType !== "code" || !scope.split(" ").includes("openid")
-    || scope.split(" ").includes("email") || !state || state.length > 512
+    || responseType !== "code" || !isAllowedOidcScope(scope) || !state || state.length > 512
     || !nonce || nonce.length > 512 || method !== "S256"
     || !/^[A-Za-z0-9_-]{43,128}$/.test(challenge)) {
     throw new ApiError("Invalid Nipto authorization request", 400);
