@@ -591,9 +591,20 @@ as $$
 declare v_identity uuid;
 begin
   if p_challenge_hash !~ '^[a-f0-9]{64}$' or p_grant_hash !~ '^[a-f0-9]{64}$' then return null; end if;
-  select c.owner_identity_id into v_identity from private.nipto_recovery_challenges c
+  select c.owner_identity_id into v_identity
+  from private.nipto_recovery_challenges c
+  join private.nipto_accounts owner_account on owner_account.identity_id=c.owner_identity_id
+    and owner_account.status='active'
+  join public.profiles owner_profile on owner_profile.id=owner_account.supabase_user_id
+    and owner_profile.account_state='active'
+  join public.account_recovery_contacts rc on rc.owner_id=owner_account.supabase_user_id
+    and rc.recovery_user_id=c.recovery_user_id and rc.status='accepted'
+  join public.profiles recovery_profile on recovery_profile.id=rc.recovery_user_id
+    and recovery_profile.account_state='active'
   where c.id=p_challenge_id and c.challenge_hash=p_challenge_hash
-    and c.status='approved' and c.expires_at>pg_catalog.now() for update;
+    and c.status='approved' and c.expires_at>pg_catalog.now()
+    and not private.is_blocked_between(owner_account.supabase_user_id,rc.recovery_user_id)
+  for update of c, owner_account, rc, owner_profile, recovery_profile;
   if v_identity is null then return null; end if;
   insert into private.nipto_password_reset_grants(challenge_id,owner_identity_id,grant_hash,expires_at)
   values(p_challenge_id,v_identity,p_grant_hash,pg_catalog.now()+interval '10 minutes')
@@ -610,7 +621,9 @@ grant execute on function public.nipto_native_claim_reset_grant(uuid,text,text) 
 create or replace function public.nipto_native_consume_reset_grant(p_grant_hash text,p_new_password_hash text)
 returns uuid language plpgsql security definer set search_path=''
 as $$
-declare v_grant private.nipto_password_reset_grants%rowtype;
+declare
+  v_grant private.nipto_password_reset_grants%rowtype;
+  v_owner_user uuid;
 begin
   if p_grant_hash !~ '^[a-f0-9]{64}$' or p_new_password_hash is null
     or p_new_password_hash not like '$argon2id$%' or char_length(p_new_password_hash) not between 32 and 512 then
@@ -619,13 +632,28 @@ begin
   select * into v_grant from private.nipto_password_reset_grants g
   where g.grant_hash=p_grant_hash for update;
   if not found or v_grant.consumed_at is not null or v_grant.expires_at<=pg_catalog.now() then return null; end if;
+
+  select a.supabase_user_id into v_owner_user
+  from private.nipto_accounts a
+  join public.profiles owner_profile on owner_profile.id=a.supabase_user_id
+    and owner_profile.account_state='active'
+  join private.nipto_recovery_challenges c on c.id=v_grant.challenge_id and c.status='consumed'
+  join public.account_recovery_contacts rc on rc.owner_id=a.supabase_user_id
+    and rc.recovery_user_id=c.recovery_user_id and rc.status='accepted'
+  join public.profiles recovery_profile on recovery_profile.id=rc.recovery_user_id
+    and recovery_profile.account_state='active'
+  where a.identity_id=v_grant.owner_identity_id and a.status='active'
+    and not private.is_blocked_between(a.supabase_user_id,rc.recovery_user_id)
+  for update of a, owner_profile, c, rc, recovery_profile;
+  if v_owner_user is null then return null; end if;
+
   update private.nipto_password_reset_grants set consumed_at=pg_catalog.now() where id=v_grant.id;
   update private.nipto_accounts set password_hash=p_new_password_hash,
     password_changed_at=pg_catalog.now(),updated_at=pg_catalog.now()
-  where identity_id=v_grant.owner_identity_id;
+  where identity_id=v_grant.owner_identity_id and status='active';
   insert into private.nipto_security_events(identity_id,event_type)
   values(v_grant.owner_identity_id,'password_reset');
-  return (select supabase_user_id from private.nipto_accounts where identity_id=v_grant.owner_identity_id);
+  return v_owner_user;
 end;
 $$;
 revoke all on function public.nipto_native_consume_reset_grant(text,text) from public,anon,authenticated;
