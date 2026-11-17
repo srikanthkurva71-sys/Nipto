@@ -107,7 +107,7 @@ The issuer URL is `https://advmjribduqzyuwktkod.supabase.co/functions/v1/nipto-i
 - A signed-in user may request one recovery Nipto account from Settings → Security → Recovery Nipto account. Recovery linking is never part of registration or sign-in.
 - The target account receives an in-app notification and must accept.
 - Pending, rejected, blocked, suspended, or removed contacts cannot recover the account.
-- Prevent self-linking and enforce the one-contact policy server-side.
+- Prevent self-linking, enforce the one-contact policy server-side, and reject any pending or accepted relationship that would create a directed recovery cycle. Serialize link creation with a transaction-scoped graph lock so concurrent requests cannot bypass the cycle check.
 - Both parties can see and revoke the relationship. Changing the contact requires re-approval.
 - Explain that recovery is only available while the trusted account remains active and accessible.
 
