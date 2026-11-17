@@ -145,7 +145,7 @@ The existing production project uses Supabase Auth identities. Do not delete or 
 6. Back up production data and storage metadata. Preserve profile IDs, messages, conversations, media ownership, notifications, call history, staff roles, and moderation records.
 7. Preserve the profile-to-`auth.users` foreign key and every existing profile UUID because Supabase Auth remains the app-session broker. Link each Nipto credential identity to the existing Supabase user UUID; do not recreate profiles or rewrite social-data ownership.
 8. Switch Android to Nipto OIDC only after migration, rollback, security, and device tests succeed. Keep the old project auth state available through a verified rollback window.
-9. Remove old email lookup/reset Edge Function behavior, email-based UI, and unused Supabase Auth identities only after all migration checks are complete.
+9. After the Nipto identity is linked and verified, remove the legacy email/phone identities and clear the legacy Supabase password hash while preserving the Supabase user UUID. Remove old email lookup/reset behavior only after all migration checks are complete.
 
 ## 7. Required implementation and release tests
 
