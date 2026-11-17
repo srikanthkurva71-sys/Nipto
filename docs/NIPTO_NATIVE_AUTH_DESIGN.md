@@ -49,10 +49,9 @@ OIDC tokens must include:
 - `iss`: exact configured Nipto issuer URL.
 - `sub`: stable Nipto account UUID; equal to `public.profiles.id`.
 - `aud`: registered Nipto Supabase project client identifier / accepted audience.
-- `role`: `authenticated` for signed-in users.
 - `iat`, short `exp`, unique `jti`, and required OIDC `nonce` where applicable.
 - A `kid` JWT header identifying the asymmetric public key in JWKS.
-- No `email`, `email_verified`, `phone_number`, or synthetic contact claims.
+- No `email`, `email_verified`, `phone_number`, or synthetic contact claims. Supabase Auth adds its own `role=authenticated` claim to the app session JWT.
 
 Use ES256 or RS256 with a reviewed WebCrypto implementation and a key-rotation process that retains old public keys until all issued tokens expire. Private signing keys belong only in Edge Function secrets. Never put them, service-role credentials, or password hashes in Flutter or source control.
 
