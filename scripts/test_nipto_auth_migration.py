@@ -11,7 +11,7 @@ FEED_MIGRATION = ROOT / "supabase/migrations/20261117130000_nipto_home_feed_stab
 RECOVERY_SETUP_MIGRATION = ROOT / "supabase/migrations/20261117150000_nipto_recovery_setup_after_registration.sql"
 IDENTITY_FUNCTION = ROOT / "supabase/functions/nipto-identity/index.ts"
 RECOVERY_SCREEN = APP_ROOT / "lib/screens/recovery_contacts_screen.dart"
-AUTH_SCREEN = ROOT / "lib/screens/auth_screen.dart"
+AUTH_SCREEN = APP_ROOT / "lib/screens/auth_screen.dart"
 RECOVERY_CYCLE_MIGRATION = ROOT / "supabase/migrations/20261117160000_nipto_recovery_cycle_prevention.sql"
 
 
@@ -176,8 +176,8 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         self.assertIn("grant update (body) on public.post_comments to authenticated", migration)
         self.assertIn("grant update (body) on public.short_comments to authenticated", migration)
         self.assertIn("short_comments_updated_at", migration)
-        home = (ROOT / "lib/screens/home_feed_screen.dart").read_text()
-        shorts = (ROOT / "lib/screens/shorts_screen.dart").read_text()
+        home = (APP_ROOT / "lib/screens/home_feed_screen.dart").read_text()
+        shorts = (APP_ROOT / "lib/screens/shorts_screen.dart").read_text()
         self.assertIn("_editComment", home)
         self.assertIn("_deleteComment", home)
         self.assertIn("_editComment", shorts)
