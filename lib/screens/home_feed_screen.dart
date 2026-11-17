@@ -32,10 +32,11 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     if (_scroll.hasClients && !_loadingMore && _hasMore && _scroll.position.extentAfter < 700) _loadMore();
   }
 
-  Future<List<Map<String, dynamic>>> _fetchPage({DateTime? before}) async {
+  Future<List<Map<String, dynamic>>> _fetchPage({DateTime? before, String? beforeId}) async {
     final rows = await _client.rpc('get_home_feed', params: {
       'p_limit': 20,
       'p_before': before?.toUtc().toIso8601String(),
+      'p_before_id': beforeId,
     });
     return (rows as List).map((row) => Map<String, dynamic>.from(row)).toList();
   }
@@ -56,8 +57,13 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     setState(() => _loadingMore = true);
     try {
       final before = DateTime.tryParse(_posts.last['created_at'] as String? ?? '');
-      final rows = await _fetchPage(before: before);
-      if (mounted) setState(() { _posts.addAll(rows); _hasMore = rows.length == 20; });
+      final beforeId = _posts.last['id'] as String?;
+      final rows = await _fetchPage(before: before, beforeId: beforeId);
+      if (mounted) setState(() {
+        final existingIds = _posts.map((post) => post['id']).toSet();
+        _posts.addAll(rows.where((post) => !existingIds.contains(post['id'])));
+        _hasMore = rows.length == 20;
+      });
     } catch (_) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not load more posts.')));
     } finally { if (mounted) setState(() => _loadingMore = false); }
