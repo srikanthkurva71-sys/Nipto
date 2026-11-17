@@ -250,6 +250,12 @@ class NiptoSessionManager {
       await _clearRecoveryChallenge();
       throw const NiptoAuthException('This recovery request expired. Start a new request.');
     }
+    if (status == 'consumed') {
+      await _clearRecoveryChallenge();
+      throw const NiptoAuthException(
+        'This recovery approval has already been used. Start a new request if you still need to reset your password.',
+      );
+    }
     final grant = response['reset_grant'] as String?;
     if (status == 'approved' && grant != null) {
       await _storage.write(key: _resetGrantKey, value: grant);
