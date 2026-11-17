@@ -44,6 +44,10 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         self.assertIn("for update", consume)
         self.assertIn("consumed_at is not null", consume)
         self.assertIn("expires_at<=pg_catalog.now()", consume)
+        self.assertIn("join public.account_recovery_contacts rc", claim)
+        self.assertIn("for update of c, owner_account, rc", claim)
+        self.assertIn("join public.account_recovery_contacts rc", consume)
+        self.assertIn("for update of a, owner_profile, c, rc", consume)
 
     def test_recovery_approval_rechecks_active_accounts_and_block_state(self):
         listing = self.auth_sql.split(
