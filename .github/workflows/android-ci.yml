@@ -31,6 +31,9 @@ jobs:
       - name: Generate Android platform project
         run: flutter create --platforms=android --org com.nipto --project-name nipto .
 
+      - name: Test Android manifest configuration
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+
       - name: Configure Nipto OAuth callback deep link
         run: python3 scripts/configure_android_manifest.py
 
