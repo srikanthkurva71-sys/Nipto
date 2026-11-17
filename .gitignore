@@ -21,6 +21,7 @@ coverage/
 *.keystore
 key.properties
 android/local.properties
+mobile/app/android/local.properties
 
 # OS
 .DS_Store

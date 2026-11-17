@@ -3,13 +3,14 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
+APP_ROOT = ROOT / "mobile/app"
 AUTH_MIGRATION = ROOT / "supabase/migrations/20261116170000_nipto_native_auth.sql"
 CORE_MIGRATION = ROOT / "supabase/migrations/20261116000100_nipto_social_core.sql"
 REGISTRATION_MIGRATION = ROOT / "supabase/migrations/20261117100000_nipto_registration_assistance.sql"
 FEED_MIGRATION = ROOT / "supabase/migrations/20261117130000_nipto_home_feed_stable_cursor.sql"
 RECOVERY_SETUP_MIGRATION = ROOT / "supabase/migrations/20261117150000_nipto_recovery_setup_after_registration.sql"
 IDENTITY_FUNCTION = ROOT / "supabase/functions/nipto-identity/index.ts"
-RECOVERY_SCREEN = ROOT / "lib/screens/recovery_contacts_screen.dart"
+RECOVERY_SCREEN = APP_ROOT / "lib/screens/recovery_contacts_screen.dart"
 AUTH_SCREEN = ROOT / "lib/screens/auth_screen.dart"
 RECOVERY_CYCLE_MIGRATION = ROOT / "supabase/migrations/20261117160000_nipto_recovery_cycle_prevention.sql"
 

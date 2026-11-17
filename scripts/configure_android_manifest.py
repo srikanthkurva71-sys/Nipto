@@ -5,7 +5,8 @@ from pathlib import Path
 import re
 import sys
 
-MANIFEST = Path("android/app/src/main/AndroidManifest.xml")
+ROOT = Path(__file__).resolve().parents[1]
+MANIFEST = ROOT / "mobile/app/android/app/src/main/AndroidManifest.xml"
 INTENT_FILTER = """            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

@@ -5,7 +5,8 @@
       "name": "Nipto (Android)",
       "request": "launch",
       "type": "dart",
-      "program": "lib/main.dart",
+      "program": "${workspaceFolder}/mobile/app/lib/main.dart",
+      "cwd": "${workspaceFolder}/mobile/app",
       "args": [
         "--dart-define-from-file=config/dev.json"
       ]
