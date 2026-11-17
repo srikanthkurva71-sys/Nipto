@@ -40,20 +40,25 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     unawaited(_pollIncomingCalls());
     _pageController = PageController(initialPage: _index);
     _loadUnreadCount();
-    _notificationChannel = Supabase.instance.client
-        .channel('nipto-notifications-badge')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'notifications',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'recipient_id',
-            value: NiptoSessionManager.instance.userId!,
-          ),
-          callback: (_) => _loadUnreadCount(),
-        )
-        .subscribe();
+    // Auth state can change while the widget tree is rebuilding. Capture and
+    // validate the user before creating a user-scoped Realtime subscription.
+    final userId = NiptoSessionManager.instance.userId;
+    if (userId != null) {
+      _notificationChannel = Supabase.instance.client
+          .channel('nipto-notifications-badge:$userId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'notifications',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'recipient_id',
+              value: userId,
+            ),
+            callback: (_) => _loadUnreadCount(),
+          )
+          .subscribe();
+    }
   }
 
   @override
