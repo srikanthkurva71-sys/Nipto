@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import '../services/nipto_session_manager.dart';
 
 import '../theme/nipto_theme.dart';
@@ -20,8 +18,6 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
   late Future<List<Map<String, dynamic>>> _contacts;
   late Future<List<Map<String, dynamic>>> _passwordRequests;
 
-  SupabaseClient get _client => Supabase.instance.client;
-
   @override
   void initState() {
     super.initState();
@@ -39,11 +35,8 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
     super.dispose();
   }
 
-  Future<List<Map<String, dynamic>>> _loadContacts() async {
-    final rows = await _client.rpc('list_my_recovery_contacts');
-    return (rows as List)
-        .map((row) => Map<String, dynamic>.from(row as Map))
-        .toList();
+  Future<List<Map<String, dynamic>>> _loadContacts() {
+    return NiptoSessionManager.instance.listRecoveryContacts();
   }
 
   Future<void> _refresh() async {
@@ -174,7 +167,7 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
     if (confirm != true) return;
     setState(() => _busy = true);
     try {
-      await _client.rpc('remove_recovery_contact', params: {'p_request_id': requestId});
+      await NiptoSessionManager.instance.removeRecoveryContact(requestId);
       if (mounted) setState(() => _contacts = _loadContacts());
     } catch (_) {
       if (mounted) {
