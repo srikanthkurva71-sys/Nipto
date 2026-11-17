@@ -190,6 +190,8 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         self.assertIn("cm.membership_state = 'accepted'", migration)
         self.assertIn("m.message_type = 'text'", migration)
         self.assertIn("m.deleted_at is null", migration)
+        self.assertIn("edited_at = now()", migration)
+        self.assertIn("body = 'Message deleted'", migration)
         self.assertIn("revoke all on function public.edit_own_message(uuid, text) from public, anon", migration)
         self.assertIn("grant execute on function public.edit_own_message(uuid, text) to authenticated", migration)
         self.assertIn("grant execute on function public.delete_own_message(uuid) to authenticated", migration)
