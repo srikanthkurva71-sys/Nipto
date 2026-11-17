@@ -455,7 +455,8 @@ begin
   if v_user_id is null or not exists(
     select 1 from auth.identities i where i.user_id=v_user_id and i.provider='custom:nipto'
   ) then raise exception 'Link your Nipto identity before removing legacy sign-in'; end if;
-  update auth.users set email=null,email_confirmed_at=null,phone=null,phone_confirmed_at=null
+  update auth.users set email=null,email_confirmed_at=null,phone=null,phone_confirmed_at=null,
+    encrypted_password=''
   where id=v_user_id;
   delete from auth.identities where user_id=v_user_id and provider in ('email','phone');
   insert into private.nipto_security_events(identity_id,event_type)
