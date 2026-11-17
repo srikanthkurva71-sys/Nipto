@@ -376,7 +376,12 @@ function renderAuthorizePage(input: {
             const digits = "23456789";
             const symbols = "!@#$%^&*()-_=+";
             const all = lower + upper + digits + symbols;
-            const randomIndex = (max) => crypto.getRandomValues(new Uint32Array(1))[0] % max;
+            const randomIndex = (max) => {
+              const limit = Math.floor(0x100000000 / max) * max;
+              let value;
+              do { value = crypto.getRandomValues(new Uint32Array(1))[0]; } while (value >= limit);
+              return value % max;
+            };
             const chars = [lower[randomIndex(lower.length)], upper[randomIndex(upper.length)],
               digits[randomIndex(digits.length)], symbols[randomIndex(symbols.length)]];
             while (chars.length < 20) chars.push(all[randomIndex(all.length)]);
