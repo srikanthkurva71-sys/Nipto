@@ -52,7 +52,7 @@ function html(content: string, status = 200): Response {
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",
-      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
     },
   });
 }
@@ -318,6 +318,15 @@ function renderAuthorizePage(input: {
     : isLink
     ? `<label>Recovery Nipto account <span>(optional)</span><input name="recovery_nipto_id" maxlength="24" autocomplete="off" placeholder="Nipto ID"></label>`
     : "";
+  const registrationTools = isRegister
+    ? `<div id="id-feedback" class="feedback" aria-live="polite">Choose a Nipto ID. We will check availability.</div>
+       <div id="id-suggestions" class="suggestions" aria-live="polite"></div>`
+    : "";
+  const passwordTools = isRegister || isLink
+    ? `<div class="password-tools"><button type="button" class="secondary" id="suggest-password">Suggest a strong password</button>
+       <button type="button" class="secondary" id="toggle-password">Show</button></div>
+       <div id="password-feedback" class="feedback" aria-live="polite">Use at least 12 characters. A unique password is safest.</div>`
+    : "";
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <title>${isRegister ? "Create your Nipto account" : isLink ? "Set your Nipto password" : "Sign in to Nipto"}</title>
     <style>
@@ -327,7 +336,12 @@ function renderAuthorizePage(input: {
       h1{font-size:23px;text-align:center;margin:0 0 8px}p{color:#77748a;line-height:1.5;text-align:center}
       label{display:block;font-size:14px;font-weight:650;margin:16px 0 0}label span{font-weight:400;color:#888}
       input{display:block;width:100%;margin-top:7px;padding:13px 14px;border:1px solid #dedbea;border-radius:12px;font:inherit}
-      button{width:100%;margin-top:22px;padding:14px;border:0;border-radius:12px;background:#6657e8;color:#fff;font-weight:750;font-size:16px}
+      button{width:100%;margin-top:22px;padding:14px;border:0;border-radius:12px;background:#6657e8;color:#fff;font-weight:750;font-size:16px;cursor:pointer}
+      button:disabled{opacity:.55;cursor:not-allowed}.feedback{font-size:13px;color:#77748a;margin-top:8px;min-height:20px}
+      .feedback.good{color:#18794e}.feedback.bad{color:#b42318}.suggestions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+      .suggestions button,.password-tools .secondary{width:auto;margin:0;padding:8px 11px;background:#f0efff;color:#5142ca;font-size:13px;border:1px solid #dedaff}
+      .password-tools{display:flex;gap:8px;margin-top:10px}.password-tools button{flex:1}
+      .password-tools input{font-family:ui-monospace,monospace}
       a{display:block;text-align:center;color:#6657e8;margin-top:18px;text-decoration:none;font-weight:650}
       .error{background:#fff0f0;color:#a22;padding:10px;border-radius:10px;text-align:left}
       .hint{font-size:13px}
@@ -340,13 +354,122 @@ function renderAuthorizePage(input: {
       <input type="hidden" name="csrf_token" value="${htmlEscape(input.csrfToken)}">
       <input type="hidden" name="action" value="${isRegister ? "register" : isLink ? "link" : "login"}">
       ${fields}
-      ${isLink ? "" : `<label>Nipto ID<input name="nipto_id" maxlength="24" autocomplete="username" autocapitalize="none" required></label>`}
-      <label>Password<input name="password" type="password" minlength="12" maxlength="128" autocomplete="${isRegister || isLink ? "new-password" : "current-password"}" required></label>
-      <button type="submit">${isRegister ? "Create account" : isLink ? "Link Nipto account" : "Sign in"}</button>
+      ${isLink ? "" : `<label>Nipto ID<input name="nipto_id" id="nipto-id" maxlength="24" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>${registrationTools}`}
+      <label>Password<input name="password" id="nipto-password" type="password" minlength="12" maxlength="128" autocomplete="${isRegister || isLink ? "new-password" : "current-password"}" required></label>
+      ${passwordTools}
+      <button type="submit" id="submit-auth">${isRegister ? "Create account" : isLink ? "Link Nipto account" : "Sign in"}</button>
     </form>
     ${isLink ? "" : `<a href="${input.switchUrl}">${isRegister ? "Already have a Nipto account? Sign in" : "New to Nipto? Create an account"}</a>`}
     <p class="hint">Your Nipto password is handled by Nipto. It is never sent to an email provider.</p>
-    </main></body></html>`;
+    </main>
+    ${isRegister || isLink ? `<script>
+      (() => {
+        const form = document.querySelector("form");
+        const password = document.getElementById("nipto-password");
+        const suggest = document.getElementById("suggest-password");
+        const toggle = document.getElementById("toggle-password");
+        const passwordFeedback = document.getElementById("password-feedback");
+        if (password && suggest) {
+          suggest.addEventListener("click", () => {
+            const lower = "abcdefghijkmnopqrstuvwxyz";
+            const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+            const digits = "23456789";
+            const symbols = "!@#$%^&*()-_=+";
+            const all = lower + upper + digits + symbols;
+            const randomIndex = (max) => crypto.getRandomValues(new Uint32Array(1))[0] % max;
+            const chars = [lower[randomIndex(lower.length)], upper[randomIndex(upper.length)],
+              digits[randomIndex(digits.length)], symbols[randomIndex(symbols.length)]];
+            while (chars.length < 20) chars.push(all[randomIndex(all.length)]);
+            for (let i = chars.length - 1; i > 0; i--) {
+              const j = randomIndex(i + 1); [chars[i], chars[j]] = [chars[j], chars[i]];
+            }
+            password.value = chars.join("");
+            password.type = "text";
+            if (toggle) toggle.textContent = "Hide";
+            passwordFeedback.textContent = "Strong 20-character password generated on this device. Save it in a trusted password manager.";
+            passwordFeedback.className = "feedback good";
+            password.dispatchEvent(new Event("input", { bubbles: true }));
+          });
+          password.addEventListener("input", () => {
+            const value = password.value;
+            const checks = [value.length >= 12, /[a-z]/.test(value), /[A-Z]/.test(value),
+              /[0-9]/.test(value), /[^A-Za-z0-9]/.test(value)];
+            const score = checks.filter(Boolean).length;
+            passwordFeedback.textContent = score >= 5 ? "Strong password." :
+              score >= 3 ? "Good start. Add length and character variety." :
+              "Use at least 12 characters with a mix of character types.";
+            passwordFeedback.className = "feedback " + (score >= 5 ? "good" : "");
+          });
+        }
+        if (toggle && password) toggle.addEventListener("click", () => {
+          password.type = password.type === "password" ? "text" : "password";
+          toggle.textContent = password.type === "password" ? "Show" : "Hide";
+        });
+        const idInput = document.getElementById("nipto-id");
+        const feedback = document.getElementById("id-feedback");
+        const suggestions = document.getElementById("id-suggestions");
+        const submit = document.getElementById("submit-auth");
+        if (idInput && feedback && suggestions && submit) {
+          let timer = 0;
+          let lastChecked = "";
+          let available = false;
+          const checkId = async () => {
+            const value = idInput.value.trim().replace(/^@/, "").toLowerCase();
+            available = false;
+            lastChecked = "";
+            suggestions.replaceChildren();
+            if (!/^[a-z0-9_]{3,24}$/.test(value)) {
+              feedback.textContent = "Use 3–24 letters, numbers or underscores.";
+              feedback.className = "feedback";
+              submit.disabled = true;
+              return;
+            }
+            feedback.textContent = "Checking availability…";
+            feedback.className = "feedback";
+            try {
+              const response = await fetch("${issuer()}/id/check", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ nipto_id: value })
+              });
+              if (!response.ok) throw new Error("check_failed");
+              const result = await response.json();
+              if (idInput.value.trim().replace(/^@/, "").toLowerCase() !== value) return;
+              lastChecked = value;
+              available = result.available === true;
+              feedback.textContent = available ? "✓ This Nipto ID is available." :
+                "This Nipto ID already exists or cannot be used. Try one of these:";
+              feedback.className = "feedback " + (available ? "good" : "bad");
+              submit.disabled = !available;
+              for (const candidate of (result.suggestions || []).slice(0, 5)) {
+                const button = document.createElement("button");
+                button.type = "button"; button.textContent = "@" + candidate;
+                button.addEventListener("click", () => {
+                  idInput.value = candidate;
+                  idInput.dispatchEvent(new Event("input", { bubbles: true }));
+                });
+                suggestions.append(button);
+              }
+            } catch (_) {
+              feedback.textContent = "Could not check right now. Please try again.";
+              feedback.className = "feedback bad";
+              submit.disabled = true;
+            }
+          };
+          idInput.addEventListener("input", () => {
+            clearTimeout(timer); available = false; submit.disabled = true;
+            timer = setTimeout(checkId, 350);
+          });
+          form.addEventListener("submit", (event) => {
+            const value = idInput.value.trim().replace(/^@/, "").toLowerCase();
+            if (!available || lastChecked !== value) {
+              event.preventDefault(); checkId();
+            }
+          });
+          submit.disabled = true;
+        }
+      })();
+    </script>` : ""}
+    </body></html>`;
 }
 async function authorizeGet(request: Request): Promise<Response> {
   const url = new URL(request.url);
@@ -599,6 +722,18 @@ async function handleRoute(request: Request): Promise<Response> {
   const method = request.method;
 
   if (method === "OPTIONS") return json({ ok: true });
+  if (path.endsWith("/id/check") && method === "POST") {
+    const input = await requestBody(request);
+    const niptoId = String(input.nipto_id ?? "").trim().replace(/^@/, "").toLowerCase();
+    await enforceRateLimit(request, "id-check:" + niptoId);
+    const result = firstRow(await rpc("nipto_oidc_check_id", { p_nipto_id: niptoId }));
+    if (!result) throw new ApiError("Nipto ID availability could not be checked.", 503);
+    return json({
+      available: result.available === true,
+      suggestions: Array.isArray(result.suggestions) ? result.suggestions.slice(0, 5) : [],
+    });
+  }
+
   if (path.endsWith("/.well-known/openid-configuration") && method === "GET") {
     return json(discoveryDocument());
   }
