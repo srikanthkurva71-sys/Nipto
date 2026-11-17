@@ -25,7 +25,8 @@ begin
   end if;
 
   update public.messages as m
-     set body = v_body
+     set body = v_body,
+         edited_at = now()
    where m.id = p_message_id
      and m.sender_id = v_user_id
      and m.message_type = 'text'
@@ -62,7 +63,7 @@ begin
 
   update public.messages as m
      set deleted_at = now(),
-         body = null,
+         body = 'Message deleted',
          media_path = null
    where m.id = p_message_id
      and m.sender_id = v_user_id
