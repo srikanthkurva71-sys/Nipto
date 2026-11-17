@@ -36,6 +36,7 @@ class NiptoSessionManager {
   static const _recoveryIdKey = 'nipto.recovery.challenge_id.v1';
   static const _recoverySecretKey = 'nipto.recovery.challenge_secret.v1';
   static const _recoveryStartedAtKey = 'nipto.recovery.started_at.v1';
+  static const _recoveryNiptoIdKey = 'nipto.recovery.nipto_id.v1';
   static const _resetGrantKey = 'nipto.recovery.reset_grant.v1';
   static const _pendingLinkNiptoIdKey = 'nipto.auth.pending_link_id.v1';
 
@@ -200,19 +201,26 @@ class NiptoSessionManager {
   }
 
   Future<void> startPasswordRecovery(String niptoId) async {
-    if (await _storage.read(key: _resetGrantKey) != null) return;
-    final existingId = await _storage.read(key: _recoveryIdKey);
-    final existingSecret = await _storage.read(key: _recoverySecretKey);
-    final startedRaw = await _storage.read(key: _recoveryStartedAtKey);
-    final startedAt = int.tryParse(startedRaw ?? '');
-    if (existingId != null && existingSecret != null && startedAt != null &&
-        DateTime.now().millisecondsSinceEpoch - startedAt <
-            const Duration(minutes: 15).inMilliseconds) {
-      return;
+    final normalizedNiptoId =
+        niptoId.trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
+    final existingNiptoId = await _storage.read(key: _recoveryNiptoIdKey);
+    final existingGrant = await _storage.read(key: _resetGrantKey);
+    if (existingNiptoId == normalizedNiptoId) {
+      if (existingGrant != null) return;
+      final existingId = await _storage.read(key: _recoveryIdKey);
+      final existingSecret = await _storage.read(key: _recoverySecretKey);
+      final startedRaw = await _storage.read(key: _recoveryStartedAtKey);
+      final startedAt = int.tryParse(startedRaw ?? '');
+      if (existingId != null && existingSecret != null && startedAt != null &&
+          DateTime.now().millisecondsSinceEpoch - startedAt <
+              const Duration(minutes: 15).inMilliseconds) {
+        return;
+      }
     }
     await _clearRecoveryChallenge();
+    await _storage.delete(key: _resetGrantKey);
     final response = await _post('recovery/start', {
-      'nipto_id': niptoId.trim().replaceFirst(RegExp(r'^@'), '').toLowerCase(),
+      'nipto_id': normalizedNiptoId,
     });
     final challengeId = response['challenge_id'] as String?;
     final challengeSecret = response['challenge_secret'] as String?;
@@ -221,6 +229,7 @@ class NiptoSessionManager {
     }
     await _storage.write(key: _recoveryIdKey, value: challengeId);
     await _storage.write(key: _recoverySecretKey, value: challengeSecret);
+    await _storage.write(key: _recoveryNiptoIdKey, value: normalizedNiptoId);
     await _storage.write(
       key: _recoveryStartedAtKey,
       value: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -288,6 +297,7 @@ class NiptoSessionManager {
     await _storage.delete(key: _recoveryIdKey);
     await _storage.delete(key: _recoverySecretKey);
     await _storage.delete(key: _recoveryStartedAtKey);
+    await _storage.delete(key: _recoveryNiptoIdKey);
   }
 
   Future<void> changePassword({
