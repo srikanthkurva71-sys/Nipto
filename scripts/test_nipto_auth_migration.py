@@ -110,6 +110,7 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         ):
             self.assertIn(field, cleanup)
         self.assertIn("delete from auth.identities", cleanup)
+        self.assertIn("'legacy_auth_credentials_cleared'", self.auth_sql)
 
     def test_nipto_id_constraints_use_canonical_handle_format(self):
         self.assertIn("nipto_id ~ '^[a-z0-9]+(_[a-z0-9]+)*$'", self.registration_sql)
