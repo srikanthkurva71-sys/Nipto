@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { argon2id, argon2Verify } from "npm:hash-wasm@4.13.0";
-import { isAllowedOidcScope, isValidNiptoId, isValidPassword, isValidRecoveryNiptoId, passwordsMatch } from "./validation.ts";
+import { isAllowedOidcScope, isValidNiptoId, isValidPassword, passwordsMatch } from "./validation.ts";
 
 type Json = Record<string, unknown>;
 
@@ -362,10 +362,7 @@ function renderAuthorizePage(input: {
   const isLink = input.screen === "link";
   const error = input.error ? `<p class="error">${htmlEscape(input.error)}</p>` : "";
   const fields = isRegister
-    ? `<label>Display name<input name="display_name" maxlength="50" autocomplete="name" required></label>
-       <label>Recovery Nipto account <span>(optional)</span><input name="recovery_nipto_id" maxlength="24" autocomplete="off" placeholder="Nipto ID"></label>`
-    : isLink
-    ? `<label>Recovery Nipto account <span>(optional)</span><input name="recovery_nipto_id" maxlength="24" autocomplete="off" placeholder="Nipto ID"></label>`
+    ? `<label>Display name<input name="display_name" maxlength="50" autocomplete="name" required></label>`
     : "";
   const registrationTools = isRegister
     ? `<div id="id-feedback" class="feedback" aria-live="polite">Choose a Nipto ID. We will check availability.</div>
@@ -598,7 +595,6 @@ async function authorizePost(request: Request): Promise<Response> {
   const niptoId = String(form.get("nipto_id") ?? "").trim().replace(/^@/, "").toLowerCase();
   const password = String(form.get("password") ?? "");
   const displayName = String(form.get("display_name") ?? "").trim();
-  const recoveryNiptoId = String(form.get("recovery_nipto_id") ?? "").trim().replace(/^@/, "").toLowerCase();
   const passwordConfirmation = String(form.get("password_confirmation") ?? "");
   const txRows = await rpc("nipto_oidc_get_transaction", {
     p_id: transactionId,
@@ -624,9 +620,6 @@ async function authorizePost(request: Request): Promise<Response> {
     if ((action === "register" || action === "link") && !passwordsMatch(password, passwordConfirmation)) {
       throw new ApiError("Passwords do not match. Please confirm your password.", 400);
     }
-    if (!isValidRecoveryNiptoId(recoveryNiptoId, action === "register" ? niptoId : undefined)) {
-      throw new ApiError("Enter a valid recovery Nipto ID or leave this optional field empty.", 400);
-    }
     if (!isValidPassword(password) || (action !== "link" && !isValidNiptoId(niptoId))) {
       throw new ApiError("Check your Nipto ID and password.", 400);
     }
@@ -648,7 +641,6 @@ async function authorizePost(request: Request): Promise<Response> {
         p_nipto_id: migration.nipto_id,
         p_display_name: migration.display_name,
         p_password_hash: passwordHash,
-        p_recovery_nipto_id: recoveryNiptoId || null,
       });
       if (typeof created !== "string") throw new ApiError("Nipto account could not be linked.", 409);
       identityId = created;
@@ -665,7 +657,6 @@ async function authorizePost(request: Request): Promise<Response> {
           p_nipto_id: niptoId,
           p_display_name: displayName,
           p_password_hash: passwordHash,
-          p_recovery_nipto_id: recoveryNiptoId || null,
         });
       if (typeof created !== "string") throw new ApiError("That Nipto ID is unavailable.", 409);
       identityId = created;
