@@ -466,12 +466,30 @@ begin
   if v_user_id is null or not exists(
     select 1 from auth.identities i where i.user_id=v_user_id and i.provider='custom:nipto'
   ) then raise exception 'Link your Nipto identity before removing legacy sign-in'; end if;
-  update auth.users set email=null,email_confirmed_at=null,phone=null,phone_confirmed_at=null,
-    encrypted_password=''
+  update auth.users set
+    email=null,
+    email_confirmed_at=null,
+    phone=null,
+    phone_confirmed_at=null,
+    encrypted_password='',
+    confirmation_token='',
+    recovery_token='',
+    email_change_token_new='',
+    email_change_token_current='',
+    email_change='',
+    email_change_sent_at=null,
+    email_change_confirm_status=0,
+    phone_change='',
+    phone_change_token='',
+    phone_change_sent_at=null,
+    reauthentication_token='',
+    raw_user_meta_data=coalesce(raw_user_meta_data,'{}'::jsonb)
+      - 'email' - 'phone' - 'email_verified' - 'phone_verified'
   where id=v_user_id;
   delete from auth.identities where user_id=v_user_id and provider in ('email','phone');
   insert into private.nipto_security_events(identity_id,event_type)
-  select a.identity_id,'email_identity_removed' from private.nipto_accounts a where a.supabase_user_id=v_user_id;
+  select a.identity_id,'legacy_auth_credentials_cleared'
+  from private.nipto_accounts a where a.supabase_user_id=v_user_id;
   return true;
 end;
 $$;
