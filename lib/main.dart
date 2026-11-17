@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 
 import 'nipto_app.dart';
+import 'services/nipto_secure_auth_storage.dart';
 import 'services/nipto_session_manager.dart';
 
 const _supabaseUrl = String.fromEnvironment(
@@ -24,6 +25,10 @@ Future<void> main() async {
   await Supabase.initialize(
     url: _supabaseUrl,
     publishableKey: _supabasePublishableKey,
+    authOptions: FlutterAuthClientOptions(
+      localStorage: NiptoSecureSessionStorage(),
+      pkceAsyncStorage: NiptoSecurePkceStorage(),
+    ),
     debug: false,
   );
 
