@@ -51,6 +51,7 @@ Install the Flutter stable SDK and Android SDK, then generate the Android platfo
 
 ~~~bash
 flutter create --platforms=android --org com.nipto --project-name nipto .
+python scripts/configure_android_manifest.py
 flutter pub get
 flutter analyze
 flutter test
@@ -69,6 +70,8 @@ Build a release APK using the same config:
 ~~~bash
 flutter build apk --release --dart-define-from-file=config/dev.json
 ~~~
+
+The manifest configuration script adds the `nipto://auth-callback` intent filter required for the Supabase OAuth return to the Android app. The Supabase Auth URL configuration must also allow `nipto://auth-callback` as a redirect URL.
 
 In VS Code, select **Nipto (Android)** in Run and Debug and press F5. The launch configuration loads `config/dev.json` automatically. For a local checkout, fetch the latest repository changes once with `git pull origin main`; after that, normal VS Code runs do not require opening GitHub in a browser.
 
