@@ -856,7 +856,7 @@ async function handleRoute(request: Request): Promise<Response> {
       p_new_password_hash: await hashPassword(password),
     });
     if (typeof userId !== "string") throw new ApiError("This reset request is invalid or expired.", 400);
-    await rpc("nipto_native_revoke_all_sessions", { p_user_id: userId });
+    // The SQL RPC atomically consumes the grant, changes the password and revokes sessions.
     return json({ ok: true });
   }
 
