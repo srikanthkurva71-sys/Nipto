@@ -45,6 +45,22 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         self.assertIn("consumed_at is not null", consume)
         self.assertIn("expires_at<=pg_catalog.now()", consume)
 
+    def test_recovery_approval_rechecks_active_accounts_and_block_state(self):
+        listing = self.auth_sql.split(
+            "create or replace function public.nipto_native_list_recovery_requests", 1
+        )[1].split("create or replace function public.nipto_native_respond_password_recovery", 1)[0]
+        approval = self.auth_sql.split(
+            "create or replace function public.nipto_native_respond_password_recovery", 1
+        )[1].split("create or replace function public.nipto_native_claim_reset_grant", 1)[0]
+        contact = self.auth_sql.split(
+            "create or replace function public.nipto_native_respond_recovery_contact", 1
+        )[1].split("create or replace function public.nipto_native_remove_recovery_contact", 1)[0]
+        self.assertIn("op.account_state='active'", listing)
+        self.assertIn("owner_profile.account_state='active'", approval)
+        self.assertIn("recovery_profile.account_state='active'", approval)
+        self.assertIn("not private.is_blocked_between(owner_account.supabase_user_id,rc.recovery_user_id)", approval)
+        self.assertIn("not private.is_blocked_between(rc.owner_id,rc.recovery_user_id)", contact)
+
     def test_sensitive_identity_rpcs_are_service_role_only(self):
         for signature in (
             "nipto_oidc_register(text,text,text,text)",
