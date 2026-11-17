@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1.0.14";
-import { isValidNiptoId, isValidPassword } from "./validation.ts";
+import { isAllowedOidcScope, isValidNiptoId, isValidPassword } from "./validation.ts";
 
 Deno.test("Nipto ID accepts canonical handles", () => {
   assertEquals(isValidNiptoId("nipto_user7"), true);
@@ -25,4 +25,15 @@ Deno.test("Nipto password length policy is bounded", () => {
   assertEquals(isValidPassword("123456789012"), true);
   assertEquals(isValidPassword("x".repeat(128)), true);
   assertEquals(isValidPassword("x".repeat(129)), false);
+});
+
+Deno.test("OIDC accepts only the required openid and optional profile scopes", () => {
+  assertEquals(isAllowedOidcScope("openid"), true);
+  assertEquals(isAllowedOidcScope("openid profile"), true);
+  assertEquals(isAllowedOidcScope("profile openid"), true);
+  assertEquals(isAllowedOidcScope("openid email"), false);
+  assertEquals(isAllowedOidcScope("openid offline_access"), false);
+  assertEquals(isAllowedOidcScope("openid openid"), false);
+  assertEquals(isAllowedOidcScope("profile"), false);
+  assertEquals(isAllowedOidcScope(""), false);
 });
