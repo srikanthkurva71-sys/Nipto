@@ -30,7 +30,12 @@ if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
     throw "Python 3 is required for the Android manifest setup script."
 }
 
-$javaVersion = (& java -version 2>&1 | Out-String)
+# java -version writes its version banner to stderr. Capture it through cmd.exe
+# so PowerShell's Stop preference does not treat the banner as a terminating error.
+$javaVersion = (& cmd.exe /d /c "java -version 2>&1" | Out-String)
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to execute Java. Verify JAVA_HOME and PATH."
+}
 if ($javaVersion -notmatch 'version "17\.') {
     Write-Warning ("Nipto's documented Android toolchain uses Java 17. Detected Java output: " + $javaVersion)
 }
