@@ -199,6 +199,9 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         self.assertIn("messages_read_connected_members", migration)
         self.assertIn("messages_send_connected_as_self", migration)
         self.assertIn("chat_media_read_connected_member", migration)
+        self.assertIn("list_chat_connections(uuid[])", migration)
+        self.assertIn("revoke all on function public.list_chat_connections(uuid[]) from public, anon", migration)
+        self.assertIn("grant execute on function public.list_chat_connections(uuid[]) to authenticated", migration)
         self.assertIn("grant update (body, edited_at) on public.messages to authenticated", migration)
         self.assertIn("revoke delete on public.messages from authenticated", migration)
         self.assertIn("profiles_display_name_search_idx", migration)
@@ -211,6 +214,7 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         self.assertIn("chat_connected", chats)
         self.assertIn("Follow or be followed by this account to start a chat", chats)
         self.assertIn("profile['chat_connected'] == true", chats)
+        self.assertIn("list_chat_connections", chats)
         self.assertIn("search_profiles", chats)
         self.assertIn("Search people by ID or name", chats)
 
