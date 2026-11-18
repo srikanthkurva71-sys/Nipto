@@ -45,8 +45,8 @@ Nipto/
 ├── .vscode/                 # Flutter Android launch and tasks
 ├── docs/                    # product, security and delivery documentation
 ├── mobile/app/              # the one Flutter Android application root
-│   ├── android/             # generated Android native host only
-│   ├── config/              # client-safe development configuration
+│   ├── android/             # generated Android native host\n│   ├── web/                 # generated Chrome development host only
+│   ├── config/              # optional client-safe overrides
 │   ├── lib/
 │   │   ├── main.dart
 │   │   ├── nipto_app.dart
@@ -76,7 +76,7 @@ cd mobile/app
 flutter run
 ~~~
 
-The Flutter app includes the Nipto Supabase project URL and publishable key as client-safe defaults, so ordinary `flutter run`, `flutter run -d chrome`, and `flutter build apk` commands work without a configuration file. Optional `--dart-define` values can override these defaults for another environment. A publishable key is intended for client apps; never embed a service-role key or backend secret.
+The Flutter app includes the Nipto Supabase project URL and publishable key as client-safe defaults, so ordinary `flutter run`, `flutter run -d chrome`, and `flutter build apk` commands work without a configuration file. The Chrome host is for development preview only; Android remains the sole product target. Optional `--dart-define` values can override these defaults for another environment. A publishable key is intended for client apps; never embed a service-role key or backend secret.
 
 The manifest setup script adds the `nipto://auth-callback` deep link required for Supabase OAuth. The Supabase Auth URL configuration must also allow that redirect URL.
 
