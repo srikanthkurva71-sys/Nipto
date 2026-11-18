@@ -1,6 +1,6 @@
 # Nipto Android application structure
 
-The Flutter application lives at `mobile/app/`. That directory is the **only app package root**. It targets Android only. It is not a Flutter multi-platform template.
+The Flutter application lives at `mobile/app/`. That directory is the **only app package root**. Android is the only product target. A generated web host is also used for local Chrome development previews; it is not a web product or release target.
 
 ## Repository layout
 
@@ -18,6 +18,7 @@ Nipto/
 ├── mobile/
 │   └── app/                      # actual Flutter Android application root
 │       ├── android/              # generated Android Gradle project
+│       ├── web/                  # generated local Chrome development host only
 │       ├── config/
 │       │   └── dev.json          # client-safe Supabase dev config
 │       ├── lib/
@@ -38,12 +39,12 @@ Nipto/
     └── migrations/
 ```
 
-There are no iOS, macOS, Windows, Linux or web application targets. The Android host is generated using Flutter's Android-only platform option. The generated native project contains the Android Gradle wrapper, app module, manifest, Kotlin activity and resources. Do not commit machine-specific SDK paths, Gradle caches, `.dart_tool/` or build output.
+There are no iOS, macOS, Windows or Linux targets. The Android host and local Chrome preview host are generated using Flutter's `--platforms=android,web` option. The generated native project contains the Android Gradle wrapper, app module, manifest, Kotlin activity and resources. Do not commit machine-specific SDK paths, Gradle caches, `.dart_tool/` or build output.
 
 ## What belongs in each app folder
 
 - `android/`: Android manifest, Gradle configuration, Kotlin host activity, app resources and wrapper. Android permissions and native plugin configuration belong here.
-- `config/`: client-safe environment configuration only. Never put service-role keys, TURN secrets, signing keys or private credentials here.
+- `config/`: optional client-safe environment overrides only. Default Nipto Supabase URL and publishable key are built into the app; never put service-role keys, TURN secrets, signing keys or private credentials here.
 - `lib/screens/`: user-facing screens and navigation destinations.
 - `lib/services/`: data access and platform services. Enforce authorization in Supabase RLS and trusted server functions, not only in widgets.
 - `lib/theme/`: colors, typography and component theme.
@@ -63,6 +64,7 @@ Keep the existing working folder names. Do not create empty `core/`, `features/`
 | `flutter_webrtc` | Audio/video calling |
 | `flutter_secure_storage` | Platform-backed secure storage |
 | `shared_preferences` | Non-secret local PKCE metadata |
+| `http` | Cross-platform calls to Nipto identity Edge Functions |
 
 Flutter SDK libraries are built in. `flutter_test` and `flutter_lints` are development dependencies. Every package imported by app code must be declared directly in `pubspec.yaml`; do not rely on transitive dependencies. Add a package only when implemented code needs it.
 
@@ -87,20 +89,20 @@ From PowerShell at the repository root:
 .\\scripts\\bootstrap_nipto_windows.ps1
 ```
 
-The script checks Flutter and Java, creates only the Android host under `mobile/app/android`, applies the Nipto OAuth callback, sets Android minimum SDK to API 24, resolves declared packages, formats Dart, runs static analysis and executes tests.
+The script checks Flutter and Java, creates the Android host and local Chrome preview host under `mobile/app`, applies the Nipto OAuth callback, sets Android minimum SDK to API 24, resolves declared packages, formats Dart, runs static analysis and executes tests.
 
 After bootstrap, launch on an attached Android phone or emulator:
 
 ```powershell
 Set-Location mobile/app
 flutter devices
-flutter run --dart-define-from-file=config/dev.json
+flutter run
 ```
 
-Build a local debug APK:
+Run the development UI preview in Chrome (not a supported release target):\n\n```powershell\nflutter run -d chrome\n```\n\nBuild an APK with the project's default Supabase configuration:
 
 ```powershell
-flutter build apk --debug --dart-define-from-file=config/dev.json
+flutter build apk
 ```
 
 The output is under `mobile/app/build/app/outputs/flutter-apk/app-debug.apk`.
