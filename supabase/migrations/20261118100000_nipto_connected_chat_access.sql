@@ -13,7 +13,12 @@ as $$
     select 1
       from public.conversations c
       where c.id = p_conversation_id
-        and public.is_conversation_member(c.id)
+        and exists (
+          select 1 from public.conversation_members cm
+          where cm.conversation_id = c.id
+            and cm.user_id = auth.uid()
+            and cm.membership_state = 'accepted'
+        )
         and (
           c.conversation_type = 'group'
           or (
@@ -30,6 +35,16 @@ $$;
 
 revoke all on function public.can_access_conversation_messages(uuid) from public, anon;
 grant execute on function public.can_access_conversation_messages(uuid) to authenticated;
+
+-- Hide direct-conversation metadata and pending group memberships from clients
+-- unless the viewer currently has accepted access.
+drop policy if exists "conversations_read_members" on public.conversations;
+create policy "conversations_read_connected_members" on public.conversations for select to authenticated
+using (public.can_access_conversation_messages(id));
+
+drop policy if exists "conversation_members_read_members" on public.conversation_members;
+create policy "conversation_members_read_connected_members" on public.conversation_members for select to authenticated
+using (public.can_access_conversation_messages(conversation_id));
 
 create or replace function public.create_or_get_direct_conversation(p_other_user uuid)
 returns uuid
