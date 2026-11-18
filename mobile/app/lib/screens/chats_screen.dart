@@ -92,7 +92,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
           .eq('status', 'accepted')
           .inFilter('follower_id', partnerIds.toList());
       connectedIds.addAll((followingRows as List).map((row) => row['following_id'] as String));
-      connectedIds.addAll((followerRows as List).map((row) => row['follower_id'] as String);
+      connectedIds.addAll((followerRows as List).map((row) => row['follower_id'] as String));
     }
 
     final visiblePartnerIds = partnerIds.intersection(connectedIds);
@@ -472,7 +472,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   onTap: () => setState(() => _searching = true),
                   onChanged: _scheduleSearch,
                   decoration: InputDecoration(
-                    hintText: 'Search by Nipto ID',
+                    hintText: 'Search people by ID or name',
                     prefixIcon: const Icon(Icons.search_rounded),
                     suffixIcon: _searching
                         ? IconButton(
@@ -544,7 +544,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       return const SliverToBoxAdapter(
                         child: _EmptyPanel(
                           title: 'Your conversations start here',
-                          subtitle: 'Search for a Nipto ID to follow someone or start a chat.',
+                          subtitle: 'Search for any account. Chats are available when either side follows the other.',
                           icon: Icons.forum_outlined,
                         ),
                       );
@@ -625,7 +625,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
         padding: EdgeInsets.only(top: 24),
         child: _EmptyPanel(
           title: 'No people found',
-          subtitle: 'Check the spelling or try another Nipto ID.',
+          subtitle: 'Check the spelling or try another ID or name.',
           icon: Icons.person_search_rounded,
         ),
       );
