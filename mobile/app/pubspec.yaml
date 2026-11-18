@@ -12,6 +12,8 @@ dependencies:
     sdk: flutter
   # Supabase Auth, PostgreSQL, Storage and Realtime.
   supabase_flutter: ^2.18.3
+  # Cross-platform HTTP for Nipto identity endpoints (Android and web).
+  http: ^1.6.0
   # User-selected photos and videos.
   image_picker: ^1.2.4
   # Playback for feed, status and Shorts.
