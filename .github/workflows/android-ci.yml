@@ -108,7 +108,11 @@ jobs:
         working-directory: mobile/app
         run: flutter test
 
-      - name: Build Chrome development preview\n        working-directory: mobile/app\n        run: flutter build web --release\n\n      - name: Install Android NDK with retry
+      - name: Build Chrome development preview
+        working-directory: mobile/app
+        run: flutter build web --release
+
+      - name: Install Android NDK with retry
         shell: bash
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
