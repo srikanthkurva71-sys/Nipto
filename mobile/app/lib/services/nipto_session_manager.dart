@@ -399,11 +399,10 @@ class NiptoSessionManager {
 
     late final http.Response response;
     try {
-      response = (method == 'GET'
+      response = await (method == 'GET'
               ? http.get(uri, headers: headers)
               : http.post(uri, headers: headers, body: jsonEncode(payload)))
-          .timeout(const Duration(seconds: 15))
-          .then((value) => value);
+          .timeout(const Duration(seconds: 15));
     } on TimeoutException {
       throw const NiptoAuthException(
         'The Nipto service took too long to respond. Please try again.',
