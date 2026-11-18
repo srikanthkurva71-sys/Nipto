@@ -86,10 +86,10 @@ begin
     from public.conversations c
    where c.direct_user_a = v_a and c.direct_user_b = v_b;
 
-  insert into public.conversation_members (conversation_id, user_id, member_role)
+  insert into public.conversation_members (conversation_id, user_id, member_role, membership_state)
   values
-    (v_conversation_id, v_a, case when v_a = v_me then 'owner' else 'member' end),
-    (v_conversation_id, v_b, case when v_b = v_me then 'owner' else 'member' end)
+    (v_conversation_id, v_a, case when v_a = v_me then 'owner' else 'member' end, 'accepted'),
+    (v_conversation_id, v_b, case when v_b = v_me then 'owner' else 'member' end, 'accepted')
   on conflict do nothing;
 
   return v_conversation_id;
