@@ -27,7 +27,7 @@ def main() -> int:
         return 0
 
     activity = re.search(
-        r'(<activity\b[^>]*android:name="[^"]*MainActivity"[^>]*>)(.*?)(</activity>)',
+        r'<activity\\b(?=[^>]*android:name="[^"]*MainActivity")[^>]*>(.*?)</activity>',
         manifest,
         flags=re.DOTALL,
     )
@@ -35,14 +35,30 @@ def main() -> int:
         print("Could not find the generated Flutter MainActivity element.", file=sys.stderr)
         return 1
 
-    opening, body, closing = activity.groups()
-    if 'android:launchMode=' not in opening:
-        opening = opening[:-1] + ' android:launchMode="singleTop">'
-    if 'android:exported=' not in opening:
-        opening = opening[:-1] + ' android:exported="true">'
+    activity_text = activity.group(0)
+    if 'android:launchMode=' not in activity_text.split(">", 1)[0]:
+        activity_text = re.sub(
+            r'(<activity\\b[^>]*)(>)',
+            r'\\1 android:launchMode="singleTop"\\2',
+            activity_text,
+            count=1,
+        )
+    if 'android:exported=' not in activity_text.split(">", 1)[0]:
+        activity_text = re.sub(
+            r'(<activity\\b[^>]*)(>)',
+            r'\\1 android:exported="true"\\2',
+            activity_text,
+            count=1,
+        )
 
-    updated = opening + body.rstrip() + "\n" + INTENT_FILTER + closing
-    manifest = manifest[:activity.start()] + updated + manifest[activity.end():]
+    closing = activity_text.rfind("</activity>")
+    updated_activity = (
+        activity_text[:closing].rstrip()
+        + "\\n"
+        + INTENT_FILTER
+        + activity_text[closing:]
+    )
+    manifest = manifest[:activity.start()] + updated_activity + manifest[activity.end():]
     MANIFEST.write_text(manifest, encoding="utf-8")
     print("Configured nipto://auth-callback for Supabase OAuth.")
     return 0
