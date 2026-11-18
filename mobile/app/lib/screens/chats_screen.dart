@@ -75,12 +75,33 @@ class _ChatsScreenState extends State<ChatsScreen> {
       }
     }
 
-    final profilesById = <String, Map<String, dynamic>>{};
+    // Direct conversations are shown only when at least one side follows the
+    // other. Search below remains open to discover any account.
+    final connectedIds = <String>{};
     if (partnerIds.isNotEmpty) {
+      final followingRows = await _client
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', userId)
+          .eq('status', 'accepted')
+          .inFilter('following_id', partnerIds.toList());
+      final followerRows = await _client
+          .from('follows')
+          .select('follower_id')
+          .eq('following_id', userId)
+          .eq('status', 'accepted')
+          .inFilter('follower_id', partnerIds.toList());
+      connectedIds.addAll((followingRows as List).map((row) => row['following_id'] as String));
+      connectedIds.addAll((followerRows as List).map((row) => row['follower_id'] as String);
+    }
+
+    final visiblePartnerIds = partnerIds.intersection(connectedIds);
+    final profilesById = <String, Map<String, dynamic>>{};
+    if (visiblePartnerIds.isNotEmpty) {
       final profiles = await _client
           .from('profiles')
           .select('id, nipto_id, display_name, avatar_path')
-          .inFilter('id', partnerIds.toList());
+          .inFilter('id', visiblePartnerIds.toList());
       for (final profile in profiles as List) {
         profilesById[profile['id'] as String] = Map<String, dynamic>.from(profile);
       }
@@ -102,7 +123,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
       );
     }
 
-    return (conversations as List).map((raw) {
+    return (conversations as List).where((raw) {
+      if (raw['conversation_type'] != 'direct') return true;
+      final a = raw['direct_user_a'] as String?;
+      final b = raw['direct_user_b'] as String?;
+      final partnerId = a == userId ? b : a;
+      return partnerId != null && connectedIds.contains(partnerId);
+    }).map((raw) {
       final row = Map<String, dynamic>.from(raw);
       final isDirect = row['conversation_type'] == 'direct';
       final a = row['direct_user_a'] as String?;
@@ -273,8 +300,21 @@ class _ChatsScreenState extends State<ChatsScreen> {
         for (final row in existing as List) {
           states[row['following_id'] as String] = row['status'] as String;
         }
+        final inbound = await _client
+            .from('follows')
+            .select('follower_id, status')
+            .eq('following_id', myId)
+            .inFilter('follower_id', ids);
+        final inboundStates = <String, String>{};
+        for (final row in inbound as List) {
+          inboundStates[row['follower_id'] as String] = row['status'] as String;
+        }
         for (final profile in profiles) {
-          profile['my_follow_state'] = states[profile['id']];
+          final profileId = profile['id'] as String;
+          profile['my_follow_state'] = states[profileId];
+          profile['their_follow_state'] = inboundStates[profileId];
+          profile['chat_connected'] =
+              states[profileId] == 'accepted' || inboundStates[profileId] == 'accepted';
         }
       }
       if (!mounted || version != _searchVersion) return;
@@ -326,6 +366,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
   }
 
   Future<void> _startChat(Map<String, dynamic> profile) async {
+    if (profile['chat_connected'] != true) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Follow or be followed by this account to start a chat.')),
+      );
+      return;
+    }
     try {
       final conversationId = await _client.rpc(
         'create_or_get_direct_conversation',
@@ -605,11 +652,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   ],
                 ),
               ),
-              IconButton(
-                tooltip: 'Message',
-                onPressed: () => _startChat(profile),
-                icon: const Icon(Icons.chat_bubble_outline_rounded, color: NiptoColors.violet),
-              ),
+              if (profile['chat_connected'] == true)
+                IconButton(
+                  tooltip: 'Message',
+                  onPressed: () => _startChat(profile),
+                  icon: const Icon(Icons.chat_bubble_outline_rounded, color: NiptoColors.violet),
+                ),
               OutlinedButton(
                 onPressed: () => _follow(profile),
                 child: Text(
