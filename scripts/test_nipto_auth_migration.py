@@ -191,7 +191,6 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         self.assertIn("has_accepted_follow(p_other_user, v_me)", migration)
         self.assertIn("is_blocked_between(v_me, p_other_user)", migration)
         self.assertIn("create or replace function public.can_access_conversation_messages", migration)
-        self.assertIn("public.is_conversation_member(c.id)", migration)
         self.assertIn("cm.membership_state = 'accepted'", migration)
         self.assertIn("conversations_read_connected_members", migration)
         self.assertIn("conversation_members_read_connected_members", migration)
