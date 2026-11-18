@@ -650,11 +650,14 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
                     Text(
                       '@' + handle +
-                          (profile['their_follow_state'] == 'accepted'
-                              ? ' · Follows you'
-                              : profile['my_follow_state'] == 'accepted'
-                                  ? ' · Following'
-                                  : ''),
+                          (profile['my_follow_state'] == 'accepted' &&
+                                  profile['their_follow_state'] == 'accepted'
+                              ? ' · Mutual'
+                              : profile['their_follow_state'] == 'accepted'
+                                  ? ' · Follows you'
+                                  : profile['my_follow_state'] == 'accepted'
+                                      ? ' · Following'
+                                      : ''),
                       style: const TextStyle(color: NiptoColors.muted, fontSize: 12),
                     ),
                   ],
@@ -669,15 +672,18 @@ class _ChatsScreenState extends State<ChatsScreen> {
               OutlinedButton(
                 onPressed: () => _follow(profile),
                 child: Text(
-                  profile['my_follow_state'] == 'accepted'
-                      ? 'Following'
-                      : profile['my_follow_state'] == 'pending'
-                          ? 'Requested'
-                          : profile['their_follow_state'] == 'accepted'
-                              ? 'Follow back'
-                              : profile['is_private'] == true
-                                  ? 'Request'
-                                  : 'Follow',
+                  profile['my_follow_state'] == 'accepted' &&
+                          profile['their_follow_state'] == 'accepted'
+                      ? 'Mutual'
+                      : profile['my_follow_state'] == 'accepted'
+                          ? 'Following'
+                          : profile['my_follow_state'] == 'pending'
+                              ? 'Requested'
+                              : profile['their_follow_state'] == 'accepted'
+                                  ? 'Follow back'
+                                  : profile['is_private'] == true
+                                      ? 'Request'
+                                      : 'Follow',
                 ),
               ),
               PopupMenuButton<String>(
