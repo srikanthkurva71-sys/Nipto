@@ -98,10 +98,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
     final visiblePartnerIds = partnerIds.intersection(connectedIds);
     final profilesById = <String, Map<String, dynamic>>{};
     if (visiblePartnerIds.isNotEmpty) {
-      final profiles = await _client
-          .from('profiles')
-          .select('id, nipto_id, display_name, avatar_path')
-          .inFilter('id', visiblePartnerIds.toList());
+      final profiles = await _client.rpc(
+        'list_chat_connections',
+        params: {'p_user_ids': visiblePartnerIds.toList()},
+      );
       for (final profile in profiles as List) {
         profilesById[profile['id'] as String] = Map<String, dynamic>.from(profile);
       }
