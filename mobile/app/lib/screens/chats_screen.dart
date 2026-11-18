@@ -648,7 +648,15 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                    Text('@' + handle, style: const TextStyle(color: NiptoColors.muted, fontSize: 12)),
+                    Text(
+                      '@' + handle +
+                          (profile['their_follow_state'] == 'accepted'
+                              ? ' · Follows you'
+                              : profile['my_follow_state'] == 'accepted'
+                                  ? ' · Following'
+                                  : ''),
+                      style: const TextStyle(color: NiptoColors.muted, fontSize: 12),
+                    ),
                   ],
                 ),
               ),
@@ -665,9 +673,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       ? 'Following'
                       : profile['my_follow_state'] == 'pending'
                           ? 'Requested'
-                          : profile['is_private'] == true
-                              ? 'Request'
-                              : 'Follow',
+                          : profile['their_follow_state'] == 'accepted'
+                              ? 'Follow back'
+                              : profile['is_private'] == true
+                                  ? 'Request'
+                                  : 'Follow',
                 ),
               ),
               PopupMenuButton<String>(
