@@ -64,7 +64,7 @@ Nipto/
     └── migrations/
 ```
 
-`mobile/app` is the only Flutter package root. The app targets Android only; no iOS, macOS, Windows, Linux or web app folders are part of this project. The Android native host is generated with `flutter create --platforms=android`. See [Android project structure](docs/ANDROID_PROJECT_STRUCTURE.md) for the exact folder responsibilities and setup.
+`mobile/app` is the only Flutter package root. Android is the only product target; no iOS, macOS, Windows or Linux targets are included. A generated web host is used only for local Chrome development previews, not as a web product. The native hosts are generated with `flutter create --platforms=android,web`. See [Android project structure](docs/ANDROID_PROJECT_STRUCTURE.md) for the exact folder responsibilities and setup.
 
 ## Local Android setup
 
@@ -73,16 +73,16 @@ Install Flutter stable, Java 17 and the Android SDK. From the repository root:
 ~~~powershell
 .\\scripts\\bootstrap_nipto_windows.ps1
 cd mobile/app
-flutter run --dart-define-from-file=config/dev.json
+flutter run
 ~~~
 
-The Flutter app uses the client-safe Supabase development configuration in `mobile/app/config/dev.json`. It must never contain a service-role key or backend secret. Release builds must receive environment-specific Dart defines explicitly.
+The Flutter app includes the Nipto Supabase project URL and publishable key as client-safe defaults, so ordinary `flutter run`, `flutter run -d chrome`, and `flutter build apk` commands work without a configuration file. Optional `--dart-define` values can override these defaults for another environment. A publishable key is intended for client apps; never embed a service-role key or backend secret.
 
 The manifest setup script adds the `nipto://auth-callback` deep link required for Supabase OAuth. The Supabase Auth URL configuration must also allow that redirect URL.
 
 ## Run from VS Code
 
-Open the repository root in VS Code, install the Flutter and Dart extensions, connect an Android phone or emulator, then select **Nipto (Android)** in Run and Debug and press F5. The launch configuration points to `mobile/app` and reads its local development configuration.
+Open the repository root in VS Code, install the Flutter and Dart extensions, connect an Android phone or emulator, then select **Nipto (Android)** in Run and Debug and press F5. The launch configurations point to `mobile/app` and require no separate Supabase config file.
 
 Nipto v1 is an Android app, not a web product. Use an Android emulator or physical Android device for plugin, media and calling validation.
 
