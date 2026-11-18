@@ -71,13 +71,9 @@ The current screens/services/theme/widgets folders are retained while feature-fi
 
 Install Flutter stable, Java 17 and the Android SDK. From the repository root:
 
-~~~bash
-flutter create --platforms=android --org com.nipto --project-name nipto mobile/app
-python scripts/configure_android_manifest.py
+~~~powershell
+.\\scripts\\bootstrap_nipto_windows.ps1
 cd mobile/app
-flutter pub get
-flutter analyze
-flutter test
 flutter run --dart-define-from-file=config/dev.json
 ~~~
 
