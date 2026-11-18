@@ -36,7 +36,9 @@ if ($javaVersion -notmatch 'version "17\.') {
 }
 
 Invoke-Checked "flutter" @("--version")
-Invoke-Checked "flutter" @("doctor", "--verbose")
+Write-Host ""
+Write-Host "> flutter doctor --verbose" -ForegroundColor Cyan
+flutter doctor --verbose
 
 # Generate only the native Android host. Dart source and pubspec.yaml remain the
 # checked-in source of truth; Flutter resolves dependencies from pubspec.yaml.
@@ -59,7 +61,7 @@ if (-not (Test-Path $GradleFile)) {
 $gradleText = Get-Content $GradleFile -Raw
 if ($gradleText -match 'minSdk\s*=\s*flutter\.minSdkVersion') {
     $gradleText = $gradleText -replace 'minSdk\s*=\s*flutter\.minSdkVersion', 'minSdk = 24'
-    Set-Content -Path $GradleFile -Value $gradleText -NoNewline
+    [System.IO.File]::WriteAllText($GradleFile, $gradleText, [System.Text.UTF8Encoding]::new($false))
 } elseif ($gradleText -notmatch 'minSdk\s*=\s*24') {
     throw ("Could not safely set minSdk to API 24 in " + $GradleFile)
 }
