@@ -160,3 +160,11 @@ $$;
 
 revoke all on function public.search_profiles(text, integer) from public, anon;
 grant execute on function public.search_profiles(text, integer) to authenticated;
+
+-- Narrow ordinary client message updates to content fields and prevent hard-delete.
+-- Soft deletion is performed only by the SECURITY DEFINER RPC from the earlier
+-- message-edit/delete migration.
+revoke update on public.messages from authenticated;
+grant update (body, edited_at) on public.messages to authenticated;
+drop policy if exists "messages_delete_own" on public.messages;
+revoke delete on public.messages from authenticated;
