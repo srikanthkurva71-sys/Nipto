@@ -210,6 +210,8 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         self.assertIn("connectedIds.addAll", chats)
         self.assertIn("visiblePartnerIds = partnerIds.intersection(connectedIds)", chats)
         self.assertIn("their_follow_state", chats)
+        self.assertIn(" · Mutual", chats)
+        self.assertIn("profile['my_follow_state'] == 'accepted' &&", chats)
         self.assertIn("chat_connected", chats)
         self.assertIn("Follow or be followed by this account to start a chat", chats)
         self.assertIn("profile['chat_connected'] == true", chats)
