@@ -116,6 +116,16 @@ The existing hosted Supabase project remains the target. Its Custom OIDC integra
 - [ ] Apply migrations only to a disposable staging Supabase project, configure OIDC secrets/provider, and complete end-to-end registration, login, legacy migration, recovery, RLS, Storage and Realtime tests.
 - [ ] Keep production Supabase unchanged until staging, rollback, security and physical-device acceptance tests pass.
 
+## Social discovery and connected chat access checkpoint
+
+- [x] Keep account search available for all active accounts, independent of follow state; add Nipto ID/display-name prefix search.
+- [x] Hide Message action for accounts with no accepted follow in either direction; private follow requests do not enable chat.
+- [x] Filter direct conversations in the inbox to accepted follower/following connections; group chats remain separately membership-based.
+- [x] Enforce direct-chat creation, message reads/writes, and private chat-media access in database policies/RPC, not only Flutter UI.
+- [x] Return limited identity fields for unapproved viewers of private accounts.
+- [x] Limit ordinary message update grants to body and edited timestamp; disable hard-delete from client role.
+- [ ] Run CI/static tests and validate migration on a disposable staging database with both follow directions, pending private follow, unfollow, block, and direct RPC bypass cases.
+
 ## Calling infrastructure checkpoint
 
 - [x] Replace the public third-party STUN dependency with authenticated Nipto-managed ICE configuration.
