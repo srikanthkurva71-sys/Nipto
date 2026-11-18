@@ -184,6 +184,29 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         self.assertIn("_deleteComment", shorts)
 
 
+
+    def test_connected_chat_rules_allow_search_but_gate_direct_message_access(self):
+        migration = (ROOT / "supabase/migrations/20261118100000_nipto_connected_chat_access.sql").read_text()
+        self.assertIn("has_accepted_follow(v_me, p_other_user)", migration)
+        self.assertIn("has_accepted_follow(p_other_user, v_me)", migration)
+        self.assertIn("is_blocked_between(v_me, p_other_user)", migration)
+        self.assertIn("create or replace function public.can_access_conversation_messages", migration)
+        self.assertIn("public.is_conversation_member(c.id)", migration)
+        self.assertIn("drop policy if exists \"messages_read_members\" on public.messages", migration)
+        self.assertIn("messages_read_connected_members", migration)
+        self.assertIn("messages_send_connected_as_self", migration)
+        self.assertIn("chat_media_read_connected_member", migration)
+        self.assertIn("grant execute on function public.create_or_get_direct_conversation(uuid) to authenticated", migration)
+        self.assertIn("revoke all on function public.search_profiles(text, integer) from public, anon", migration)
+        chats = (APP_ROOT / "lib/screens/chats_screen.dart").read_text()
+        self.assertIn("connectedIds.addAll", chats)
+        self.assertIn("visiblePartnerIds = partnerIds.intersection(connectedIds)", chats)
+        self.assertIn("their_follow_state", chats)
+        self.assertIn("chat_connected", chats)
+        self.assertIn("Follow or be followed by this account to start a chat", chats)
+        self.assertIn("profile['chat_connected'] == true", chats)
+        self.assertIn("search_profiles", chats)
+
     def test_message_mutations_are_author_scoped_and_membership_checked(self):
         migration = (ROOT / "supabase/migrations/20261117180000_nipto_message_edit_delete.sql").read_text()
         self.assertIn("m.sender_id = v_user_id", migration)
