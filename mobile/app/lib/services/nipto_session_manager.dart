@@ -1,8 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class NiptoSession {
@@ -41,9 +40,6 @@ class NiptoSessionManager {
   static const _pendingLinkNiptoIdKey = 'nipto.auth.pending_link_id.v1';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
-  final HttpClient _http = HttpClient()
-    ..connectionTimeout = const Duration(seconds: 15);
-
   String? _supabaseUrl;
   String? _publishableKey;
   String? _baseUrl;
@@ -385,25 +381,42 @@ class NiptoSessionManager {
       throw const NiptoAuthException('Nipto is not initialized.');
     }
     final uri = Uri.parse('$baseUrl/$path');
-    final request = method == 'GET'
-        ? await _http.getUrl(uri)
-        : await _http.postUrl(uri);
-    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-    request.headers.set('apikey', publishableKey);
-    if (payload != null) {
-      request.headers.contentType = ContentType.json;
-      request.write(jsonEncode(payload));
-    }
+    final headers = <String, String>{
+      'Accept': 'application/json',
+      'apikey': publishableKey,
+    };
+    if (payload != null) headers['Content-Type'] = 'application/json';
     if (authenticated) {
       final token = _client.auth.currentSession?.accessToken;
-      if (token == null) throw const NiptoAuthException('Sign in to continue.', statusCode: 401);
-      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      if (token == null) {
+        throw const NiptoAuthException(
+          'Sign in to continue.',
+          statusCode: 401,
+        );
+      }
+      headers['Authorization'] = 'Bearer $token';
     }
-    final response = await request.close();
-    final raw = await response.transform(utf8.decoder).join();
+
+    late final http.Response response;
+    try {
+      response = (method == 'GET'
+              ? http.get(uri, headers: headers)
+              : http.post(uri, headers: headers, body: jsonEncode(payload)))
+          .timeout(const Duration(seconds: 15))
+          .then((value) => value);
+    } on TimeoutException {
+      throw const NiptoAuthException(
+        'The Nipto service took too long to respond. Please try again.',
+      );
+    } on http.ClientException {
+      throw const NiptoAuthException(
+        'Could not connect to Nipto. Check your internet connection.',
+      );
+    }
+
     Map<String, dynamic> data = {};
-    if (raw.isNotEmpty) {
-      final value = jsonDecode(raw);
+    if (response.body.isNotEmpty) {
+      final value = jsonDecode(response.body);
       if (value is Map) data = Map<String, dynamic>.from(value);
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
