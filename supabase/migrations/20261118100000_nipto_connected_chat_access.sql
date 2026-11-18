@@ -114,6 +114,8 @@ using (
 
 -- Account search is open for discovery but private accounts expose only basic
 -- identity fields until the viewer's follow request is accepted.
+create index if not exists profiles_display_name_search_idx on public.profiles(lower(display_name));
+
 create or replace function public.search_profiles(p_query text, p_limit integer default 20)
 returns table (
   id uuid,
@@ -146,7 +148,10 @@ as $$
   from public.profiles p
   where auth.uid() is not null
     and p.account_state = 'active'
-    and p.nipto_id like (lower(trim(p_query)) || '%')
+    and (
+      p.nipto_id like (lower(trim(p_query)) || '%')
+      or lower(p.display_name) like (lower(trim(p_query)) || '%')
+    )
     and not public.is_blocked_between(auth.uid(), p.id)
     and p.id <> auth.uid()
   order by p.nipto_id
