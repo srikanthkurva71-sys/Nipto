@@ -49,7 +49,7 @@ flutter doctor --verbose
 # checked-in source of truth; Flutter resolves dependencies from pubspec.yaml.
 Invoke-Checked "flutter" @(
     "create",
-    "--platforms=android",
+    "--platforms=android,web",
     "--org", "com.nipto",
     "--project-name", "nipto",
     $AppRoot
@@ -80,7 +80,7 @@ try {
         Invoke-Checked "flutter" @("test")
     }
     Write-Host ""
-    Write-Host "Nipto Android bootstrap completed. Connect an Android device and run: flutter run --dart-define-from-file=config/dev.json" -ForegroundColor Green
+    Write-Host "Nipto setup completed. Run 'flutter run' for the default device, 'flutter run -d chrome' for the web development preview, or 'flutter build apk' for Android." -ForegroundColor Green
 } finally {
     Pop-Location
 }
