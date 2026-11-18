@@ -5,16 +5,13 @@ import 'nipto_app.dart';
 import 'services/nipto_secure_auth_storage.dart';
 import 'services/nipto_session_manager.dart';
 
-/// Client-safe defaults for local development. Production/release builds
-/// should override these values with environment-specific Dart defines.
-/// Never put a Supabase service-role or secret key in the Flutter app.
-const _isReleaseBuild = bool.fromEnvironment('dart.vm.product');
-const _defaultSupabaseUrl = _isReleaseBuild
-    ? ''
-    : 'https://advmjribduqzyuwktkod.supabase.co';
-const _defaultSupabasePublishableKey = _isReleaseBuild
-    ? ''
-    : 'sb_publishable_zxqki-GLfT6zi-BXT1h6zw_nWq9Nhye';
+/// Public client configuration for the Nipto Supabase project.
+/// Dart defines can override these values for staging/production builds.
+/// A publishable key is designed to be embedded in client apps; never put a
+/// service-role/secret key here.
+const _defaultSupabaseUrl = 'https://advmjribduqzyuwktkod.supabase.co';
+const _defaultSupabasePublishableKey =
+    'sb_publishable_zxqki-GLfT6zi-BXT1h6zw_nWq9Nhye';
 
 const _supabaseUrl = String.fromEnvironment(
   'SUPABASE_URL',
