@@ -6,16 +6,24 @@ version: 0.1.0+1
 environment:
   sdk: ">=3.11.0 <4.0.0"
 
+# Keep direct dependencies limited to packages imported by lib/.
 dependencies:
   flutter:
     sdk: flutter
+  # Supabase Auth, PostgreSQL, Storage and Realtime.
   supabase_flutter: ^2.18.3
-  video_player: ^2.11.1
+  # User-selected photos and videos.
   image_picker: ^1.2.4
+  # Playback for feed, status and Shorts.
+  video_player: ^2.11.1
+  # Audio/video calling.
   flutter_webrtc: ^1.6.3
+  # Encrypted platform-backed storage for session material.
   flutter_secure_storage: ^10.0.0
+  # Non-secret local PKCE metadata.
   shared_preferences: ^2.5.4
 
+# Test and lint tooling only; never imported by production app code.
 dev_dependencies:
   flutter_test:
     sdk: flutter
