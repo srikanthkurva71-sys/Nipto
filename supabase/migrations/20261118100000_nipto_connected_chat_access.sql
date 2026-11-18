@@ -36,6 +36,45 @@ $$;
 revoke all on function public.can_access_conversation_messages(uuid) from public, anon;
 grant execute on function public.can_access_conversation_messages(uuid) to authenticated;
 
+-- Connection-only profile lookup for inbox rows. This returns basic identity
+-- fields without depending on private-profile table visibility.
+create or replace function public.list_chat_connections(p_user_ids uuid[])
+returns table (
+  id uuid,
+  nipto_id text,
+  display_name text,
+  avatar_path text,
+  is_private boolean
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $
+  select
+    p.id,
+    p.nipto_id,
+    p.display_name,
+    case
+      when not p.is_private or public.has_accepted_follow(auth.uid(), p.id)
+      then p.avatar_path
+      else null
+    end,
+    p.is_private
+  from public.profiles p
+  where auth.uid() is not null
+    and p.id = any(coalesce(p_user_ids, array[]::uuid[]))
+    and p.account_state = 'active'
+    and not public.is_blocked_between(auth.uid(), p.id)
+    and (
+      public.has_accepted_follow(auth.uid(), p.id)
+      or public.has_accepted_follow(p.id, auth.uid())
+    )
+  order by p.nipto_id;
+$;
+revoke all on function public.list_chat_connections(uuid[]) from public, anon;
+grant execute on function public.list_chat_connections(uuid[]) to authenticated;
+
 -- Hide direct-conversation metadata and pending group memberships from clients
 -- unless the viewer currently has accepted access.
 drop policy if exists "conversations_read_members" on public.conversations;
