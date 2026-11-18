@@ -1,10 +1,11 @@
 # Nipto Android app
 
-This is the Flutter package root for the **Android-only Nipto application**. Open the repository root in VS Code.
+This is the Flutter package root for Nipto. Android is the only product target; a generated web host is retained only for local Chrome development previews. Open the repository root in VS Code.
 
 ## Real app folders
 
 - `android/` — generated Android Gradle project, manifest, Kotlin host, resources and wrapper.
+- `web/` — generated development-only Chrome host; Nipto v1 is not shipped as a web product.
 - `lib/main.dart` — Flutter entry point.
 - `lib/nipto_app.dart` — root application widget and theme setup.
 - `lib/screens/` — authentication, home, chats, conversations, profile, status, Shorts, calls and settings screens.
@@ -12,12 +13,12 @@ This is the Flutter package root for the **Android-only Nipto application**. Ope
 - `lib/theme/` — Nipto theme.
 - `lib/widgets/` — reusable Nipto widgets.
 - `test/` — unit and widget tests.
-- `config/dev.json` — client-safe Supabase URL and publishable key.
+- Supabase URL and publishable key — safe client defaults are built into `lib/main.dart`; optional Dart defines can override them for another environment.
 - `pubspec.yaml` — direct package dependencies.
 - `pubspec.lock` — exact resolved versions after `flutter pub get`.
 - `analysis_options.yaml` — Dart analyzer rules.
 
-No iOS, macOS, Windows, Linux or web targets are included. Keep the structure useful: do not add empty folders or placeholder feature modules.
+No iOS, macOS, Windows or Linux targets are included. The web host is for local development only. Keep the structure useful: do not add empty folders or placeholder feature modules.
 
 ## Windows setup
 
@@ -27,7 +28,7 @@ From the repository root:
 .\\scripts\\bootstrap_nipto_windows.ps1
 ```
 
-This creates only the Android native host, configures the OAuth deep link and Android API 24 minimum, resolves the packages declared in `pubspec.yaml`, formats code, analyzes the project and runs tests.
+This creates the Android native host and a development-only web host, configures the OAuth deep link and Android API 24 minimum, resolves dependencies, formats code, analyzes the project and runs tests.
 
 ## Run on Android
 
@@ -37,8 +38,12 @@ Or use PowerShell:
 
 ```powershell
 Set-Location mobile/app
-flutter run --dart-define-from-file=config/dev.json
+flutter run
 ```
+
+## Chrome development preview
+
+The generated web host allows a UI/API development preview with `flutter run -d chrome`. Some native capabilities, especially platform media and calling behavior, must still be validated on Android. Chrome is not a supported release target.
 
 ## Dependencies and secrets
 
