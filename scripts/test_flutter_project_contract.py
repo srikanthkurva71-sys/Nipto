@@ -30,7 +30,7 @@ class FlutterProjectContractTests(unittest.TestCase):
         for source in (APP / "lib").rglob("*.dart"):
             imported.update(
                 re.findall(
-                    r"import\s+['\"]package:([^/]+)/",
+                    r"import\\s+['\\\"]package:([^/]+)/",
                     source.read_text(encoding="utf-8"),
                 )
             )
@@ -51,11 +51,23 @@ class FlutterProjectContractTests(unittest.TestCase):
             "video_player",
             "flutter_webrtc",
             "flutter_secure_storage",
-            "shared_preferences",\n            "http",
+            "shared_preferences",
+            "http",
         }
         self.assertLessEqual(expected, declared)
 
-    def test_supabase_defaults_allow_build_and_run_without_dart_defines(self):\n        source = (APP / "lib" / "main.dart").read_text(encoding="utf-8")\n        self.assertIn("https://advmjribduqzyuwktkod.supabase.co", source)\n        self.assertIn("sb_publishable_", source)\n        self.assertIn("String.fromEnvironment", source)\n\n    def test_identity_http_client_is_cross_platform(self):\n        source = (APP / "lib" / "services" / "nipto_session_manager.dart").read_text(encoding="utf-8")\n        self.assertIn("package:http/http.dart", source)\n        self.assertNotIn("dart:io", source)\n\n    def test_development_config_contains_only_client_safe_supabase_values(self):
+    def test_supabase_defaults_allow_build_and_run_without_dart_defines(self):
+        source = (APP / "lib" / "main.dart").read_text(encoding="utf-8")
+        self.assertIn("https://advmjribduqzyuwktkod.supabase.co", source)
+        self.assertIn("sb_publishable_", source)
+        self.assertIn("String.fromEnvironment", source)
+
+    def test_identity_http_client_is_cross_platform(self):
+        source = (APP / "lib" / "services" / "nipto_session_manager.dart").read_text(encoding="utf-8")
+        self.assertIn("package:http/http.dart", source)
+        self.assertNotIn("dart:io", source)
+
+    def test_development_config_contains_only_client_safe_supabase_values(self):
         config = json.loads((APP / "config" / "dev.json").read_text(encoding="utf-8"))
         self.assertEqual(
             set(config),
