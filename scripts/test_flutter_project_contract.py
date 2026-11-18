@@ -51,11 +51,11 @@ class FlutterProjectContractTests(unittest.TestCase):
             "video_player",
             "flutter_webrtc",
             "flutter_secure_storage",
-            "shared_preferences",
+            "shared_preferences",\n            "http",
         }
         self.assertLessEqual(expected, declared)
 
-    def test_development_config_contains_only_client_safe_supabase_values(self):
+    def test_supabase_defaults_allow_build_and_run_without_dart_defines(self):\n        source = (APP / "lib" / "main.dart").read_text(encoding="utf-8")\n        self.assertIn("https://advmjribduqzyuwktkod.supabase.co", source)\n        self.assertIn("sb_publishable_", source)\n        self.assertIn("String.fromEnvironment", source)\n\n    def test_identity_http_client_is_cross_platform(self):\n        source = (APP / "lib" / "services" / "nipto_session_manager.dart").read_text(encoding="utf-8")\n        self.assertIn("package:http/http.dart", source)\n        self.assertNotIn("dart:io", source)\n\n    def test_development_config_contains_only_client_safe_supabase_values(self):
         config = json.loads((APP / "config" / "dev.json").read_text(encoding="utf-8"))
         self.assertEqual(
             set(config),
@@ -71,7 +71,7 @@ class FlutterProjectContractTests(unittest.TestCase):
             if item["name"] == "Nipto (Android)"
         )
         self.assertEqual(configuration["cwd"], "${workspaceFolder}/mobile/app")
-        self.assertIn("--dart-define-from-file=config/dev.json", configuration["args"])
+        self.assertNotIn("args", configuration)
 
     def test_android_project_is_generated_not_committed_as_machine_specific_state(self):
         ignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
