@@ -23,10 +23,10 @@ as $$
           c.conversation_type = 'group'
           or (
             c.conversation_type = 'direct'
-            and not public.is_blocked_between(c.direct_user_a, c.direct_user_b)
+            and not private.is_blocked_between(c.direct_user_a, c.direct_user_b)
             and (
-              public.has_accepted_follow(c.direct_user_a, c.direct_user_b)
-              or public.has_accepted_follow(c.direct_user_b, c.direct_user_a)
+              private.has_accepted_follow(c.direct_user_a, c.direct_user_b)
+              or private.has_accepted_follow(c.direct_user_b, c.direct_user_a)
             )
           )
         )
@@ -56,7 +56,7 @@ as $
     p.nipto_id,
     p.display_name,
     case
-      when not p.is_private or public.has_accepted_follow(auth.uid(), p.id)
+      when not p.is_private or private.has_accepted_follow(auth.uid(), p.id)
       then p.avatar_path
       else null
     end,
@@ -65,10 +65,10 @@ as $
   where auth.uid() is not null
     and p.id = any(coalesce(p_user_ids, array[]::uuid[]))
     and p.account_state = 'active'
-    and not public.is_blocked_between(auth.uid(), p.id)
+    and not private.is_blocked_between(auth.uid(), p.id)
     and (
-      public.has_accepted_follow(auth.uid(), p.id)
-      or public.has_accepted_follow(p.id, auth.uid())
+      private.has_accepted_follow(auth.uid(), p.id)
+      or private.has_accepted_follow(p.id, auth.uid())
     )
   order by p.nipto_id;
 $;
@@ -99,7 +99,7 @@ declare
 begin
   if v_me is null then raise exception 'Authentication required'; end if;
   if p_other_user is null or p_other_user = v_me then raise exception 'Invalid recipient'; end if;
-  if public.is_blocked_between(v_me, p_other_user) then
+  if private.is_blocked_between(v_me, p_other_user) then
     raise exception 'This conversation is unavailable';
   end if;
   if not exists (
@@ -109,8 +109,8 @@ begin
     raise exception 'User not found';
   end if;
   if not (
-    public.has_accepted_follow(v_me, p_other_user)
-    or public.has_accepted_follow(p_other_user, v_me)
+    private.has_accepted_follow(v_me, p_other_user)
+    or private.has_accepted_follow(p_other_user, v_me)
   ) then
     raise exception 'Follow or be followed by this account to start a chat';
   end if;
@@ -151,7 +151,7 @@ with check (
     select 1 from public.conversation_members cm
     where cm.conversation_id = messages.conversation_id
       and cm.user_id <> auth.uid()
-      and public.is_blocked_between(auth.uid(), cm.user_id)
+      and private.is_blocked_between(auth.uid(), cm.user_id)
   )
 );
 
@@ -189,12 +189,12 @@ as $$
     p.nipto_id,
     p.display_name,
     case
-      when not p.is_private or public.has_accepted_follow(auth.uid(), p.id) or p.id = auth.uid()
+      when not p.is_private or private.has_accepted_follow(auth.uid(), p.id) or p.id = auth.uid()
       then p.bio
       else ''
     end,
     case
-      when not p.is_private or public.has_accepted_follow(auth.uid(), p.id) or p.id = auth.uid()
+      when not p.is_private or private.has_accepted_follow(auth.uid(), p.id) or p.id = auth.uid()
       then p.avatar_path
       else null
     end,
@@ -206,7 +206,7 @@ as $$
       p.nipto_id like (lower(trim(p_query)) || '%')
       or lower(p.display_name) like (lower(trim(p_query)) || '%')
     )
-    and not public.is_blocked_between(auth.uid(), p.id)
+    and not private.is_blocked_between(auth.uid(), p.id)
     and p.id <> auth.uid()
   order by p.nipto_id
   limit least(greatest(coalesce(p_limit, 20), 1), 30);
