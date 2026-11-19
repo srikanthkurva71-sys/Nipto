@@ -7,7 +7,7 @@ alter table public.short_comments
 drop trigger if exists short_comments_updated_at on public.short_comments;
 create trigger short_comments_updated_at
 before update on public.short_comments
-for each row execute function public.set_updated_at();
+for each row execute function private.set_updated_at();
 
 drop policy if exists post_comments_update_own_body on public.post_comments;
 create policy post_comments_update_own_body
