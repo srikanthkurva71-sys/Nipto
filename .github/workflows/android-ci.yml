@@ -79,6 +79,25 @@ jobs:
         run: |
           python3 -c "from pathlib import Path; p=Path('mobile/app/android/settings.gradle.kts'); s=p.read_text(); s=s.replace('repositories {', 'repositories {\\n        google()\\n        mavenCentral()', 1); p.write_text(s)"
 
+      - name: Pin Android Gradle Plugin lint fix
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          path = Path("mobile/app/android/settings.gradle.kts")
+          text = path.read_text(encoding="utf-8")
+          updated, count = re.subn(
+              r'(id\\(["\\']com\\.android\\.application["\\']\\)\\s+version\\s+)["\\'][^"\\']+["\\']',
+              r'\\g<1>"9.3.2"',
+              text,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit("Could not identify the generated Android Gradle Plugin version declaration")
+          path.write_text(updated, encoding="utf-8")
+          print("Pinned Android Gradle Plugin to 9.3.2 for the JDK 17 lint fix.")
+          PY
+
       - name: Configure Android SDK levels
         run: |
           python3 - <<'PY'
