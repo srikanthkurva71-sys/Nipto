@@ -42,7 +42,7 @@ def main() -> int:
             r'\1 android:launchMode="singleTop"\2',
             activity_text,
             count=1,
-            r'(<activity\\b[^>]*)(>)',
+            r'(<activity\b[^>]*)(>)',
     if 'android:exported=' not in activity_text.split(">", 1)[0]:
         activity_text = re.sub(
             r'(<activity\\b[^>]*)(>)',
