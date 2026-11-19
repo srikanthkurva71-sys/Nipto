@@ -86,15 +86,15 @@ jobs:
           import re
           path = Path("mobile/app/android/settings.gradle.kts")
           text = path.read_text(encoding="utf-8")
-          updated, count = re.subn(
-              r'(id\\(["\\']com\\.android\\.application["\\']\\)\\s+version\\s+)["\\'][^"\\']+["\\']',
-              r'\\g<1>"9.3.2"',
-              text,
-              count=1,
-          )
+          lines = text.splitlines()
+          matches = [i for i, line in enumerate(lines) if 'id("com.android.application")' in line]
+          if len(matches) != 1:
+              raise SystemExit("Could not identify exactly one Android Gradle Plugin declaration")
+          index = matches[0]
+          lines[index], count = re.subn(r'version\\s+"[^"]+"', 'version "9.3.2"', lines[index], count=1)
           if count != 1:
-              raise SystemExit("Could not identify the generated Android Gradle Plugin version declaration")
-          path.write_text(updated, encoding="utf-8")
+              raise SystemExit("Could not update the generated Android Gradle Plugin version")
+          path.write_text("\\n".join(lines) + "\\n", encoding="utf-8")
           print("Pinned Android Gradle Plugin to 9.3.2 for the JDK 17 lint fix.")
           PY
 
