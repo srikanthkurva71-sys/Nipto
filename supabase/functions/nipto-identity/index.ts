@@ -376,21 +376,36 @@ function renderAuthorizePage(input: {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <title>${isRegister ? "Create your Nipto account" : isLink ? "Set your Nipto password" : "Sign in to Nipto"}</title>
     <style>
-      *{box-sizing:border-box}body{margin:0;min-height:100vh;background:#f6f5fc;color:#19172b;font:16px system-ui,-apple-system,sans-serif;display:grid;place-items:center;padding:24px}
-      main{width:100%;max-width:420px;background:#fff;border:1px solid #e8e5f2;border-radius:22px;padding:30px;box-shadow:0 18px 50px #24164a12}
-      .brand{color:#6657e8;font-weight:900;letter-spacing:4px;font-size:26px;text-align:center;margin-bottom:8px}
-      h1{font-size:23px;text-align:center;margin:0 0 8px}p{color:#77748a;line-height:1.5;text-align:center}
-      label{display:block;font-size:14px;font-weight:650;margin:16px 0 0}label span{font-weight:400;color:#888}
-      input{display:block;width:100%;margin-top:7px;padding:13px 14px;border:1px solid #dedbea;border-radius:12px;font:inherit}
-      button{width:100%;margin-top:22px;padding:14px;border:0;border-radius:12px;background:#6657e8;color:#fff;font-weight:750;font-size:16px;cursor:pointer}
-      button:disabled{opacity:.55;cursor:not-allowed}.feedback{font-size:13px;color:#77748a;margin-top:8px;min-height:20px}
-      .feedback.good{color:#18794e}.feedback.bad{color:#b42318}.suggestions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-      .suggestions button,.password-tools .secondary{width:auto;margin:0;padding:8px 11px;background:#f0efff;color:#5142ca;font-size:13px;border:1px solid #dedaff}
-      .password-tools{display:flex;gap:8px;margin-top:10px}.password-tools button{flex:1}
-      .password-tools input{font-family:ui-monospace,monospace}
-      a{display:block;text-align:center;color:#6657e8;margin-top:18px;text-decoration:none;font-weight:650}
-      .error{background:#fff0f0;color:#a22;padding:10px;border-radius:10px;text-align:left}
-      .hint{font-size:13px}
+      :root{color-scheme:light;--ink:#17152b;--muted:#77758b;--brand:#6554e8;--brand-dark:#5140d1;--line:#e8e6f1;--surface:#fff;--soft:#f5f3ff}
+      *{box-sizing:border-box}
+      body{margin:0;min-height:100vh;padding:36px 20px;display:grid;place-items:center;color:var(--ink);font:16px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(ellipse at 12% 12%,#ded9ff 0,transparent 38%),radial-gradient(ellipse at 90% 88%,#d9f3f0 0,transparent 34%),linear-gradient(135deg,#f8f7ff,#f4f7fc)}
+      main{position:relative;width:min(100%,470px);padding:38px 40px 30px;background:rgba(255,255,255,.96);border:1px solid rgba(255,255,255,.9);border-radius:28px;box-shadow:0 28px 90px rgba(42,34,92,.13),0 3px 12px rgba(42,34,92,.04);overflow:hidden}
+      main:before{content:"";position:absolute;inset:0 0 auto;height:5px;background:linear-gradient(90deg,#7968ff,#4c9ce8,#4dc9b4)}
+      .brand{display:flex;align-items:center;justify-content:center;gap:10px;margin:0 auto 24px;color:#211d45;font-size:21px;font-weight:900;letter-spacing:3.5px}
+      .brand:before{content:"N";display:grid;place-items:center;width:38px;height:38px;border-radius:13px;background:linear-gradient(145deg,#7868ff,#5542d8);color:white;font-size:20px;letter-spacing:0;box-shadow:0 6px 16px #6657e844}
+      h1{margin:0;text-align:center;font-size:clamp(25px,5vw,30px);line-height:1.2;letter-spacing:-.8px;font-weight:800}
+      p{margin:12px 0 22px;color:var(--muted);line-height:1.65;text-align:center;font-size:14px}
+      label{display:block;margin:17px 0 0;color:#302d46;font-size:13px;font-weight:700;letter-spacing:.1px}
+      input{display:block;width:100%;height:50px;margin-top:8px;padding:0 15px;border:1px solid #dfddea;border-radius:13px;background:#fcfcff;color:var(--ink);font:inherit;font-size:15px;outline:none;transition:border-color .18s,box-shadow .18s,background .18s}
+      input:hover{border-color:#c7c1eb}input:focus{border-color:var(--brand);background:white;box-shadow:0 0 0 4px #6554e817}
+      input::placeholder{color:#aaa8b8}
+      button{display:block;width:100%;min-height:51px;margin-top:24px;padding:13px 18px;border:0;border-radius:14px;background:linear-gradient(135deg,#7565f5,#5846dc);color:#fff;font:inherit;font-weight:750;font-size:15px;letter-spacing:.1px;cursor:pointer;box-shadow:0 8px 18px #6554e833;transition:transform .15s,box-shadow .15s,opacity .15s}
+      button:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 11px 22px #6554e83d}
+      button:focus-visible,a:focus-visible{outline:3px solid #a69cff;outline-offset:3px}
+      button:disabled{opacity:.48;cursor:not-allowed;box-shadow:none}
+      .feedback{min-height:20px;margin-top:8px;color:var(--muted);font-size:12px;line-height:1.45}
+      .feedback.good{color:#16804f}.feedback.bad{color:#b42318}
+      .suggestions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+      .suggestions button,.password-tools .secondary{display:inline-flex;align-items:center;justify-content:center;width:auto;min-height:34px;margin:0;padding:7px 11px;border:1px solid #e1ddff;border-radius:10px;background:#f4f2ff;color:#5142ca;font-size:12px;font-weight:700;box-shadow:none}
+      .suggestions button:hover,.password-tools .secondary:hover{background:#eae7ff;box-shadow:none}
+      .password-tools{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
+      .password-tools button{flex:0 0 auto}
+      a{display:block;margin-top:20px;color:var(--brand-dark);text-align:center;text-decoration:none;font-size:14px;font-weight:700}
+      a:hover{text-decoration:underline}
+      .error{margin:0 0 16px;padding:12px 14px;border:1px solid #ffd8d8;border-radius:12px;background:#fff4f4;color:#a32121;text-align:left;font-size:13px}
+      .hint{margin:22px 0 0;padding-top:17px;border-top:1px solid #f0eef6;color:#9996a8;font-size:11px}
+      @media(max-width:520px){body{padding:16px 12px;align-items:center;background:linear-gradient(160deg,#eeebff,#f7f9fd 60%,#e9f7f5)}main{padding:30px 23px 24px;border-radius:23px}.brand{margin-bottom:20px}}
+      @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
     </style></head><body><main><div class="brand">NIPTO</div>
     <h1>${isRegister ? "Create your Nipto account" : isLink ? "Set your Nipto password" : "Welcome back"}</h1>
     <p>${isRegister ? "Choose your Nipto ID and password. No email or phone number is required." : isLink ? "Create a Nipto password for the account already signed in on this device. No email is required." : "Sign in with your Nipto ID and password. No email is required."}</p>
