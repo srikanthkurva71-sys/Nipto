@@ -64,7 +64,6 @@ Deno.test("bounded form parser rejects streamed bodies larger than the limit", a
     // Required by the Request constructor for streaming bodies in Deno.
     // @ts-ignore: Deno supports this non-standard RequestInit extension.
     duplex: "half",
-  }),
   });
 
   const error = await assertRejects(
