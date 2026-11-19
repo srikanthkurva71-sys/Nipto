@@ -28,7 +28,7 @@ Optional:
 - `NIPTO_OIDC_PUBLIC_KEYS` (for explicit public-key rotation)
 - `TURN_SHARED_SECRET`, `TURN_URLS`, `TURN_STUN_URL` (for TURN credential issuance)
 
-Generate the ES256 key pair with `deno run scripts/generate_nipto_oidc_keys.ts`. Keep the private JWK confidential. Store the public JWK in the public-key set for rotation/verification as appropriate.
+Generate the client credentials and ES256 key pair with `deno run scripts/generate_nipto_oidc_keys.ts`. The script prints `NIPTO_OIDC_CLIENT_ID`, `NIPTO_OIDC_CLIENT_SECRET`, `NIPTO_OIDC_KID`, `NIPTO_OIDC_PRIVATE_JWK`, and `NIPTO_OIDC_PUBLIC_KEYS`. Keep the complete output in a password manager. Put the private JWK and client secret only in Supabase Edge Function secrets; put the same client ID and client secret into the Auth provider form. Never commit the generated output.
 
 ## Deployment order
 
@@ -36,7 +36,7 @@ Generate the ES256 key pair with `deno run scripts/generate_nipto_oidc_keys.ts`.
 2. Configure the required Edge Function secrets.
 3. Deploy `supabase/functions/nipto-identity/index.ts` together with `validation.ts`.
 4. Verify the discovery document, JWKS, ID availability endpoint, and OIDC authorization-code/PKCE flow.
-5. Register/enable Supabase Auth custom OIDC provider `custom:nipto` with the matching client ID, client secret, issuer/discovery URL, and callback settings supported by the project's Auth configuration.
+5. In Supabase Dashboard → Authentication → Sign In / Providers → Custom OAuth Providers → New Provider, choose **Auto-discovery (OIDC)**. Set identifier `custom:nipto`, name `Nipto`, the generated client ID and client secret, issuer `https://advmjribduqzyuwktkod.supabase.co/functions/v1/nipto-identity`, scopes `openid profile`, and `email_optional=true`; then create and enable it. Supabase Auth callback: `https://advmjribduqzyuwktkod.supabase.co/auth/v1/callback`. Also allow `nipto://auth-callback` in Authentication → URL Configuration for the Flutter app redirect.
 6. Test registration, sign-in, sign-out, refresh, duplicate-ID suggestions, password rejection, account recovery, session revocation, and legacy-account migration.
 7. Only after staging tests pass, repeat the configuration in production and run two-device smoke tests.
 
