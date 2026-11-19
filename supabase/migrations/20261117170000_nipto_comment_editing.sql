@@ -13,15 +13,15 @@ drop policy if exists post_comments_update_own_body on public.post_comments;
 create policy post_comments_update_own_body
 on public.post_comments
 for update to authenticated
-using (author_id = (select auth.uid()) and public.can_view_post(post_id))
-with check (author_id = (select auth.uid()) and public.can_view_post(post_id));
+using (author_id = (select auth.uid()) and private.can_view_post(post_id))
+with check (author_id = (select auth.uid()) and private.can_view_post(post_id));
 
 drop policy if exists short_comments_update_own_body on public.short_comments;
 create policy short_comments_update_own_body
 on public.short_comments
 for update to authenticated
-using (author_id = (select auth.uid()) and public.can_view_short(short_id))
-with check (author_id = (select auth.uid()) and public.can_view_short(short_id));
+using (author_id = (select auth.uid()) and private.can_view_short(short_id))
+with check (author_id = (select auth.uid()) and private.can_view_short(short_id));
 
 revoke update on public.post_comments from authenticated;
 revoke update on public.short_comments from authenticated;
