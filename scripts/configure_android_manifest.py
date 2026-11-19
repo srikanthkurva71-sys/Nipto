@@ -27,7 +27,7 @@ def main() -> int:
         return 0
 
     activity = re.search(
-        r'<activity\\b(?=[^>]*android:name="[^"]*MainActivity")[^>]*>(.*?)</activity>',
+        r'<activity\b(?=[^>]*android:name="[^"]*MainActivity")[^>]*>(.*?)</activity>',
         manifest,
         flags=re.DOTALL,
     )
@@ -38,15 +38,15 @@ def main() -> int:
     activity_text = activity.group(0)
     if 'android:launchMode=' not in activity_text.split(">", 1)[0]:
         activity_text = re.sub(
-            r'(<activity\\b[^>]*)(>)',
-            r'\\1 android:launchMode="singleTop"\\2',
+            r'(<activity\b[^>]*)(>)',
+            r'\1 android:launchMode="singleTop"\2',
             activity_text,
             count=1,
         )
     if 'android:exported=' not in activity_text.split(">", 1)[0]:
         activity_text = re.sub(
             r'(<activity\\b[^>]*)(>)',
-            r'\\1 android:exported="true"\\2',
+            r'\1 android:exported="true"\2',
             activity_text,
             count=1,
         )
@@ -54,7 +54,7 @@ def main() -> int:
     closing = activity_text.rfind("</activity>")
     updated_activity = (
         activity_text[:closing].rstrip()
-        + "\\n"
+        + "\n"
         + INTENT_FILTER
         + activity_text[closing:]
     )
