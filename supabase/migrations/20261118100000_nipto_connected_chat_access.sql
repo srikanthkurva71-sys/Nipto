@@ -50,7 +50,7 @@ language sql
 stable
 security definer
 set search_path = ''
-as $
+as $$
   select
     p.id,
     p.nipto_id,
@@ -71,7 +71,7 @@ as $
       or private.has_accepted_follow(p.id, auth.uid())
     )
   order by p.nipto_id;
-$;
+$$;
 revoke all on function public.list_chat_connections(uuid[]) from public, anon;
 grant execute on function public.list_chat_connections(uuid[]) to authenticated;
 
