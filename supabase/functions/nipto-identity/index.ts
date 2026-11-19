@@ -361,7 +361,7 @@ function renderAuthorizePage(input: {
 }): string {
   const isRegister = input.screen === "register";
   const isLink = input.screen === "link";
-  const error = input.error ? `<p class="error">${htmlEscape(input.error)}</p>` : "";
+  const error = input.error ? `<p class="error" role="alert">${htmlEscape(input.error)}</p>` : "";
   const fields = isRegister
     ? `<label>Display name<input name="display_name" maxlength="50" autocomplete="name" required></label>`
     : "";
@@ -416,7 +416,7 @@ function renderAuthorizePage(input: {
       @media(max-width:800px){body{padding:20px}.auth-shell{width:min(100%,520px);min-height:0;grid-template-columns:1fr;border-radius:25px}.story-panel{display:none}main{padding:42px 42px 32px}.mobile-brand{display:flex;align-items:center;gap:9px;margin-bottom:28px;color:#211d45;font-size:17px;font-weight:900;letter-spacing:3px}.mobile-brand span{display:grid;place-items:center;width:35px;height:35px;border-radius:11px;background:linear-gradient(145deg,#7868ff,#5542d8);color:#fff;font-size:18px;letter-spacing:0}}
       @media(max-width:520px){body{padding:12px;align-items:center;background:linear-gradient(160deg,#eeebff,#f7f9fd 60%,#e9f7f5)}.auth-shell{border-radius:21px}main{padding:28px 22px 23px}.mobile-brand{margin-bottom:23px}h1{font-size:28px}.intro{margin-bottom:22px}}
       @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
-    </style></head><body><main><div class="auth-shell"><aside class="story-panel"><div class="brand"><span class="brand-mark">N</span>NIPTO</div><div class="story-copy"><span class="eyebrow">Your world, connected</span><h2>One identity.<br>Every connection.</h2><p>Welcome to a simpler way to stay close, share what matters, and build your community with Nipto.</p><div class="feature-list"><div class="feature"><span class="feature-icon">✦</span>Your own Nipto ID</div><div class="feature"><span class="feature-icon">⌁</span>Conversations that stay yours</div><div class="feature"><span class="feature-icon">◈</span>A place for your people</div></div></div><div class="story-foot">A little more connected. A little more you.</div></aside><main><div class="mobile-brand"><span>N</span>NIPTO</div>
+    </style></head><body><div class="auth-shell"><aside class="story-panel"><div class="brand"><span class="brand-mark">N</span>NIPTO</div><div class="story-copy"><span class="eyebrow">Your world, connected</span><h2>One identity.<br>Every connection.</h2><p>Welcome to a simpler way to stay close, share what matters, and build your community with Nipto.</p><div class="feature-list"><div class="feature"><span class="feature-icon">✦</span>Your own Nipto ID</div><div class="feature"><span class="feature-icon">⌁</span>Conversations that stay yours</div><div class="feature"><span class="feature-icon">◈</span>A place for your people</div></div></div><div class="story-foot">A little more connected. A little more you.</div></aside><main><div class="mobile-brand"><span>N</span>NIPTO</div>
     <h1>${isRegister ? "Create your Nipto account" : isLink ? "Set your Nipto password" : "Welcome back"}</h1>
     <p class="intro">${isRegister ? "Choose your Nipto ID and password. No email or phone number is required." : isLink ? "Create a Nipto password for the account already signed in on this device. No email is required." : "Sign in with your Nipto ID and password. No email is required."}</p>
     ${error}
