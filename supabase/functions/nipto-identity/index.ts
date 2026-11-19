@@ -545,12 +545,12 @@ async function authorizeGet(request: Request): Promise<Response> {
   const responseType = url.searchParams.get("response_type") ?? "";
   const scope = url.searchParams.get("scope") ?? "";
   const state = url.searchParams.get("state") ?? "";
-  const nonce = url.searchParams.get("nonce") ?? "";
+  const nonce = url.searchParams.get("nonce");
   const challenge = url.searchParams.get("code_challenge") ?? "";
   const method = url.searchParams.get("code_challenge_method") ?? "";
   if (client !== oidcClientId() || redirectUri !== oidcRedirectUri()
     || responseType !== "code" || !isAllowedOidcScope(scope) || !state || state.length > 512
-    || !nonce || nonce.length > 512 || method !== "S256"
+    || (nonce !== null && (nonce.length === 0 || nonce.length > 512)) || method !== "S256"
     || !/^[A-Za-z0-9_-]{43,128}$/.test(challenge)) {
     throw new ApiError("Invalid Nipto authorization request", 400);
   }
@@ -603,17 +603,18 @@ async function authorizePost(request: Request): Promise<Response> {
   const tx = firstRow(txRows);
   if (!tx) throw new ApiError("This sign-in request expired. Return to Nipto and try again.", 410);
   const screen = action === "register" ? "register" : action === "link" ? "link" : "login";
+  const switchParams = new URLSearchParams({
+    client_id: String(tx.client_id),
+    redirect_uri: String(tx.redirect_uri),
+    response_type: "code",
+    scope: String(tx.scope),
+    state: String(tx.state),
+    code_challenge: String(tx.code_challenge),
+    code_challenge_method: "S256",
+  });
+  if (tx.nonce !== null && tx.nonce !== undefined) switchParams.set("nonce", String(tx.nonce));
   const switchUrl = screen === "link" ? "" : buildSwitchUrl(new URL(
-    issuer() + "/authorize?" + new URLSearchParams({
-      client_id: String(tx.client_id),
-      redirect_uri: String(tx.redirect_uri),
-      response_type: "code",
-      scope: String(tx.scope),
-      state: String(tx.state),
-      nonce: String(tx.nonce),
-      code_challenge: String(tx.code_challenge),
-      code_challenge_method: "S256",
-    }).toString(),
+    issuer() + "/authorize?" + switchParams.toString(),
   ), screen === "register" ? "login" : "register");
 
   try {
@@ -685,7 +686,7 @@ async function authorizePost(request: Request): Promise<Response> {
       p_identity_id: identityId,
       p_client_id: String(tx.client_id),
       p_redirect_uri: String(tx.redirect_uri),
-      p_nonce: String(tx.nonce),
+      p_nonce: tx.nonce === null || tx.nonce === undefined ? null : String(tx.nonce),
       p_code_challenge: String(tx.code_challenge),
     });
     const destination = new URL(String(tx.redirect_uri));
@@ -756,7 +757,7 @@ async function tokenEndpoint(request: Request): Promise<Response> {
     ...common,
     exp: now + 300,
     auth_time: now,
-    nonce: String(row.nonce),
+    ...(row.nonce === null || row.nonce === undefined ? {} : { nonce: String(row.nonce) }),
   });
   const accessToken = await signJwt({
     ...common,
