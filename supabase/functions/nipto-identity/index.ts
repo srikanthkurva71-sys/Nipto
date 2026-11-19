@@ -377,39 +377,48 @@ function renderAuthorizePage(input: {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <title>${isRegister ? "Create your Nipto account" : isLink ? "Set your Nipto password" : "Sign in to Nipto"}</title>
     <style>
-      :root{color-scheme:light;--ink:#17152b;--muted:#77758b;--brand:#6554e8;--brand-dark:#5140d1;--line:#e8e6f1;--surface:#fff;--soft:#f5f3ff}
+      :root{color-scheme:light;--ink:#17152b;--muted:#77758b;--brand:#6554e8;--brand-dark:#5140d1}
       *{box-sizing:border-box}
-      body{margin:0;min-height:100vh;padding:36px 20px;display:grid;place-items:center;color:var(--ink);font:16px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(ellipse at 12% 12%,#ded9ff 0,transparent 38%),radial-gradient(ellipse at 90% 88%,#d9f3f0 0,transparent 34%),linear-gradient(135deg,#f8f7ff,#f4f7fc)}
-      main{position:relative;width:min(100%,470px);padding:38px 40px 30px;background:rgba(255,255,255,.96);border:1px solid rgba(255,255,255,.9);border-radius:28px;box-shadow:0 28px 90px rgba(42,34,92,.13),0 3px 12px rgba(42,34,92,.04);overflow:hidden}
-      main:before{content:"";position:absolute;inset:0 0 auto;height:5px;background:linear-gradient(90deg,#7968ff,#4c9ce8,#4dc9b4)}
-      .brand{display:flex;align-items:center;justify-content:center;gap:10px;margin:0 auto 24px;color:#211d45;font-size:21px;font-weight:900;letter-spacing:3.5px}
-      .brand:before{content:"N";display:grid;place-items:center;width:38px;height:38px;border-radius:13px;background:linear-gradient(145deg,#7868ff,#5542d8);color:white;font-size:20px;letter-spacing:0;box-shadow:0 6px 16px #6657e844}
-      h1{margin:0;text-align:center;font-size:clamp(25px,5vw,30px);line-height:1.2;letter-spacing:-.8px;font-weight:800}
-      p{margin:12px 0 22px;color:var(--muted);line-height:1.65;text-align:center;font-size:14px}
-      label{display:block;margin:17px 0 0;color:#302d46;font-size:13px;font-weight:700;letter-spacing:.1px}
-      input{display:block;width:100%;height:50px;margin-top:8px;padding:0 15px;border:1px solid #dfddea;border-radius:13px;background:#fcfcff;color:var(--ink);font:inherit;font-size:15px;outline:none;transition:border-color .18s,box-shadow .18s,background .18s}
-      input:hover{border-color:#c7c1eb}input:focus{border-color:var(--brand);background:white;box-shadow:0 0 0 4px #6554e817}
-      input::placeholder{color:#aaa8b8}
-      button{display:block;width:100%;min-height:51px;margin-top:24px;padding:13px 18px;border:0;border-radius:14px;background:linear-gradient(135deg,#7565f5,#5846dc);color:#fff;font:inherit;font-weight:750;font-size:15px;letter-spacing:.1px;cursor:pointer;box-shadow:0 8px 18px #6554e833;transition:transform .15s,box-shadow .15s,opacity .15s}
-      button:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 11px 22px #6554e83d}
-      button:focus-visible,a:focus-visible{outline:3px solid #a69cff;outline-offset:3px}
-      button:disabled{opacity:.48;cursor:not-allowed;box-shadow:none}
-      .feedback{min-height:20px;margin-top:8px;color:var(--muted);font-size:12px;line-height:1.45}
-      .feedback.good{color:#16804f}.feedback.bad{color:#b42318}
+      body{margin:0;min-height:100vh;padding:34px;display:grid;place-items:center;color:var(--ink);font:15px/1.55 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f5f6fb;background-image:radial-gradient(ellipse at 8% 8%,#dcd7ff 0,transparent 32%),radial-gradient(ellipse at 95% 92%,#d7f2ec 0,transparent 30%)}
+      .auth-shell{width:min(100%,1060px);min-height:650px;display:grid;grid-template-columns:1fr 1fr;overflow:hidden;border:1px solid rgba(255,255,255,.9);border-radius:30px;background:#fff;box-shadow:0 32px 100px rgba(34,29,76,.16),0 4px 14px rgba(34,29,76,.04)}
+      .story-panel{position:relative;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;padding:48px;color:#fff;background:linear-gradient(150deg,#211b58 0%,#4336a6 55%,#6255dc 100%)}
+      .story-panel:before,.story-panel:after{position:absolute;content:"";border:1px solid rgba(255,255,255,.13);border-radius:50%;pointer-events:none}
+      .story-panel:before{width:470px;height:470px;right:-220px;top:-180px;box-shadow:0 0 0 38px rgba(255,255,255,.035),0 0 0 78px rgba(255,255,255,.025)}
+      .story-panel:after{width:360px;height:360px;left:-230px;bottom:-190px;box-shadow:0 0 0 35px rgba(255,255,255,.035)}
+      .brand{position:relative;z-index:1;display:flex;align-items:center;gap:12px;color:#fff;font-size:20px;font-weight:900;letter-spacing:4px}
+      .brand-mark{display:grid;place-items:center;width:42px;height:42px;border:1px solid rgba(255,255,255,.25);border-radius:14px;background:rgba(255,255,255,.13);font-size:22px;letter-spacing:0}
+      .story-copy{position:relative;z-index:1;max-width:410px;margin:55px 0}
+      .eyebrow{display:inline-flex;align-items:center;gap:8px;padding:7px 11px;border:1px solid rgba(255,255,255,.2);border-radius:30px;background:rgba(255,255,255,.09);color:#e8e5ff;font-size:11px;font-weight:750;letter-spacing:1.2px;text-transform:uppercase}
+      .eyebrow:before{content:"";width:7px;height:7px;border-radius:50%;background:#6fe0c2;box-shadow:0 0 0 4px rgba(111,224,194,.14)}
+      .story-copy h2{margin:22px 0 15px;font-size:clamp(34px,4vw,48px);line-height:1.08;letter-spacing:-1.8px;font-weight:800}
+      .story-copy p{max-width:360px;margin:0;color:#d7d3fa;font-size:15px;line-height:1.8}
+      .feature-list{display:grid;gap:15px;margin-top:34px}
+      .feature{display:flex;align-items:center;gap:12px;color:#f0efff;font-size:13px;font-weight:600}
+      .feature-icon{display:grid;place-items:center;width:30px;height:30px;border:1px solid rgba(255,255,255,.17);border-radius:10px;background:rgba(255,255,255,.1);font-size:14px}
+      .story-foot{position:relative;z-index:1;color:#c4c0ee;font-size:11px}
+      main{position:relative;display:flex;flex-direction:column;justify-content:center;width:100%;padding:54px 56px 42px;background:rgba(255,255,255,.98)}
+      .mobile-brand{display:none}
+      h1{margin:0;text-align:left;font-size:clamp(27px,3vw,34px);line-height:1.18;letter-spacing:-1px;font-weight:820;color:#211d3b}
+      .intro{margin:11px 0 27px;color:var(--muted);line-height:1.65;text-align:left;font-size:14px}
+      label{display:block;margin:17px 0 0;color:#302d46;font-size:13px;font-weight:720}
+      input{display:block;width:100%;height:51px;margin-top:8px;padding:0 15px;border:1px solid #e1dfeb;border-radius:12px;background:#fbfbfe;color:var(--ink);font:inherit;font-size:14px;outline:none;transition:border-color .18s,box-shadow .18s,background .18s}
+      input:hover{border-color:#c7c1eb}input:focus{border-color:var(--brand);background:white;box-shadow:0 0 0 4px #6554e817}input::placeholder{color:#aaa8b8}
+      button{display:block;width:100%;min-height:52px;margin-top:25px;padding:13px 18px;border:0;border-radius:12px;background:linear-gradient(120deg,#7565f5,#5846dc);color:#fff;font:inherit;font-weight:750;font-size:14px;cursor:pointer;box-shadow:0 8px 18px #6554e82c;transition:transform .15s,box-shadow .15s,opacity .15s}
+      button:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 11px 22px #6554e83d}button:focus-visible,a:focus-visible{outline:3px solid #a69cff;outline-offset:3px}button:disabled{opacity:.48;cursor:not-allowed;box-shadow:none}
+      .feedback{min-height:20px;margin-top:8px;color:var(--muted);font-size:12px;line-height:1.45}.feedback.good{color:#16804f}.feedback.bad{color:#b42318}
       .suggestions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-      .suggestions button,.password-tools .secondary{display:inline-flex;align-items:center;justify-content:center;width:auto;min-height:34px;margin:0;padding:7px 11px;border:1px solid #e1ddff;border-radius:10px;background:#f4f2ff;color:#5142ca;font-size:12px;font-weight:700;box-shadow:none}
+      .suggestions button,.password-tools .secondary{display:inline-flex;align-items:center;justify-content:center;width:auto;min-height:34px;margin:0;padding:7px 11px;border:1px solid #e1ddff;border-radius:9px;background:#f4f2ff;color:#5142ca;font-size:12px;font-weight:700;box-shadow:none}
       .suggestions button:hover,.password-tools .secondary:hover{background:#eae7ff;box-shadow:none}
-      .password-tools{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
-      .password-tools button{flex:0 0 auto}
-      a{display:block;margin-top:20px;color:var(--brand-dark);text-align:center;text-decoration:none;font-size:14px;font-weight:700}
-      a:hover{text-decoration:underline}
-      .error{margin:0 0 16px;padding:12px 14px;border:1px solid #ffd8d8;border-radius:12px;background:#fff4f4;color:#a32121;text-align:left;font-size:13px}
-      .hint{margin:22px 0 0;padding-top:17px;border-top:1px solid #f0eef6;color:#9996a8;font-size:11px}
-      @media(max-width:520px){body{padding:16px 12px;align-items:center;background:linear-gradient(160deg,#eeebff,#f7f9fd 60%,#e9f7f5)}main{padding:30px 23px 24px;border-radius:23px}.brand{margin-bottom:20px}}
+      .password-tools{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}.password-tools button{flex:0 0 auto}
+      a{display:block;margin-top:19px;color:var(--brand-dark);text-align:center;text-decoration:none;font-size:13px;font-weight:750}a:hover{text-decoration:underline}
+      .error{margin:0 0 17px;padding:12px 14px;border:1px solid #ffd8d8;border-radius:11px;background:#fff4f4;color:#a32121;text-align:left;font-size:13px}
+      .hint{margin:25px 0 0;padding-top:17px;border-top:1px solid #f0eef6;color:#9693a5;font-size:11px;text-align:left}
+      @media(max-width:800px){body{padding:20px}.auth-shell{width:min(100%,520px);min-height:0;grid-template-columns:1fr;border-radius:25px}.story-panel{display:none}main{padding:42px 42px 32px}.mobile-brand{display:flex;align-items:center;gap:9px;margin-bottom:28px;color:#211d45;font-size:17px;font-weight:900;letter-spacing:3px}.mobile-brand span{display:grid;place-items:center;width:35px;height:35px;border-radius:11px;background:linear-gradient(145deg,#7868ff,#5542d8);color:#fff;font-size:18px;letter-spacing:0}}
+      @media(max-width:520px){body{padding:12px;align-items:center;background:linear-gradient(160deg,#eeebff,#f7f9fd 60%,#e9f7f5)}.auth-shell{border-radius:21px}main{padding:28px 22px 23px}.mobile-brand{margin-bottom:23px}h1{font-size:28px}.intro{margin-bottom:22px}}
       @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important}}
-    </style></head><body><main><div class="brand">NIPTO</div>
+    </style></head><body><main><div class="auth-shell"><aside class="story-panel"><div class="brand"><span class="brand-mark">N</span>NIPTO</div><div class="story-copy"><span class="eyebrow">Your world, connected</span><h2>One identity.<br>Every connection.</h2><p>Welcome to a simpler way to stay close, share what matters, and build your community with Nipto.</p><div class="feature-list"><div class="feature"><span class="feature-icon">✦</span>Your own Nipto ID</div><div class="feature"><span class="feature-icon">⌁</span>Conversations that stay yours</div><div class="feature"><span class="feature-icon">◈</span>A place for your people</div></div></div><div class="story-foot">A little more connected. A little more you.</div></aside><main><div class="mobile-brand"><span>N</span>NIPTO</div>
     <h1>${isRegister ? "Create your Nipto account" : isLink ? "Set your Nipto password" : "Welcome back"}</h1>
-    <p>${isRegister ? "Choose your Nipto ID and password. No email or phone number is required." : isLink ? "Create a Nipto password for the account already signed in on this device. No email is required." : "Sign in with your Nipto ID and password. No email is required."}</p>
+    <p class="intro">${isRegister ? "Choose your Nipto ID and password. No email or phone number is required." : isLink ? "Create a Nipto password for the account already signed in on this device. No email is required." : "Sign in with your Nipto ID and password. No email is required."}</p>
     ${error}
     <form method="post" action="${issuer()}/authorize">
       <input type="hidden" name="transaction_id" value="${htmlEscape(input.transactionId)}">
@@ -424,7 +433,7 @@ function renderAuthorizePage(input: {
     </form>
     ${isLink ? "" : `<a href="${input.switchUrl}">${isRegister ? "Already have a Nipto account? Sign in" : "New to Nipto? Create an account"}</a>`}
     <p class="hint">Your Nipto password is handled by Nipto. It is never sent to an email provider.</p>
-    </main>
+    </main></div>
     <script>
       (() => {
         const form = document.querySelector("form");
