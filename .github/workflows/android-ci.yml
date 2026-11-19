@@ -75,6 +75,9 @@ jobs:
       - name: Test Nipto identity validation
         run: deno test supabase/functions/nipto-identity/validation_test.ts
 
+      - name: Test bounded Nipto OIDC token form parsing
+        run: deno test supabase/functions/nipto-identity/form_body_test.ts
+
       - name: Configure Android plugin repositories
         run: |
           python3 -c "from pathlib import Path; p=Path('mobile/app/android/settings.gradle.kts'); s=p.read_text(); s=s.replace('repositories {', 'repositories {\\n        google()\\n        mavenCentral()', 1); p.write_text(s)"
