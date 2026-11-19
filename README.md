@@ -88,9 +88,9 @@ Nipto v1 is an Android app, not a web product. Use an Android emulator or physic
 
 ## Supabase state
 
-The initial social schema and security migrations are applied to the connected Nipto Supabase project. See supabase/migrations/. The nipto-login Edge Function is deployed with JWT verification disabled because it is the unauthenticated sign-in endpoint; it has its own input validation and database-backed attempt limiting.
+The connected Supabase project has the social schema and the Nipto native-auth database migrations applied. The live Edge Function inventory currently contains only `nipto-login`; `nipto-identity` has not yet been deployed. Supabase Auth does not yet have the `custom:nipto` OIDC provider enabled, which is why the Flutter OAuth request currently returns `Unsupported provider: custom provider custom:nipto not found`.
 
-**Authentication migration status:** The current deployed app still requires a private email in Supabase Auth and uses that email internally for login and password reset. This is a legacy implementation and does **not** meet the product requirement. The target is Nipto ID + Nipto password only, with no email or phone collected or stored for authentication. A recovery Nipto account is optional and can only be linked after sign-in in Settings, with explicit approval by the other account owner. The complete target architecture and hosted-Supabase constraint are documented in `docs/NIPTO_NATIVE_AUTH_DESIGN.md`. Do not present the current authentication flow as the finished Nipto account system.
+**Authentication status:** The Flutter app and repository contain the Nipto ID/password flow and the OIDC issuer implementation. The intended identity model is Nipto ID + password only, with no email or phone required. A recovery Nipto account is optional and is linked only after sign-in in Settings, with approval from the other account owner. The remaining activation steps are server-secret configuration, issuer deployment, and registering the `custom:nipto` provider in Supabase Auth. See `docs/NIPTO_NATIVE_AUTH_DESIGN.md` and `docs/NIPTO_OIDC_DEPLOYMENT.md`. Do not present Nipto sign-in as operational until a real end-to-end login succeeds.
 
 ## Current implementation status
 
@@ -106,7 +106,7 @@ GitHub Actions generates the Android platform project, then runs Dart formatting
 
 - Verify the latest commit's full CI run and test critical flows on physical Android devices.
 - Verify the new `flutter_secure_storage` adapters for Supabase sessions and PKCE verifiers on supported Android versions, including OAuth callback restoration after app restart.
-- Configure the Nipto-owned OIDC issuer as Supabase Auth custom provider `custom:nipto` with `email_optional=true`, no email scope, and manual identity linking enabled. Validate the full registration, login, migration and recovery flows before production cutover. The branch replaces email reset with in-app recovery Nipto account approval and one-time reset grants; production cutover remains gated on deployment and testing.
+- Set the server-only OIDC secrets, deploy `nipto-identity`, and create the Supabase Auth OIDC provider `custom:nipto` with scopes `openid profile` and `email_optional=true`. Validate registration, login, migration and recovery end to end before production cutover. See `docs/NIPTO_OIDC_DEPLOYMENT.md` for the exact sequence.
 - Implement push delivery and notification routing.
 - Implement video scanning/transcoding, thumbnails and resilient upload processing.
 - Build the role-gated staff console for an appropriately staffed adult operations team; the staff backend, audit log, review RPCs and user notifications are already provisioned.
