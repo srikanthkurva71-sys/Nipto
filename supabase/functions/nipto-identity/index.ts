@@ -356,7 +356,7 @@ function buildSwitchUrl(url: URL, screen: string): string {
   return next.toString();
 }
 function renderAuthorizePage(input: {
-  transactionId: string; csrfToken: string; screen: string; error?: string; switchUrl: string;
+  transactionId: string; csrfToken: string; screen: string; error?: string; switchUrl: string; niptoId?: string;
 }): string {
   const isRegister = input.screen === "register";
   const isLink = input.screen === "link";
@@ -370,9 +370,9 @@ function renderAuthorizePage(input: {
     : "";
   const passwordTools = isRegister || isLink
     ? `<div class="password-tools"><button type="button" class="secondary" id="suggest-password">Suggest a strong password</button>
-       <button type="button" class="secondary" id="toggle-password">Show</button></div>
+       <button type="button" class="secondary" id="toggle-password" aria-label="Show password">Show</button></div>
        <div id="password-feedback" class="feedback" aria-live="polite">Use at least 12 characters. A unique password is safest.</div>`
-    : "";
+    : `<div class="password-tools"><button type="button" class="secondary" id="toggle-password" aria-label="Show password">Show password</button></div>`;
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <title>${isRegister ? "Create your Nipto account" : isLink ? "Set your Nipto password" : "Sign in to Nipto"}</title>
     <style>
@@ -400,7 +400,7 @@ function renderAuthorizePage(input: {
       <input type="hidden" name="csrf_token" value="${htmlEscape(input.csrfToken)}">
       <input type="hidden" name="action" value="${isRegister ? "register" : isLink ? "link" : "login"}">
       ${fields}
-      ${isLink ? "" : `<label>Nipto ID<input name="nipto_id" id="nipto-id" maxlength="24" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>${registrationTools}`}
+      ${isLink ? "" : `<label>Nipto ID<input name="nipto_id" id="nipto-id" value="${htmlEscape(input.niptoId ?? "")}" maxlength="24" autocomplete="username" autocapitalize="none" spellcheck="false" required></label>${registrationTools}`}
       <label>Password<input name="password" id="nipto-password" type="password" minlength="12" maxlength="128" autocomplete="${isRegister || isLink ? "new-password" : "current-password"}" required></label>
       ${isRegister || isLink ? `<label>Confirm password<input name="password_confirmation" id="nipto-password-confirmation" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label>` : ""}
       ${passwordTools}
@@ -409,7 +409,7 @@ function renderAuthorizePage(input: {
     ${isLink ? "" : `<a href="${input.switchUrl}">${isRegister ? "Already have a Nipto account? Sign in" : "New to Nipto? Create an account"}</a>`}
     <p class="hint">Your Nipto password is handled by Nipto. It is never sent to an email provider.</p>
     </main>
-    ${isRegister || isLink ? `<script>
+    <script>
       (() => {
         const form = document.querySelector("form");
         const password = document.getElementById("nipto-password");
@@ -535,7 +535,7 @@ function renderAuthorizePage(input: {
           submit.disabled = true;
         }
       })();
-    </script>` : ""}
+    </script>
     </body></html>`;
 }
 async function authorizeGet(request: Request): Promise<Response> {
@@ -701,6 +701,7 @@ async function authorizePost(request: Request): Promise<Response> {
       screen,
       error: message,
       switchUrl,
+      niptoId,
     }), error instanceof ApiError ? error.status : 400);
   }
 }
