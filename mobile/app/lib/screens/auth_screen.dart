@@ -163,7 +163,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       const Divider(),
                       const SizedBox(height: 12),
                       const Text(
-                        'A recovery Nipto account is optional. You can add a trusted recovery account later in Settings.',
+                        'A recovery Nipto account is optional. You can add or change one later in Settings.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: NiptoColors.muted, fontSize: 12, height: 1.5),
                       ),
