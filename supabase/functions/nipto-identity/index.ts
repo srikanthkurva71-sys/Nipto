@@ -731,7 +731,21 @@ function parseBasicAuth(value: string): { id: string; secret: string } | null {
   } catch { return null; }
 }
 async function tokenEndpoint(request: Request): Promise<Response> {
-  const form = await request.formData();
+  const contentType = request.headers.get("content-type") ?? "";
+  if (!/^application\\/x-www-form-urlencoded(?:;|$)/i.test(contentType)) {
+    return json({ error: "invalid_request" }, 400);
+  }
+  // Bound token-exchange input before parsing; this endpoint is public to the
+  // authorization server network and must not accept arbitrarily large bodies.
+  const formBytes = await readLimitedBody(request, 8_192);
+  let form: FormData;
+  try {
+    form = await new Response(formBytes, {
+      headers: { "Content-Type": contentType },
+    }).formData();
+  } catch {
+    return json({ error: "invalid_request" }, 400);
+  }
   const basic = parseBasicAuth(request.headers.get("authorization") ?? "");
   const clientId = basic?.id ?? String(form.get("client_id") ?? "");
   const clientSecret = basic?.secret ?? String(form.get("client_secret") ?? "");
