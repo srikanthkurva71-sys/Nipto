@@ -36,16 +36,18 @@ def main() -> int:
         return 1
 
     activity_text = activity.group(0)
-    if 'android:launchMode=' not in activity_text.split(">", 1)[0]:
+    opening_tag = activity_text.split(">", 1)[0]
+    if "android:launchMode=" not in opening_tag:
         activity_text = re.sub(
             r'(<activity\b[^>]*)(>)',
             r'\1 android:launchMode="singleTop"\2',
             activity_text,
             count=1,
-            r'(<activity\b[^>]*)(>)',
-    if 'android:exported=' not in activity_text.split(">", 1)[0]:
+        )
+    opening_tag = activity_text.split(">", 1)[0]
+    if "android:exported=" not in opening_tag:
         activity_text = re.sub(
-            r'(<activity\\b[^>]*)(>)',
+            r'(<activity\b[^>]*)(>)',
             r'\1 android:exported="true"\2',
             activity_text,
             count=1,
