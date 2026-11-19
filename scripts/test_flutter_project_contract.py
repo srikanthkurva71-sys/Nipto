@@ -30,7 +30,7 @@ class FlutterProjectContractTests(unittest.TestCase):
         for source in (APP / "lib").rglob("*.dart"):
             imported.update(
                 re.findall(
-                    r"import\\s+['\\\"]package:([^/]+)/",
+                    r"import\s+['\"]package:([^/]+)/",
                     source.read_text(encoding="utf-8"),
                 )
             )
