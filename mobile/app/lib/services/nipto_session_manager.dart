@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -147,7 +149,7 @@ class NiptoSessionManager {
     try {
       final launched = await _client.auth.signInWithOAuth(
         OAuthProvider('custom:nipto'),
-        redirectTo: 'nipto://auth-callback',
+        redirectTo: kIsWeb ? Uri.base.origin : 'nipto://auth-callback',
         queryParams: {'screen': screen},
       );
       if (!launched) {
