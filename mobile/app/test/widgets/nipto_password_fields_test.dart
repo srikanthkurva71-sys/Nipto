@@ -40,6 +40,27 @@ void main() {
     confirmationController.dispose();
   });
 
+  testWidgets('confirmation edits do not invoke password callback', (tester) async {
+    var callbackCount = 0;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: NiptoPasswordFields(
+          passwordController: passwordController,
+          confirmationController: confirmationController,
+          onPasswordChanged: (_) => callbackCount++,
+        ),
+      ),
+    ));
+
+    confirmationController.text = 'ConfirmOnly123!';
+    await tester.pump();
+    expect(callbackCount, 0);
+
+    passwordController.text = 'StrongPass123!';
+    await tester.pump();
+    expect(callbackCount, 1);
+  });
+
   testWidgets('shows all password requirements', (tester) async {
     await tester.pumpWidget(buildHarness());
 
