@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/auth/nipto_id_policy.dart';
 import '../theme/nipto_theme.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -38,16 +39,7 @@ class _AuthScreenState extends State<AuthScreen> {
     super.dispose();
   }
 
-  String? _validateNiptoId(String? value) {
-    final input = (value ?? '').trim().toLowerCase();
-    if (!RegExp(r'^[a-z0-9_]{3,24}$').hasMatch(input)) {
-      return 'Use 3–24 lowercase letters, numbers or underscores.';
-    }
-    if (const ['admin', 'administrator', 'support', 'help', 'nipto', 'official', 'security', 'moderator'].contains(input)) {
-      return 'This Nipto ID is reserved.';
-    }
-    return null;
-  }
+  String? _validateNiptoId(String? value) => NiptoIdPolicy.validate(value);
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
