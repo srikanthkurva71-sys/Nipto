@@ -10,7 +10,11 @@ coverage/
 
 # IDE
 .idea/
-.vscode/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
 *.iml
 
 # Local configuration and secrets
@@ -21,6 +25,7 @@ coverage/
 *.keystore
 key.properties
 android/local.properties
+mobile/app/android/local.properties
 
 # OS
 .DS_Store

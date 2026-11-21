@@ -2,7 +2,7 @@ name: Android CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'work/**']
   pull_request:
   workflow_dispatch:
 
@@ -29,13 +29,20 @@ jobs:
           cache: true
 
       - name: Generate Android platform project
-        run: flutter create --platforms=android --org com.nipto --project-name nipto .
+        run: flutter create --platforms=android,web --org com.nipto --project-name nipto .
+        working-directory: mobile/app
+
+      - name: Test Android manifest configuration
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+
+      - name: Configure Nipto OAuth callback deep link
+        run: python3 scripts/configure_android_manifest.py
 
       - name: Configure WebRTC media permissions
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          path = Path("android/app/src/main/AndroidManifest.xml")
+          path = Path("mobile/app/android/app/src/main/AndroidManifest.xml")
           manifest = path.read_text()
           permissions = [
               '    <uses-feature android:name="android.hardware.camera" android:required="false" />',
@@ -54,48 +61,78 @@ jobs:
           path.write_text(manifest)
           PY
 
-      - name: Configure password recovery deep link
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path("android/app/src/main/AndroidManifest.xml")
-          manifest = path.read_text()
-          if "nipto://auth-callback" not in manifest:
-              activity_start = manifest.find('android:name=".MainActivity"')
-              if activity_start < 0:
-                  raise SystemExit("Generated MainActivity declaration was not found")
-              activity_end = manifest.find("</activity>", activity_start)
-              if activity_end < 0:
-                  raise SystemExit("Generated MainActivity closing tag was not found")
-              intent_filter = """            <intent-filter>
-                          <action android:name="android.intent.action.VIEW" />
-                          <category android:name="android.intent.category.DEFAULT" />
-                          <category android:name="android.intent.category.BROWSABLE" />
-                          <data android:scheme="nipto" android:host="auth-callback" />
-                      </intent-filter>
-              """
-              manifest = manifest[:activity_end] + intent_filter + manifest[activity_end:]
-              path.write_text(manifest)
-          PY
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Format Nipto identity TypeScript
+        run: deno fmt supabase/functions/nipto-identity scripts/generate_nipto_oidc_keys.ts
+
+      - name: Check Nipto identity Edge Function and key utility
+        run: deno check supabase/functions/nipto-identity/index.ts scripts/generate_nipto_oidc_keys.ts
+
+      - name: Test Nipto identity validation
+        run: deno test supabase/functions/nipto-identity/validation_test.ts
+
+      - name: Test bounded Nipto OIDC token form parsing
+        run: deno test supabase/functions/nipto-identity/form_body_test.ts
 
       - name: Configure Android plugin repositories
         run: |
-          python3 -c "from pathlib import Path; p=Path('android/settings.gradle.kts'); s=p.read_text(); s=s.replace('repositories {', 'repositories {\\n        google()\\n        mavenCentral()', 1); p.write_text(s)"
+          python3 -c "from pathlib import Path; p=Path('mobile/app/android/settings.gradle.kts'); s=p.read_text(); s=s.replace('repositories {', 'repositories {\\n        google()\\n        mavenCentral()', 1); p.write_text(s)"
+
+      - name: Pin Android Gradle Plugin lint fix
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("mobile/app/android/settings.gradle.kts")
+          lines = path.read_text(encoding="utf-8").splitlines()
+          matches = [i for i, line in enumerate(lines) if 'id("com.android.application")' in line]
+          if len(matches) != 1:
+              raise SystemExit("Could not identify exactly one Android Gradle Plugin declaration")
+          index = matches[0]
+          before, marker, after = lines[index].partition('version "')
+          if not marker or '"' not in after:
+              raise SystemExit("Could not parse the generated Android Gradle Plugin version")
+          _, quote, suffix = after.partition('"')
+          lines[index] = before + marker + "9.3.2" + quote + suffix
+          path.write_text(chr(10).join(lines) + chr(10), encoding="utf-8")
+          print("Pinned Android Gradle Plugin to 9.3.2 for the JDK 17 lint fix.")
+          PY
+
+      - name: Configure Android SDK levels
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("mobile/app/android/app/build.gradle.kts")
+          text = path.read_text()
+          text = text.replace("minSdk = flutter.minSdkVersion", "minSdk = 24")
+          path.write_text(text)
+          PY
 
       - name: Resolve dependencies
+        working-directory: mobile/app
         run: flutter pub get
 
       - name: Remove generated sample test
-        run: rm -f test/widget_test.dart
+        run: rm -f mobile/app/test/widget_test.dart
 
       - name: Format Dart sources
+        working-directory: mobile/app
         run: dart format lib test
 
       - name: Static analysis
+        working-directory: mobile/app
         run: flutter analyze --no-fatal-infos
 
       - name: Unit and widget tests
+        working-directory: mobile/app
         run: flutter test
+
+      - name: Build Chrome development preview
+        working-directory: mobile/app
+        run: flutter build web --release
 
       - name: Install Android NDK with retry
         shell: bash
@@ -114,15 +151,13 @@ jobs:
           exit 1
 
       - name: Build debug APK
-        run: |
-          flutter build apk --debug \
-            --dart-define=SUPABASE_URL=https://advmjribduqzyuwktkod.supabase.co \
-            --dart-define=SUPABASE_PUBLISHABLE_KEY=sb_publishable_zxqki-GLfT6zi-BXT1h6zw_nWq9Nhye
+        working-directory: mobile/app
+        run: flutter build apk --debug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: nipto-android-debug
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          path: mobile/app/build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
           retention-days: 14

@@ -5,7 +5,7 @@
 - [x] Establish product scope and three-tab navigation.
 - [x] Create schema for identity, follows, blocks, chat, statuses, posts, Shorts, notifications and reports.
 - [x] Enable RLS and private media buckets.
-- [x] Add Nipto ID-to-Auth lookup restricted to service role.
+- [x] Add Nipto ID-to-Auth lookup restricted to service role (legacy flow; to be retired).
 - [x] Add Nipto ID login Edge Function and attempt limiting.
 - [x] Implement four-destination Flutter app shell (Home, Chats, Shorts, You) and initial Nipto ID auth UX.
 - [x] Add Android platform scaffolding and verify debug build in CI.
@@ -13,12 +13,12 @@
 - [x] Align design tokens with Nipto logo palette.
 
 ## Phase 1 — Identity and discovery
-- [x] Registration, email confirmation and Nipto ID sign-in endpoint.
+- [x] Legacy registration and Nipto ID sign-in endpoint retained only as a migration bridge; it is not compliant with the current no-email requirement and must be retired after cutover.
 - [x] Profile editing, unique handle validation and prefix search.
 - [x] Follow requests, private profiles, blocks and profile visibility.
 - [x] Message privacy and notification preference controls.
-- [x] Add optional trusted Recovery Nipto ID at signup and consent-based recovery-contact management in Settings; recovery requests and approvals notify both accounts.
-- [ ] Complete verified-email password recovery deep-link acceptance and per-device session inventory.
+- [x] Add consent-based optional Recovery Nipto ID management after sign-in in Settings; registration does not collect a recovery account.
+- [x] Implement the email-free in-app recovery request, accepted recovery-account approval, and short-lived one-time password-reset grant path; staging replay/rate-limit/device validation remains open.
 - [x] Add a user-confirmed global sign-out action that revokes refresh sessions; current access tokens may remain valid until expiry.
 
 ## Phase 2 — Messaging
@@ -28,6 +28,7 @@
 - [x] Private chat media and signed access.
 - [x] Add newest-first 50-message conversation loading with cursor-based older-page retrieval while retaining the live latest-message stream.
 - [ ] Complete message requests, retries, audio/video/file attachments and multi-device delivery.
+- [ ] Validate the new author-scoped message edit/delete RPCs and long-press UI in CI and a disposable staging database before marking this slice complete.
 - [ ] Implement one-to-one WebRTC voice/video calls using private authenticated signaling, short-lived TURN credentials, push wake-up, call lifecycle controls and mobile network recovery; see `docs/WEBRTC_CALLS.md`.
 - [ ] Add group calling through an SFU only after one-to-one calling is stable; no production mesh fan-out.
 
@@ -74,3 +75,61 @@
 ## Definition of done
 
 A feature is done only when its UI, database access, failure handling, authorization tests and Android behavior have been verified. A deployed table or visible screen alone is not a completed feature.
+
+
+## Updated critical path — email-free Nipto identity
+
+- [x] Add Nipto identity issuer source: Nipto ID/password, Argon2id, asymmetric ES256 JWT, JWKS/discovery, refresh rotation and recovery endpoints. Runtime validation and key deployment remain open.
+- [ ] Build a hosted Supabase project with Custom OIDC and configure its Auth service with the Nipto custom OIDC provider; no email or phone claim may be collected.
+- [ ] Prove no-email user provisioning, stable UUID mapping, RLS, PostgREST, Storage, Realtime and RPC behavior in staging.
+- [x] Implement optional recovery Nipto account linking after sign-in in Settings, with explicit acceptance. Registration does not request recovery details. End-to-end backend and device tests remain open.
+- [x] Add in-app forgot-password request, approval inbox, one-time expiring reset-grant and password-reset code paths. End-to-end security tests, notification delivery and replay/rate-limit validation remain open.
+- [ ] Migrate existing accounts/data with backups, preserve profile UUIDs, and retain a tested rollback path.
+- [ ] Remove legacy email fields, email lookup, email reset UI and old login Edge Function only after the replacement is proven.
+
+The existing hosted Supabase project remains the target. Its Custom OIDC integration must be configured before Nipto-issued JWTs are used. The Nipto OIDC issuer runs as a Nipto-controlled Edge Function in the existing Supabase project; signing-key secrets must be configured outside source control.
+
+
+## Current native-auth engineering checkpoint
+
+- [x] Replace email-based registration/sign-in UI with Nipto ID and password UI in the review branch.
+- [x] Add Android secure refresh-token storage and a Nipto session manager.
+- [x] Route Supabase client requests through the Nipto JWT access-token callback.
+- [x] Replace application reads of Supabase Auth current-user state with the Nipto session identity.
+- [x] Add in-app recovery request, approval inbox, and one-time password reset screen.
+- [x] Add OIDC key-generation utility; key material is generated locally and never committed.
+- [x] Implement the legacy-account migration bridge, preserving existing profile UUIDs and clearing legacy Auth email/phone identities only after the Nipto identity is linked; staging and rollback validation remain open.
+- [ ] Validate the SQL migration in a disposable staging database; do not apply it to production yet.
+- [ ] Configure Edge Function secrets and the Supabase Custom OIDC trust integration.
+- [x] Run Deno Edge Function tests, Flutter analysis/tests, Android debug APK build and artifact upload on the latest validated auth checkpoint.
+- [ ] Re-run CI for the follow-up comment-editing commits; two-device security tests remain open.
+
+
+## Latest implementation review — 2026-11-17
+
+- [x] Build and upload a CI debug APK artifact on commit `78794b2d83e5bb7f7b1019ad79def96ceb684812`; this is a debug artifact, not a signed release.
+- [x] Audit the deployed auth trigger and normalize it to the private `auth.users` handler so new users are provisioned from `custom:nipto`.
+- [x] Serialize parallel password-recovery starts per Nipto identity.
+- [x] Restrict OIDC scopes to `openid` and optional `profile`; reject email and all unsupported scopes.
+- [x] Add static migration regression tests for trigger wiring, recovery serialization, single-use reset grants and service-role-only identity RPCs.
+- [ ] Re-run CI on the latest follow-up commits and verify the newly added regression tests.
+- [ ] Apply migrations only to a disposable staging Supabase project, configure OIDC secrets/provider, and complete end-to-end registration, login, legacy migration, recovery, RLS, Storage and Realtime tests.
+- [ ] Keep production Supabase unchanged until staging, rollback, security and physical-device acceptance tests pass.
+
+## Social discovery and connected chat access checkpoint
+
+- [x] Keep account search available for all active accounts, independent of follow state; add Nipto ID/display-name prefix search.
+- [x] Hide Message action for accounts with no accepted follow in either direction; private follow requests do not enable chat.
+- [x] Filter direct conversations in the inbox to accepted follower/following connections; group chats remain separately membership-based.
+- [x] Enforce direct-chat creation, message reads/writes, and private chat-media access in database policies/RPC, not only Flutter UI.
+- [x] Return limited identity fields for unapproved viewers of private accounts.
+- [x] Limit ordinary message update grants to body and edited timestamp; disable hard-delete from client role.
+- [ ] Run CI/static tests and validate migration on a disposable staging database with both follow directions, pending private follow, unfollow, block, and direct RPC bypass cases.
+
+## Calling infrastructure checkpoint
+
+- [x] Replace the public third-party STUN dependency with authenticated Nipto-managed ICE configuration.
+- [x] Add short-lived HMAC TURN credential issuance from the Nipto identity Edge Function.
+- [x] Add a self-hosted coturn Docker Compose deployment template.
+- [ ] Provision the TURN host, DNS and TLS certificate; configure the same shared secret in coturn and Supabase Edge Function Secrets.
+- [ ] Verify UDP and TCP/TLS relay across independent mobile networks and complete two-device call tests.

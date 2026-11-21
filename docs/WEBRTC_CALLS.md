@@ -1,6 +1,6 @@
 # Nipto Live Calls — WebRTC Architecture
 
-Status: partial implementation on main; not production-ready. Backend call control, private signaling authorization and foreground Flutter calling flows are implemented. TURN, push wake-up, network handoff and two-device verification remain release gates.
+Status: implementation in progress on the review branch; not production-ready. Backend call control, private signaling authorization, foreground Flutter calling flows, and short-lived TURN credential issuance are implemented in source. A self-hosted coturn server, Edge Function secrets, push wake-up, network handoff and two-device verification remain release gates.
 
 ## Product scope
 
@@ -9,7 +9,7 @@ Nipto will support real-time voice and video calls from direct conversations. Th
 ## Media and signaling architecture
 
 - **Media plane:** WebRTC peer connections carry encrypted audio/video directly where possible.
-- **NAT traversal:** use STUN for candidate discovery and a production TURN service (UDP plus TCP/TLS fallback) for restrictive networks. TURN credentials must be short-lived and minted by a trusted server/Edge Function. Never ship static TURN secrets in Flutter.
+- **NAT traversal:** Nipto uses a self-hosted coturn relay with UDP and TCP/TLS fallback. The Nipto identity Edge Function mints one-hour TURN REST credentials using the server-only shared secret. The Flutter app receives only time-limited username/credential pairs; the static shared secret never leaves the server.
 - **Signaling plane:** use authenticated, private Supabase Realtime channels scoped to a call ID. Exchange SDP offer/answer and ICE candidates over signaling only; do not store SDP or ICE payloads in public tables or notifications.
 - **Call control:** persist minimal call lifecycle metadata (caller, callee, conversation, state, timestamps, end reason) so devices can recover UI state and enforce membership. Do not persist media.
 - **Push:** use push only to wake/notify the callee; the callee must authenticate and join the private signaling channel before receiving signaling.
@@ -52,15 +52,15 @@ Nipto will support real-time voice and video calls from direct conversations. Th
 - Flutter dependency: `flutter_webrtc: ^1.6.3`.
 - Android manifest generation in CI includes microphone, camera and network permissions; camera hardware is optional so voice-only devices remain eligible.
 - Direct conversation UI exposes voice/video call entry points; group conversations hide those controls.
-- Call service handles local media, peer connection, SDP, trickled ICE, serialized signaling, mute, camera enable/disable, camera switching, speaker/earpiece routing, ringing/connection/disconnect timeouts and cleanup.
+- Call service handles local media, peer connection, SDP, trickled ICE, serialized signaling, mute, camera enable/disable, camera switching, speaker/earpiece routing, ringing/connection/disconnect timeouts and cleanup. Signaling payload sizes and queued ICE candidates are bounded. Backend termination is attempted independently of realtime hang-up delivery, and local media teardown continues even if one native cleanup operation fails.
 - Incoming calls are surfaced through authenticated foreground polling in the app shell, with accept/decline UI. This does not wake a terminated or backgrounded app.
-- The current development ICE configuration uses a public STUN server only. It is not a production NAT-traversal solution; TURN credentials must be provisioned server-side before release.
+- The Flutter call service now obtains ICE servers from the authenticated Nipto identity endpoint and refuses to start a call unless a TURN relay is configured. It no longer depends on a public third-party STUN service. TURN will remain unavailable until coturn is deployed and the matching Edge Function secrets are configured.
 - CI has passed static analysis and tests on the call UI integration commit, and the Android APK build completed successfully on that commit. Later small changes remain subject to their own CI runs.
 - No physical-device call test has been completed. Do not describe calling as production-ready.
 
 ## Release gates
 
-- Choose and configure a TURN provider; verify UDP and TCP/TLS relay from mobile networks.
+- Provision a Linux host and DNS name for Nipto's self-hosted coturn deployment in `deploy/turn/`; configure TLS certificates, firewall ports 3478/5349 and the UDP relay range 49160–49200.\n- Set matching `TURN_SHARED_SECRET`, `TURN_URLS` and `TURN_STUN_URL` in Supabase Edge Function Secrets. Never commit the secret.\n- Verify TURN allocation and relay from at least two independent mobile networks before enabling calling for production users.
 - Configure private Realtime channel authorization and test cross-user isolation.
 - Add secure server-side call creation/accept/end operations and call rate limits.
 - Complete two-physical-device tests on Wi-Fi, mobile data, restrictive NAT and background/foreground transitions.
