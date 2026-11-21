@@ -31,32 +31,37 @@ class _NiptoPasswordFieldsState extends State<NiptoPasswordFields> {
   @override
   void initState() {
     super.initState();
-    widget.passwordController.addListener(_refresh);
-    widget.confirmationController.addListener(_refresh);
+    widget.passwordController.addListener(_onPasswordChanged);
+    widget.confirmationController.addListener(_onConfirmationChanged);
   }
 
   @override
   void didUpdateWidget(covariant NiptoPasswordFields oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.passwordController != widget.passwordController) {
-      oldWidget.passwordController.removeListener(_refresh);
-      widget.passwordController.addListener(_refresh);
+      oldWidget.passwordController.removeListener(_onPasswordChanged);
+      widget.passwordController.addListener(_onPasswordChanged);
     }
     if (oldWidget.confirmationController != widget.confirmationController) {
-      oldWidget.confirmationController.removeListener(_refresh);
-      widget.confirmationController.addListener(_refresh);
+      oldWidget.confirmationController.removeListener(_onConfirmationChanged);
+      widget.confirmationController.addListener(_onConfirmationChanged);
     }
   }
 
-  void _refresh() {
+  void _onPasswordChanged() {
     if (mounted) setState(() {});
     widget.onPasswordChanged?.call(widget.passwordController.text);
   }
 
+
+  void _onConfirmationChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
-    widget.passwordController.removeListener(_refresh);
-    widget.confirmationController.removeListener(_refresh);
+    widget.passwordController.removeListener(_onPasswordChanged);
+    widget.confirmationController.removeListener(_onConfirmationChanged);
     super.dispose();
   }
 
