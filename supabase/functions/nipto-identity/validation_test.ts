@@ -7,6 +7,7 @@ import {
   isValidRecoveryNiptoId,
   normalizeNiptoId,
   passwordsMatch,
+  suggestNiptoIds,
 } from "./validation.ts";
 
 Deno.test("Nipto ID accepts canonical handles", () => {
@@ -134,4 +135,24 @@ Deno.test("recovery ID validation normalizes case and optional @ consistently", 
   assertEquals(isValidRecoveryNiptoId("@Trusted_Friend", "owner"), true);
   assertEquals(isValidRecoveryNiptoId(" @OWNER ", "@owner"), false);
   assertEquals(isValidRecoveryNiptoId(" @NIPTO_SUPPORT "), false);
+});
+
+Deno.test("Nipto ID suggestions are valid, unique and bounded", () => {
+  const suggestions = suggestNiptoIds("@New_User", 5);
+  assertEquals(suggestions[0], "new_user");
+  assertEquals(suggestions.length, 5);
+  assertEquals(new Set(suggestions).size, suggestions.length);
+  for (const candidate of suggestions) assertEquals(isValidNiptoId(candidate), true);
+});
+Deno.test("Nipto ID suggestions handle reserved and short inputs safely", () => {
+  assertEquals(suggestNiptoIds("admin", 3).every(isValidNiptoId), true);
+  assertEquals(suggestNiptoIds("ab", 3).every(isValidNiptoId), true);
+  assertEquals(suggestNiptoIds("!!", 5), []);
+  assertEquals(suggestNiptoIds("name", 0), []);
+  assertEquals(suggestNiptoIds("name", -1), []);
+});
+Deno.test("Nipto ID suggestions remain within the 24 character limit", () => {
+  const suggestions = suggestNiptoIds("a".repeat(24), 10);
+  assertEquals(suggestions.every((candidate) => candidate.length <= 24), true);
+  assertEquals(suggestions.every(isValidNiptoId), true);
 });
