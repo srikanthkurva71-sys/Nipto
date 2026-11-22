@@ -443,7 +443,7 @@ class NiptoSessionManager {
       throw NiptoAuthException(
         message is String && message.trim().isNotEmpty
             ? message
-            : 'Nipto could not complete that request.",
+            : 'Nipto could not complete that request.',
         statusCode: response.statusCode,
       );
     }
