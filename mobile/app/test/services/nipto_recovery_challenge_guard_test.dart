@@ -1,4 +1,4 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter.dart';
 import 'package:nipto/services/nipto_recovery_challenge_guard.dart';
 
 void main() {
@@ -59,6 +59,34 @@ void main() {
       ), isFalse);
       expect(NiptoRecoveryChallengeGuard.isFreshTimestamp(
         startedAtEpochMs: (now + 1).toString(),
+        nowEpochMs: now,
+      ), isFalse);
+    });
+
+    test('requires non-empty challenge id and secret', () {
+      final validTimestamp = (now - 1000).toString();
+      expect(NiptoRecoveryChallengeGuard.isUsableCache(
+        challengeId: 'challenge',
+        challengeSecret: 'secret',
+        startedAtEpochMs: validTimestamp,
+        nowEpochMs: now,
+      ), isTrue);
+      expect(NiptoRecoveryChallengeGuard.isUsableCache(
+        challengeId: ' ',
+        challengeSecret: 'secret',
+        startedAtEpochMs: validTimestamp,
+        nowEpochMs: now,
+      ), isFalse);
+      expect(NiptoRecoveryChallengeGuard.isUsableCache(
+        challengeId: 'challenge',
+        challengeSecret: '',
+        startedAtEpochMs: validTimestamp,
+        nowEpochMs: now,
+      ), isFalse);
+      expect(NiptoRecoveryChallengeGuard.isUsableCache(
+        challengeId: 'challenge',
+        challengeSecret: 'secret',
+        startedAtEpochMs: 'invalid',
         nowEpochMs: now,
       ), isFalse);
     });
