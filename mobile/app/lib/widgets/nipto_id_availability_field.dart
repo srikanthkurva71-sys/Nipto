@@ -15,6 +15,7 @@ class NiptoIdAvailabilityField extends StatefulWidget {
     this.label = 'Nipto ID',
     this.hint = 'your_nipto_id',
     this.autofocus = false,
+    this.checkAvailability,
   });
 
   final TextEditingController controller;
@@ -22,6 +23,8 @@ class NiptoIdAvailabilityField extends StatefulWidget {
   final String label;
   final String hint;
   final bool autofocus;
+  /// Injectable for deterministic widget tests; production defaults to the session manager.
+  final Future<Map<String, dynamic>> Function(String niptoId)? checkAvailability;
 
   @override
   State<NiptoIdAvailabilityField> createState() => _NiptoIdAvailabilityFieldState();
@@ -89,7 +92,8 @@ class _NiptoIdAvailabilityFieldState extends State<NiptoIdAvailabilityField> {
       _message = 'Checking availability…';
     });
     try {
-      final response = await NiptoSessionManager.instance.checkNiptoId(value);
+      final response = await (widget.checkAvailability?.call(value) ??
+          NiptoSessionManager.instance.checkNiptoId(value));
       if (!mounted || version != _requestVersion || value != _normalizedId()) return;
       final available = response['available'] == true;
       final raw = response['suggestions'];
