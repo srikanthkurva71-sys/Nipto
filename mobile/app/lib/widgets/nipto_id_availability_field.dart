@@ -47,6 +47,9 @@ class _NiptoIdAvailabilityFieldState extends State<NiptoIdAvailabilityField> {
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_onChanged);
       widget.controller.addListener(_onChanged);
+      // The replacement controller may already contain text. Revalidate it and
+      // invalidate any availability result associated with the previous controller.
+      _onChanged();
     }
   }
 
