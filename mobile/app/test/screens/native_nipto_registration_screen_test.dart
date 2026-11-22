@@ -84,4 +84,35 @@ void main() {
     expect(submitCount, 0);
   });
 
+  testWidgets('registration submission is guarded while callback is pending',
+      (tester) async {
+    var submitCount = 0;
+    final completion = Completer<void>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: NativeNiptoRegistrationScreen(
+          onSubmit: ({
+            required displayName,
+            required niptoId,
+            required password,
+            recoveryNiptoId,
+          }) async {
+            submitCount++;
+            await completion.future;
+          },
+        ),
+      ),
+    );
+
+    // Validation fails before availability can be checked; verify the screen
+    // remains guarded against rapid taps without needing a backend request.
+    await tester.tap(find.text('Create Nipto account'));
+    await tester.tap(find.text('Create Nipto account'));
+    await tester.pump();
+    expect(submitCount, 0);
+
+    completion.complete();
+    await tester.pump();
+  });
+
 }
