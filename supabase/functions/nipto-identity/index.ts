@@ -830,6 +830,9 @@ async function handleRoute(request: Request): Promise<Response> {
   if (path.endsWith("/id/check") && method === "POST") {
     const input = await requestBody(request);
     const niptoId = String(input.nipto_id ?? "").trim().replace(/^@/, "").toLowerCase();
+    if (!isValidNiptoId(niptoId)) {
+      throw new ApiError("Use a valid Nipto ID (3–24 lowercase letters or numbers, with single underscores between parts).", 400);
+    }
     await enforceRateLimit(request, "id-check:" + niptoId);
     const result = firstRow(await rpc("nipto_oidc_check_id", { p_nipto_id: niptoId }));
     if (!result) throw new ApiError("Nipto ID availability could not be checked.", 503);
