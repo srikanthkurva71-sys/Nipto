@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/auth/nipto_id_policy.dart';
+import '../core/auth/nipto_id_availability.dart';
+import '../core/auth/nipto_id_suggestions.dart';
 import '../theme/nipto_theme.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -15,7 +17,6 @@ class _AuthScreenState extends State<AuthScreen> {
   final _formKey = GlobalKey<FormState>();
   final _niptoId = TextEditingController();
   final _displayName = TextEditingController();
-  final _email = TextEditingController();
   final _password = TextEditingController();
   final _confirmPassword = TextEditingController();
   final _recoveryNiptoId = TextEditingController();
@@ -25,6 +26,10 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _hidePassword = true;
   String? _notice;
   bool _noticeIsError = false;
+  bool? _idAvailable;
+  bool _checkingId = false;
+  int _idCheckGeneration = 0;
+  List<String> _idSuggestions = const [];
 
   SupabaseClient get _client => Supabase.instance.client;
 
@@ -32,7 +37,6 @@ class _AuthScreenState extends State<AuthScreen> {
   void dispose() {
     _niptoId.dispose();
     _displayName.dispose();
-    _email.dispose();
     _password.dispose();
     _confirmPassword.dispose();
     _recoveryNiptoId.dispose();
@@ -40,6 +44,37 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   String? _validateNiptoId(String? value) => NiptoIdPolicy.validate(value);
+
+  Future<void> _checkNiptoIdAvailability(String value) async {
+    final normalized = value.trim().toLowerCase().replaceFirst(RegExp(r'^@'), '');
+    final generation = ++_idCheckGeneration;
+    if (NiptoIdPolicy.validate(normalized) != null) {
+      if (mounted) setState(() { _idAvailable = null; _checkingId = false; _idSuggestions = const []; });
+      return;
+    }
+    if (mounted) setState(() { _checkingId = true; _idAvailable = null; _idSuggestions = const []; });
+    // Debounce typing so each keystroke does not trigger a Supabase RPC.
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (!mounted || generation != _idCheckGeneration) return;
+    try {
+      final available = await NiptoIdAvailability(client: _client).isAvailable(normalized);
+      if (!mounted || generation != _idCheckGeneration) return;
+      setState(() {
+        _checkingId = false;
+        _idAvailable = available;
+        _idSuggestions = available ? const [] : NiptoIdSuggestions.generate(normalized);
+      });
+    } catch (_) {
+      if (!mounted || generation != _idCheckGeneration) return;
+      setState(() { _checkingId = false; _idAvailable = null; _idSuggestions = const []; });
+    }
+  }
+
+  void _onNiptoIdChanged(String value) {
+    _idAvailable = null;
+    _idSuggestions = const [];
+    if (_creatingAccount) _checkNiptoIdAvailability(value);
+  }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
@@ -51,44 +86,50 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       final handle = _niptoId.text.trim().toLowerCase();
       if (_creatingAccount) {
-        final response = await _client.auth.signUp(
-          email: _email.text.trim(),
-          password: _password.text,
-          data: {
+        // Recheck at submission time to avoid trusting a stale UI availability result.
+        final confirmedAvailable = await NiptoIdAvailability(client: _client).isAvailable(handle);
+        if (!confirmedAvailable) {
+          setState(() {
+            _idAvailable = false;
+            _idSuggestions = NiptoIdSuggestions.generate(handle);
+          });
+          throw const FormatException('That Nipto ID is no longer available. Choose another ID.');
+        }
+        final registerResponse = await _client.functions.invoke(
+          'nipto-register',
+          body: {
             'nipto_id': handle,
+            'password': _password.text,
             'display_name': _displayName.text.trim(),
           },
         );
-
-        final recoveryId = _recoveryNiptoId.text.trim().toLowerCase().replaceFirst(RegExp(r'^@'), '');
-        var recoveryRequestFailed = false;
-        if (response.session != null && recoveryId.isNotEmpty) {
-          try {
-            await _client.rpc(
-              'request_recovery_contact',
-              params: {'p_nipto_id': recoveryId},
-            );
-          } catch (_) {
-            recoveryRequestFailed = true;
-          }
+        if (registerResponse.status < 200 || registerResponse.status >= 300) {
+          throw const FormatException('Could not create account. Check the Nipto ID and try again.');
         }
 
-        if (!mounted) return;
-        if (response.session == null) {
-          setState(() {
-            _notice = 'Account created. Verify your email, then open Settings → Security → Recovery Nipto account to add your trusted contact.';
-            _noticeIsError = false;
-          });
-        } else if (recoveryRequestFailed) {
-          setState(() {
-            _notice = 'Account created, but the recovery request could not be sent. You can retry it in Settings → Security → Recovery Nipto account.';
-            _noticeIsError = true;
-          });
-        } else if (recoveryId.isNotEmpty) {
-          setState(() {
-            _notice = 'Account created. Your recovery-contact request has been sent for approval.';
-            _noticeIsError = false;
-          });
+        // Sign in after registration so the app has an authenticated session.
+        final loginResponse = await _client.functions.invoke(
+          'nipto-login',
+          body: {'nipto_id': handle, 'password': _password.text},
+        );
+        final loginData = loginResponse.data;
+        if (loginData is! Map || loginData['refresh_token'] is! String) {
+          throw const FormatException('Account created. Please sign in with your new Nipto ID.');
+        }
+        await _client.auth.setSession(loginData['refresh_token'] as String);
+
+        final recoveryId = _recoveryNiptoId.text.trim().toLowerCase().replaceFirst(RegExp(r'^@'), '');
+        if (recoveryId.isNotEmpty) {
+          try {
+            await _client.rpc('request_recovery_contact', params: {'p_nipto_id': recoveryId});
+          } catch (_) {
+            if (mounted) {
+              setState(() {
+                _notice = 'Account created and signed in. Recovery contact request could not be sent; you can retry it in Settings → Security.';
+                _noticeIsError = true;
+              });
+            }
+          }
         }
       } else {
         final response = await _client.functions.invoke(
@@ -135,57 +176,27 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _recoverPassword() async {
-    final emailController = TextEditingController(text: _email.text.trim());
-    final email = await showDialog<String>(
+    if (!mounted) return;
+    await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Reset your password'),
-        content: TextField(
-          controller: emailController,
-          keyboardType: TextInputType.emailAddress,
-          decoration: const InputDecoration(
-            labelText: 'Verified recovery email',
-            hintText: 'you@example.com',
-          ),
-        ),
+        title: const Text('Recover your Nipto account'),
+        content: const Text('Nipto does not use email-based password recovery. If you set up a recovery Nipto account, ask that trusted account owner to approve a recovery request. Account recovery is not yet available in this build.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, emailController.text.trim()),
-            child: const Text('Send link'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
         ],
       ),
     );
-    emailController.dispose();
-    if (email == null || email.isEmpty || !mounted) return;
-
-    try {
-      await _client.auth.resetPasswordForEmail(
-        email,
-        redirectTo: 'nipto://auth-callback',
-      );
-      if (!mounted) return;
-      setState(() {
-        _notice = 'If that address belongs to a Nipto account, a reset link will arrive shortly.';
-        _noticeIsError = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _notice = 'Could not send the reset link. Please try again.';
-        _noticeIsError = true;
-      });
-    }
   }
 
   void _toggleMode() {
     setState(() {
       _creatingAccount = !_creatingAccount;
       _notice = null;
+      _idAvailable = null;
+      _idSuggestions = const [];
+      _checkingId = false;
+      _idCheckGeneration++;
     });
   }
 
@@ -269,23 +280,6 @@ class _AuthScreenState extends State<AuthScreen> {
                         },
                       ),
                       const SizedBox(height: 13),
-                      TextFormField(
-                        controller: _email,
-                        keyboardType: TextInputType.emailAddress,
-                        autocorrect: false,
-                        decoration: const InputDecoration(
-                          labelText: 'Recovery email',
-                          prefixIcon: Icon(Icons.alternate_email_rounded),
-                        ),
-                        validator: (value) {
-                          final input = (value ?? '').trim();
-                          if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(input)) {
-                            return 'Enter a valid email address.';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 13),
                     ],
                     TextFormField(
                       controller: _niptoId,
@@ -297,7 +291,22 @@ class _AuthScreenState extends State<AuthScreen> {
                         hintText: 'yourname',
                       ),
                       validator: _validateNiptoId,
+                      onChanged: _onNiptoIdChanged,
                     ),
+                    if (_creatingAccount) ...[
+                      const SizedBox(height: 6),
+                      Row(children: [
+                        if (_checkingId) const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                        if (_checkingId) const SizedBox(width: 8),
+                        if (!_checkingId && _idAvailable == true) const Icon(Icons.check_circle_outline, color: Colors.green, size: 18),
+                        if (!_checkingId && _idAvailable == false) const Icon(Icons.error_outline, color: NiptoColors.danger, size: 18),
+                        Expanded(child: Text(_checkingId ? 'Checking Nipto ID…' : _idAvailable == true ? 'Nipto ID is available' : _idAvailable == false ? 'This Nipto ID is already taken' : 'Enter an ID to check availability', style: const TextStyle(fontSize: 12, color: NiptoColors.muted))),
+                      ]),
+                      if (_idSuggestions.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Wrap(spacing: 8, runSpacing: 6, children: _idSuggestions.map((suggestion) => ActionChip(label: Text(suggestion), onPressed: () { _niptoId.text = suggestion; _onNiptoIdChanged(suggestion); })).toList()),
+                      ],
+                    ],
                     const SizedBox(height: 13),
                     TextFormField(
                       controller: _password,
@@ -332,7 +341,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                       const SizedBox(height: 12),
                       const Text(
-                        'Your recovery email is used for verification and password recovery. The optional recovery Nipto account must accept your request. You can also add or change it later in Settings → Security.',
+                        'Nipto accounts use your Nipto ID and password. The optional recovery Nipto account must accept your request. You can also add or change it later in Settings → Security.',
                         style: TextStyle(color: NiptoColors.muted, fontSize: 12, height: 1.4),
                       ),
 
