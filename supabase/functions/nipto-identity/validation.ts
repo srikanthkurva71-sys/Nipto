@@ -24,7 +24,7 @@ export function isValidRecoveryNiptoId(
   value: string,
   ownerNiptoId?: string,
 ): boolean {
-  if (value === "") return true;
+  if (value.trim() === "") return true;
   const normalized = normalizeNiptoId(value);
   const normalizedOwner = ownerNiptoId === undefined
     ? undefined
