@@ -47,6 +47,7 @@ class NiptoSessionManager {
   String? _baseUrl;
   StreamSubscription<AuthState>? _authSubscription;
   bool _linkCompletionInFlight = false;
+  User? _queuedLinkUser;
   String? _linkedUserId;
 
   SupabaseClient get _client => Supabase.instance.client;
@@ -117,19 +118,32 @@ class NiptoSessionManager {
   }
 
   Future<void> _completeIdentityLink(User user) async {
-    if (_linkCompletionInFlight || _linkedUserId == user.id) return;
+    if (_linkedUserId == user.id) return;
+    if (_linkCompletionInFlight) {
+      // Retain the latest auth event rather than dropping it during a link.
+      _queuedLinkUser = user;
+      return;
+    }
     _linkCompletionInFlight = true;
     try {
+      // Do not use credentials from a different active session for this user's link.
+      if (_client.auth.currentUser?.id != user.id) return;
       final pendingId = await _storage.read(key: _pendingLinkNiptoIdKey);
+      if (_client.auth.currentUser?.id != user.id) return;
       final metadata = user.userMetadata ?? const <String, dynamic>{};
       final niptoId = (pendingId ?? metadata['nipto_id'] ??
               metadata['preferred_username'] ?? '')
-          .toString();
+          .toString()
+          .trim()
+          .replaceFirst(RegExp(r'^@'), '')
+          .toLowerCase();
       if (niptoId.isEmpty) return;
       await _post('account/link', {'nipto_id': niptoId}, authenticated: true);
+      if (_client.auth.currentUser?.id != user.id) return;
       await _client.auth.refreshSession();
       final refreshedUser = _client.auth.currentUser;
       if (refreshedUser != null &&
+          refreshedUser.id == user.id &&
           refreshedUser.email == null &&
           _hasNiptoIdentity(refreshedUser)) {
         _linkedUserId = refreshedUser.id;
@@ -139,6 +153,11 @@ class NiptoSessionManager {
       // A later auth event or app restart retries the idempotent linking step.
     } finally {
       _linkCompletionInFlight = false;
+      final queuedUser = _queuedLinkUser;
+      _queuedLinkUser = null;
+      if (queuedUser != null && queuedUser.id != _linkedUserId) {
+        unawaited(_completeIdentityLink(queuedUser));
+      }
     }
   }
 
