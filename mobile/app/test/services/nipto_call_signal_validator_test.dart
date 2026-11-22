@@ -3,7 +3,7 @@ import 'package:nipto/services/nipto_call_signal_validator.dart';
 
 void main() {
   group('NiptoCallSignalValidator', () {
-    test('accepts bounded offer and answer payloads', () {
+    test('accepts offer and answer payloads', () {
       expect(
         NiptoCallSignalValidator.isDescriptionPayload(
           {'sdp': 'v=0\\r\\n', 'sdpType': 'offer'},
@@ -30,14 +30,14 @@ void main() {
       );
       expect(
         NiptoCallSignalValidator.isDescriptionPayload(
-          {'sdp': 'x' * NiptoCallSignalValidator.maxSdpLength, 'sdpType': 'offer'},
+          {'sdp': List.filled(NiptoCallSignalValidator.maxSdpLength, 'x').join(), 'sdpType': 'offer'},
           'offer',
         ),
         isTrue,
       );
       expect(
         NiptoCallSignalValidator.isDescriptionPayload(
-          {'sdp': 'x' * (NiptoCallSignalValidator.maxSdpLength + 1), 'sdpType': 'offer'},
+          {'sdp': List.filled(NiptoCallSignalValidator.maxSdpLength + 1, 'x').join(), 'sdpType': 'offer'},
           'offer',
         ),
         isFalse,
@@ -61,13 +61,13 @@ void main() {
       expect(NiptoCallSignalValidator.isIceCandidatePayload({'candidate': ''}), isFalse);
       expect(
         NiptoCallSignalValidator.isIceCandidatePayload(
-          {'candidate': 'x' * (NiptoCallSignalValidator.maxIceCandidateLength + 1)},
+          {'candidate': List.filled(NiptoCallSignalValidator.maxIceCandidateLength + 1, 'x').join()},
         ),
         isFalse,
       );
       expect(
         NiptoCallSignalValidator.isIceCandidatePayload(
-          {'candidate': 'candidate', 'sdpMid': 'x' * (NiptoCallSignalValidator.maxSdpMidLength + 1)},
+          {'candidate': 'candidate', 'sdpMid': List.filled(NiptoCallSignalValidator.maxSdpMidLength + 1, 'x').join()},
         ),
         isFalse,
       );
@@ -86,7 +86,7 @@ void main() {
             {'candidate': 'candidate', 'sdpMLineIndex': invalid},
           ),
           isFalse,
-            reason: 'Expected line index $invalid to be rejected',
+          reason: 'Expected line index $invalid to be rejected',
         );
       }
     });
