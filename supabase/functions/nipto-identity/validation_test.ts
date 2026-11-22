@@ -40,8 +40,10 @@ Deno.test("Nipto ID length and separator boundaries are explicit", () => {
 
 Deno.test("all reserved IDs remain unavailable", () => {
   for (const reserved of [
-    "admin", "administrator", "support", "help", "nipto",
-    "official", "security", "moderator",
+    "admin", "administrator", "support", "help", "nipto", "official",
+    "security", "moderator", "root", "owner", "staff", "system", "api",
+    "app", "bot", "developer", "dev", "test", "tester", "abuse", "legal",
+    "billing", "contact", "privacy", "status", "service", "null", "undefined",
   ]) {
     assertEquals(isValidNiptoId(reserved), false, reserved);
   }
