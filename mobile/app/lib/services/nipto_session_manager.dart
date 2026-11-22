@@ -244,7 +244,6 @@ class NiptoSessionManager {
       if (existingGrant != null) {
         await _storage.delete(key: _resetGrantKey);
       await _storage.delete(key: _resetGrantIssuedAtKey);
-        await _storage.delete(key: _resetGrantIssuedAtKey);
       }
       final existingId = await _storage.read(key: _recoveryIdKey);
       final existingSecret = await _storage.read(key: _recoverySecretKey);
@@ -292,7 +291,6 @@ class NiptoSessionManager {
     }
     if (existingGrant != null) {
       await _storage.delete(key: _resetGrantKey);
-      await _storage.delete(key: _resetGrantIssuedAtKey);
       await _storage.delete(key: _resetGrantIssuedAtKey);
     }
     final challengeId = await _storage.read(key: _recoveryIdKey);
@@ -603,7 +601,6 @@ class NiptoSessionManager {
       if (existingGrant != null) {
         await _storage.delete(key: _resetGrantKey);
       await _storage.delete(key: _resetGrantIssuedAtKey);
-        await _storage.delete(key: _resetGrantIssuedAtKey);
       }
       final existingId = await _storage.read(key: _recoveryIdKey);
       final existingSecret = await _storage.read(key: _recoverySecretKey);
@@ -648,7 +645,6 @@ class NiptoSessionManager {
     }
     if (existingGrant != null) {
       await _storage.delete(key: _resetGrantKey);
-      await _storage.delete(key: _resetGrantIssuedAtKey);
       await _storage.delete(key: _resetGrantIssuedAtKey);
     }
     final challengeId = await _storage.read(key: _recoveryIdKey);
