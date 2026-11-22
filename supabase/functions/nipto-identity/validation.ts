@@ -9,6 +9,11 @@ const RESERVED_IDS = new Set([
   "nipto_app", "nipto_api", "nipto_bot",
 ]);
 
+/** Canonicalize user-entered Nipto handles consistently before lookup. */
+export function normalizeNiptoId(value: string): string {
+  return value.trim().replace(/^@/, "").toLowerCase();
+}
+
 export function isValidNiptoId(value: string): boolean {
   return value.length >= 3 && value.length <= 24
     && /^[a-z0-9]+(?:_[a-z0-9]+)*$/.test(value)
@@ -20,8 +25,12 @@ export function isValidRecoveryNiptoId(
   ownerNiptoId?: string,
 ): boolean {
   if (value === "") return true;
-  return isValidNiptoId(value)
-    && (ownerNiptoId === undefined || value !== ownerNiptoId);
+  const normalized = normalizeNiptoId(value);
+  const normalizedOwner = ownerNiptoId === undefined
+    ? undefined
+    : normalizeNiptoId(ownerNiptoId);
+  return isValidNiptoId(normalized)
+    && (normalizedOwner === undefined || normalized !== normalizedOwner);
 }
 
 export function isValidPassword(value: string): boolean {
