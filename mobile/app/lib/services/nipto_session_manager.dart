@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'nipto_recovery_challenge_guard.dart';
+import 'nipto_reset_grant_cache_guard.dart';
 
 class NiptoSession {
   const NiptoSession({
@@ -41,6 +42,7 @@ class NiptoSessionManager {
   static const _recoveryStartedAtKey = 'nipto.recovery.started_at.v1';
   static const _recoveryNiptoIdKey = 'nipto.recovery.nipto_id.v1';
   static const _resetGrantKey = 'nipto.recovery.reset_grant.v1';
+  static const _resetGrantIssuedAtKey = 'nipto.recovery.reset_grant_issued_at.v1';
   static const _pendingLinkNiptoIdKey = 'nipto.auth.pending_link_id.v1';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
@@ -230,7 +232,20 @@ class NiptoSessionManager {
     final existingNiptoId = await _storage.read(key: _recoveryNiptoIdKey);
     final existingGrant = await _storage.read(key: _resetGrantKey);
     if (existingNiptoId == normalizedNiptoId) {
-      if (existingGrant != null) return;
+      final grantIssuedAt =
+          await _storage.read(key: _resetGrantIssuedAtKey);
+      if (NiptoResetGrantCacheGuard.isUsable(
+        grant: existingGrant,
+        issuedAtEpochMs: grantIssuedAt,
+        nowEpochMs: DateTime.now().millisecondsSinceEpoch,
+      )) {
+        return;
+      }
+      if (existingGrant != null) {
+        await _storage.delete(key: _resetGrantKey);
+      await _storage.delete(key: _resetGrantIssuedAtKey);
+        await _storage.delete(key: _resetGrantIssuedAtKey);
+      }
       final existingId = await _storage.read(key: _recoveryIdKey);
       final existingSecret = await _storage.read(key: _recoverySecretKey);
       final startedRaw = await _storage.read(key: _recoveryStartedAtKey);
@@ -246,6 +261,7 @@ class NiptoSessionManager {
     }
     await _clearRecoveryChallenge();
     await _storage.delete(key: _resetGrantKey);
+      await _storage.delete(key: _resetGrantIssuedAtKey);
     final response = await _post('recovery/start', {
       'nipto_id': normalizedNiptoId,
     });
@@ -265,7 +281,20 @@ class NiptoSessionManager {
 
   Future<String?> checkPasswordRecoveryApproval() async {
     final existingGrant = await _storage.read(key: _resetGrantKey);
-    if (existingGrant != null) return existingGrant;
+    final existingGrantIssuedAt =
+        await _storage.read(key: _resetGrantIssuedAtKey);
+    if (NiptoResetGrantCacheGuard.isUsable(
+      grant: existingGrant,
+      issuedAtEpochMs: existingGrantIssuedAt,
+      nowEpochMs: DateTime.now().millisecondsSinceEpoch,
+    )) {
+      return existingGrant;
+    }
+    if (existingGrant != null) {
+      await _storage.delete(key: _resetGrantKey);
+      await _storage.delete(key: _resetGrantIssuedAtKey);
+      await _storage.delete(key: _resetGrantIssuedAtKey);
+    }
     final challengeId = await _storage.read(key: _recoveryIdKey);
     final challengeSecret = await _storage.read(key: _recoverySecretKey);
     final startedRaw = await _storage.read(key: _recoveryStartedAtKey);
@@ -302,6 +331,10 @@ class NiptoSessionManager {
     final grant = response['reset_grant'] as String?;
     if (status == 'approved' && grant != null) {
       await _storage.write(key: _resetGrantKey, value: grant);
+      await _storage.write(
+        key: _resetGrantIssuedAtKey,
+        value: DateTime.now().millisecondsSinceEpoch.toString(),
+      );
       return grant;
     }
     return null;
@@ -320,11 +353,13 @@ class NiptoSessionManager {
       if (error.statusCode == 400) {
         await _clearRecoveryChallenge();
         await _storage.delete(key: _resetGrantKey);
+      await _storage.delete(key: _resetGrantIssuedAtKey);
       }
       rethrow;
     }
     await _clearRecoveryChallenge();
     await _storage.delete(key: _resetGrantKey);
+      await _storage.delete(key: _resetGrantIssuedAtKey);
   }
 
   Future<void> _clearRecoveryChallenge() async {
@@ -556,7 +591,20 @@ class NiptoSessionManager {
     final existingNiptoId = await _storage.read(key: _recoveryNiptoIdKey);
     final existingGrant = await _storage.read(key: _resetGrantKey);
     if (existingNiptoId == normalizedNiptoId) {
-      if (existingGrant != null) return;
+      final grantIssuedAt =
+          await _storage.read(key: _resetGrantIssuedAtKey);
+      if (NiptoResetGrantCacheGuard.isUsable(
+        grant: existingGrant,
+        issuedAtEpochMs: grantIssuedAt,
+        nowEpochMs: DateTime.now().millisecondsSinceEpoch,
+      )) {
+        return;
+      }
+      if (existingGrant != null) {
+        await _storage.delete(key: _resetGrantKey);
+      await _storage.delete(key: _resetGrantIssuedAtKey);
+        await _storage.delete(key: _resetGrantIssuedAtKey);
+      }
       final existingId = await _storage.read(key: _recoveryIdKey);
       final existingSecret = await _storage.read(key: _recoverySecretKey);
       final startedRaw = await _storage.read(key: _recoveryStartedAtKey);
@@ -569,6 +617,7 @@ class NiptoSessionManager {
     }
     await _clearRecoveryChallenge();
     await _storage.delete(key: _resetGrantKey);
+      await _storage.delete(key: _resetGrantIssuedAtKey);
     final response = await _post('recovery/start', {
       'nipto_id': normalizedNiptoId,
     });
@@ -588,7 +637,20 @@ class NiptoSessionManager {
 
   Future<String?> checkPasswordRecoveryApproval() async {
     final existingGrant = await _storage.read(key: _resetGrantKey);
-    if (existingGrant != null) return existingGrant;
+    final existingGrantIssuedAt =
+        await _storage.read(key: _resetGrantIssuedAtKey);
+    if (NiptoResetGrantCacheGuard.isUsable(
+      grant: existingGrant,
+      issuedAtEpochMs: existingGrantIssuedAt,
+      nowEpochMs: DateTime.now().millisecondsSinceEpoch,
+    )) {
+      return existingGrant;
+    }
+    if (existingGrant != null) {
+      await _storage.delete(key: _resetGrantKey);
+      await _storage.delete(key: _resetGrantIssuedAtKey);
+      await _storage.delete(key: _resetGrantIssuedAtKey);
+    }
     final challengeId = await _storage.read(key: _recoveryIdKey);
     final challengeSecret = await _storage.read(key: _recoverySecretKey);
     if (challengeId == null || challengeSecret == null) {
@@ -618,6 +680,10 @@ class NiptoSessionManager {
     final grant = response['reset_grant'] as String?;
     if (status == 'approved' && grant != null) {
       await _storage.write(key: _resetGrantKey, value: grant);
+      await _storage.write(
+        key: _resetGrantIssuedAtKey,
+        value: DateTime.now().millisecondsSinceEpoch.toString(),
+      );
       return grant;
     }
     return null;
@@ -636,11 +702,13 @@ class NiptoSessionManager {
       if (error.statusCode == 400) {
         await _clearRecoveryChallenge();
         await _storage.delete(key: _resetGrantKey);
+      await _storage.delete(key: _resetGrantIssuedAtKey);
       }
       rethrow;
     }
     await _clearRecoveryChallenge();
     await _storage.delete(key: _resetGrantKey);
+      await _storage.delete(key: _resetGrantIssuedAtKey);
   }
 
   Future<void> _clearRecoveryChallenge() async {
