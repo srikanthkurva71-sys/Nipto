@@ -3,6 +3,28 @@
 class NiptoRecoveryChallengeGuard {
   static const defaultMaxAge = Duration(minutes: 15);
 
+  /// A cache entry is usable only when all three fields are present and
+  /// non-empty, and its local timestamp is still within the allowed window.
+  static bool isUsableCache({
+    required String? challengeId,
+    required String? challengeSecret,
+    required String? startedAtEpochMs,
+    required int nowEpochMs,
+    Duration maxAge = defaultMaxAge,
+  }) {
+    if (challengeId == null ||
+        challengeId.trim().isEmpty ||
+        challengeSecret == null ||
+        challengeSecret.trim().isEmpty) {
+      return false;
+    }
+    return isFreshTimestamp(
+      startedAtEpochMs: startedAtEpochMs,
+      nowEpochMs: nowEpochMs,
+      maxAge: maxAge,
+    );
+  }
+
   /// Validates a cached timestamp string from secure storage.
   /// Invalid or missing values are treated as stale, never as fresh.
   static bool isFreshTimestamp({
