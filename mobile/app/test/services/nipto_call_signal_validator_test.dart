@@ -20,14 +20,17 @@ void main() {
       );
     });
 
-    test('rejects empty, oversized, and mismatched SDP descriptions', () {
-      expect(
-        NiptoCallSignalValidator.isDescriptionPayload(
-          {'sdp': '', 'sdpType': 'offer'},
-          'offer',
-        ),
-        isFalse,
-      );
+    test('rejects empty, blank, oversized, and mismatched SDP descriptions', () {
+      for (final invalidSdp in ['', '   ', '\\n\\t']) {
+        expect(
+          NiptoCallSignalValidator.isDescriptionPayload(
+            {'sdp': invalidSdp, 'sdpType': 'offer'},
+            'offer',
+          ),
+          isFalse,
+          reason: 'Blank SDP should be rejected',
+        );
+      }
       expect(
         NiptoCallSignalValidator.isDescriptionPayload(
           {'sdp': List.filled(NiptoCallSignalValidator.maxSdpLength, 'x').join(), 'sdpType': 'offer'},
@@ -58,7 +61,13 @@ void main() {
         ),
         isTrue,
       );
-      expect(NiptoCallSignalValidator.isIceCandidatePayload({'candidate': ''}), isFalse);
+      for (final invalidCandidate in ['', '   ', '\\n']) {
+        expect(
+          NiptoCallSignalValidator.isIceCandidatePayload({'candidate': invalidCandidate}),
+          isFalse,
+          reason: 'Blank candidate should be rejected',
+        );
+      }
       expect(
         NiptoCallSignalValidator.isIceCandidatePayload(
           {'candidate': List.filled(NiptoCallSignalValidator.maxIceCandidateLength + 1, 'x').join()},
@@ -69,6 +78,10 @@ void main() {
         NiptoCallSignalValidator.isIceCandidatePayload(
           {'candidate': 'candidate', 'sdpMid': List.filled(NiptoCallSignalValidator.maxSdpMidLength + 1, 'x').join()},
         ),
+        isFalse,
+      );
+      expect(
+        NiptoCallSignalValidator.isIceCandidatePayload({'candidate': 'candidate', 'sdpMid': '  '}),
         isFalse,
       );
     });
