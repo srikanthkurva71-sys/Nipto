@@ -3,6 +3,21 @@
 class NiptoRecoveryChallengeGuard {
   static const defaultMaxAge = Duration(minutes: 15);
 
+  /// Validates a cached timestamp string from secure storage.
+  /// Invalid or missing values are treated as stale, never as fresh.
+  static bool isFreshTimestamp({
+    required String? startedAtEpochMs,
+    required int nowEpochMs,
+    Duration maxAge = defaultMaxAge,
+  }) {
+    final parsed = int.tryParse(startedAtEpochMs ?? '');
+    return isFresh(
+      startedAtEpochMs: parsed,
+      nowEpochMs: nowEpochMs,
+      maxAge: maxAge,
+    );
+  }
+
   static bool isFresh({
     required int? startedAtEpochMs,
     required int nowEpochMs,
