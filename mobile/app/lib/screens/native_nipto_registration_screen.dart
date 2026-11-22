@@ -111,7 +111,12 @@ class _NativeNiptoRegistrationScreenState
                     NiptoIdAvailabilityField(
                       controller: _idController,
                       onAvailabilityChanged: (available) {
-                        if (mounted) setState(() => _idAvailable = available);
+                        if (mounted) {
+                          setState(() {
+                            _idAvailable = available;
+                            if (available == null || available == true) _error = null;
+                          });
+                        }
                       },
                       autofocus: false,
                     ),
