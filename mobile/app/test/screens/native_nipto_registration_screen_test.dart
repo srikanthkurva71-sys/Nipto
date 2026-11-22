@@ -78,7 +78,7 @@ void main() {
     await tester.pump();
 
     expect(
-      find.text('Wait for Nipto ID availability to be confirmed.'),
+      find.text('Wait for a successful availability check.'),
       findsOneWidget,
     );
     expect(submitCount, 0);
