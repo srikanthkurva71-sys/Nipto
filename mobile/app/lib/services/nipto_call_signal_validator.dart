@@ -11,7 +11,7 @@ class NiptoCallSignalValidator {
   static bool isDescriptionPayload(Map<dynamic, dynamic> payload, String expectedType) {
     final sdp = payload['sdp'];
     return sdp is String &&
-        sdp.isNotEmpty &&
+        sdp.trim().isNotEmpty &&
         sdp.length <= maxSdpLength &&
         payload['sdpType'] == expectedType;
   }
@@ -19,14 +19,16 @@ class NiptoCallSignalValidator {
   static bool isIceCandidatePayload(Map payload) {
     final candidate = payload['candidate'];
     if (candidate is! String ||
-        candidate.isEmpty ||
+        candidate.trim().isEmpty ||
         candidate.length > maxIceCandidateLength) {
       return false;
     }
 
     final sdpMid = payload['sdpMid'];
     if (sdpMid != null &&
-        (sdpMid is! String || sdpMid.length > maxSdpMidLength)) {
+        (sdpMid is! String ||
+            sdpMid.length > maxSdpMidLength ||
+            sdpMid.trim().isEmpty)) {
       return false;
     }
 
