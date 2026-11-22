@@ -133,3 +133,10 @@ The existing hosted Supabase project remains the target. Its Custom OIDC integra
 - [x] Add a self-hosted coturn Docker Compose deployment template.
 - [ ] Provision the TURN host, DNS and TLS certificate; configure the same shared secret in coturn and Supabase Edge Function Secrets.
 - [ ] Verify UDP and TCP/TLS relay across independent mobile networks and complete two-device call tests.
+
+
+## Registration/recovery UX contract fix — 2026-11-22
+
+- [x] Remove recovery-account collection from the registration screen; recovery linking belongs in Settings after account creation, as defined by the native-auth contract.
+- [x] Add a Flutter widget regression test ensuring the registration screen does not collect recovery-account details.
+- [ ] Verify the regression test and Android build in GitHub Actions.
