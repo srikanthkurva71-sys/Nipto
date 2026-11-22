@@ -42,7 +42,7 @@ export function passwordsMatch(password: string, confirmation: string): boolean 
 }
 
 export function isAllowedOidcScope(value: string): boolean {
-  const scopes = value.trim().split(/\\s+/).filter(Boolean);
+  const scopes = value.trim().split(/\s+/).filter(Boolean);
   return scopes.includes("openid")
     && new Set(scopes).size === scopes.length
     && scopes.every((scope) => scope === "openid" || scope === "profile");
