@@ -84,13 +84,14 @@ void main() {
     expect(submitCount, 0);
   });
 
-  testWidgets('registration submission is guarded while callback is pending',
+  testWidgets('prevents duplicate submission while registration callback is pending',
       (tester) async {
     var submitCount = 0;
     final completion = Completer<void>();
     await tester.pumpWidget(
       MaterialApp(
         home: NativeNiptoRegistrationScreen(
+          checkNiptoIdAvailability: (id) async => {'available': true},
           onSubmit: ({
             required displayName,
             required niptoId,
@@ -104,15 +105,26 @@ void main() {
       ),
     );
 
-    // Validation fails before availability can be checked; verify the screen
-    // remains guarded against rapid taps without needing a backend request.
-    await tester.tap(find.text('Create Nipto account'));
+    await tester.enterText(find.byLabelText('Display name'), 'Nipto User');
+    await tester.enterText(find.byLabelText('Nipto ID'), 'sample_user');
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump();
+
+    expect(find.text('This Nipto ID is available.'), findsOneWidget);
+
+    await tester.enterText(find.byLabelText('Password'), 'StrongPassword1!');
+    await tester.enterText(find.byLabelText('Confirm password'), 'StrongPassword1!');
     await tester.tap(find.text('Create Nipto account'));
     await tester.pump();
-    expect(submitCount, 0);
+    await tester.tap(find.text('Create Nipto account'));
+    await tester.pump();
+
+    expect(submitCount, 1);
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
     completion.complete();
     await tester.pump();
+    await tester.pump();
+    expect(find.text('Create Nipto account'), findsOneWidget);
   });
-
 }
