@@ -353,6 +353,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         const SizedBox(height: 8),
                         Wrap(spacing: 8, runSpacing: 6, children: _idSuggestions.map((suggestion) => ActionChip(label: Text(suggestion), onPressed: () { _niptoId.text = suggestion; _onNiptoIdChanged(suggestion); })).toList()),
                       ],
+                    ],
                     const SizedBox(height: 13),
                     TextFormField(
                       controller: _password,
