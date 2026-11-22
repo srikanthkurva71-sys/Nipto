@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 /// Password and confirmation fields for native Nipto account forms.
@@ -21,6 +23,35 @@ class NiptoPasswordFields extends StatefulWidget {
 class _NiptoPasswordFieldsState extends State<NiptoPasswordFields> {
   bool _showPassword = false;
   bool _showConfirmation = false;
+
+  static const _passwordAlphabet =
+      'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#\$%^&*()-_=+[]{};:,.?';
+
+  String _generateSuggestedPassword() {
+    final random = Random.secure();
+    final chars = List.generate(
+      18,
+      (_) => _passwordAlphabet[random.nextInt(_passwordAlphabet.length)],
+    );
+    // Ensure the suggestion satisfies each local password rule.
+    chars[0] = 'A';
+    chars[1] = 'a';
+    chars[2] = '7';
+    chars[3] = '!';
+    for (var i = chars.length - 1; i > 0; i--) {
+      final j = random.nextInt(i + 1);
+      final temporary = chars[i];
+      chars[i] = chars[j];
+      chars[j] = temporary;
+    }
+    return chars.join();
+  }
+
+  void _suggestPassword() {
+    final suggestion = _generateSuggestedPassword();
+    widget.passwordController.text = suggestion;
+    widget.confirmationController.text = suggestion;
+  }
 
   bool get _longEnough => widget.passwordController.text.length >= 12;
   bool get _hasLower => RegExp(r'[a-z]').hasMatch(widget.passwordController.text);
@@ -107,6 +138,14 @@ class _NiptoPasswordFieldsState extends State<NiptoPasswordFields> {
           },
         ),
         const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: _suggestPassword,
+            icon: const Icon(Icons.auto_awesome),
+            label: const Text('Suggest a strong password'),
+          ),
+        ),
         Wrap(
           spacing: 12,
           runSpacing: 4,
