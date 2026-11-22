@@ -33,7 +33,6 @@ class _NativeNiptoRegistrationScreenState
   final _idController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmationController = TextEditingController();
-  final _recoveryController = TextEditingController();
   bool _busy = false;
   bool? _idAvailable;
   String? _error;
@@ -44,25 +43,11 @@ class _NativeNiptoRegistrationScreenState
     _idController.dispose();
     _passwordController.dispose();
     _confirmationController.dispose();
-    _recoveryController.dispose();
     super.dispose();
   }
 
   String _normalizedId(String value) =>
       value.trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
-
-  String? _validateRecoveryId(String? value) {
-    final id = _normalizedId(value ?? '');
-    if (id.isEmpty) return null;
-    if (id.length < 3 || id.length > 24 ||
-        !RegExp(r'^[a-z0-9]+(?:_[a-z0-9]+)*$').hasMatch(id)) {
-      return 'Enter a valid Nipto ID (3–24 characters).';
-    }
-    if (id == _normalizedId(_idController.text)) {
-      return 'Recovery ID must be different from your account ID.';
-    }
-    return null;
-  }
 
   Future<void> _submit() async {
     if (_busy || !_formKey.currentState!.validate()) return;
@@ -79,9 +64,7 @@ class _NativeNiptoRegistrationScreenState
         displayName: _nameController.text.trim(),
         niptoId: _normalizedId(_idController.text),
         password: _passwordController.text,
-        recoveryNiptoId: _recoveryController.text.trim().isEmpty
-            ? null
-            : _normalizedId(_recoveryController.text),
+        recoveryNiptoId: null,
       );
     } catch (_) {
       if (mounted) setState(() => _error = 'Registration could not be completed. Please try again.');
@@ -107,7 +90,7 @@ class _NativeNiptoRegistrationScreenState
                   children: [
                     Text('Create your identity', style: Theme.of(context).textTheme.headlineMedium),
                     const SizedBox(height: 8),
-                    const Text('Choose a display name and unique Nipto ID. Recovery ID is optional.'),
+                    const Text('Choose a display name and unique Nipto ID. You can add a recovery account later in Settings.'),
                     const SizedBox(height: 22),
                     TextFormField(
                       controller: _nameController,
@@ -138,23 +121,6 @@ class _NativeNiptoRegistrationScreenState
                       confirmationController: _confirmationController,
                     ),
                     const SizedBox(height: 18),
-                    TextFormField(
-                      controller: _recoveryController,
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      decoration: const InputDecoration(
-                        labelText: 'Recovery Nipto ID (optional)',
-                        hintText: 'trusted_account',
-                        prefixText: '@',
-                        prefixIcon: Icon(Icons.shield_outlined),
-                      ),
-                      validator: _validateRecoveryId,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Only add a recovery account you trust. You can set this up later.',
-                      style: TextStyle(fontSize: 12, height: 1.4),
-                    ),
                     if (_error != null) ...[
                       const SizedBox(height: 16),
                       Text(_error!, style: const TextStyle(color: Colors.red)),
