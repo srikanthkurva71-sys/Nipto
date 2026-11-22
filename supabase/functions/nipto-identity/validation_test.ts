@@ -120,3 +120,16 @@ Deno.test("recovery challenge freshness rejects invalid timestamps and lifetimes
   assertEquals(isRecoveryChallengeFresh(1_000, 2_000, 0), false);
   assertEquals(isRecoveryChallengeFresh(1_000, 2_000, -1), false);
 });
+Deno.test("recovery challenge freshness rejects far-future clock skew and overflow-like values", () => {
+  const now = 5_000_000;
+  assertEquals(isRecoveryChallengeFresh(now + 1, now), false);
+  assertEquals(isRecoveryChallengeFresh(now - 900_000, now), true);
+  assertEquals(isRecoveryChallengeFresh(now - 900_001, now), false);
+  assertEquals(isRecoveryChallengeFresh(now, now, Number.NaN), false);
+});
+
+Deno.test("recovery ID validation normalizes case and optional @ consistently", () => {
+  assertEquals(isValidRecoveryNiptoId("@Trusted_Friend", "owner"), true);
+  assertEquals(isValidRecoveryNiptoId(" @OWNER ", "@owner"), false);
+  assertEquals(isValidRecoveryNiptoId(" @NIPTO_SUPPORT "), false);
+});
