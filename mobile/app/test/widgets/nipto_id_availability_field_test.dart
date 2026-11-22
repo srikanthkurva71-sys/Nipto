@@ -87,4 +87,58 @@ void main() {
     replacementController.dispose();
   });
 
+  testWidgets('renders server suggestions and selecting one rechecks it',
+      (tester) async {
+    final controller = TextEditingController(text: 'taken_id');
+    var checkedId = '';
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: NiptoIdAvailabilityField(
+          controller: controller,
+          checkAvailability: (id) async {
+            checkedId = id;
+            return {
+              'available': false,
+              'suggestions': ['taken_id2', 'taken_id3'],
+            };
+          },
+        ),
+      ),
+    ));
+
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump();
+
+    expect(checkedId, 'taken_id');
+    expect(find.text('@taken_id2'), findsOneWidget);
+    await tester.tap(find.text('@taken_id2'));
+    await tester.pump();
+
+    expect(controller.text, 'taken_id2');
+    expect(find.text('Checking availability…'), findsNothing);
+    expect(find.text('Use 3–24 lowercase letters or numbers, with single underscores between parts.'), findsNothing);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
+
+  testWidgets('reports available after injected server check', (tester) async {
+    final controller = TextEditingController(text: 'fresh_id');
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: NiptoIdAvailabilityField(
+          controller: controller,
+          checkAvailability: (_) async => {'available': true},
+        ),
+      ),
+    ));
+
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump();
+
+    expect(find.text('This Nipto ID is available.'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
+  });
+
 }
