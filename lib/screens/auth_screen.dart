@@ -55,6 +55,9 @@ class _AuthScreenState extends State<AuthScreen> {
       return;
     }
     if (mounted) setState(() { _checkingId = true; _idAvailable = null; _idSuggestions = const []; });
+    // Debounce typing so each keystroke does not trigger a Supabase RPC.
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    if (!mounted || generation != _idCheckGeneration) return;
     try {
       final available = await NiptoIdAvailability(client: _client).isAvailable(normalized);
       if (!mounted || generation != _idCheckGeneration) return;
@@ -85,8 +88,14 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       final handle = _niptoId.text.trim().toLowerCase();
       if (_creatingAccount) {
-        if (_idAvailable != true) {
-          throw const FormatException('Please choose a Nipto ID that is confirmed available.');
+        // Recheck at submission time to avoid trusting a stale UI availability result.
+        final confirmedAvailable = await NiptoIdAvailability(client: _client).isAvailable(handle);
+        if (!confirmedAvailable) {
+          setState(() {
+            _idAvailable = false;
+            _idSuggestions = NiptoIdSuggestions.generate(handle);
+          });
+          throw const FormatException('That Nipto ID is no longer available. Choose another ID.');
         }
         final response = await _client.auth.signUp(
           email: _email.text.trim(),
