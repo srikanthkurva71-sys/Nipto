@@ -41,6 +41,24 @@ void main() {
       ), isFalse);
     });
 
+    test('rejects whitespace-only challenge secrets', () {
+      final validTimestamp = (now - 1000).toString();
+      expect(NiptoRecoveryChallengeGuard.isUsableCache(
+        challengeId: 'challenge',
+        challengeSecret: '   ',
+        startedAtEpochMs: validTimestamp,
+        nowEpochMs: now,
+      ), isFalse);
+    });
+
+    test('rejects negative maximum age', () {
+      expect(NiptoRecoveryChallengeGuard.isFresh(
+        startedAtEpochMs: now - 1,
+        nowEpochMs: now,
+        maxAge: const Duration(milliseconds: -1),
+      ), isFalse);
+    });
+
     test('parses valid cached timestamp strings', () {
       expect(NiptoRecoveryChallengeGuard.isFreshTimestamp(
         startedAtEpochMs: (now - 1000).toString(),
