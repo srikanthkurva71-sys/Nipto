@@ -17,7 +17,6 @@ class _AuthScreenState extends State<AuthScreen> {
   final _formKey = GlobalKey<FormState>();
   final _niptoId = TextEditingController();
   final _displayName = TextEditingController();
-  final _email = TextEditingController();
   final _password = TextEditingController();
   final _confirmPassword = TextEditingController();
   final _recoveryNiptoId = TextEditingController();
@@ -38,7 +37,6 @@ class _AuthScreenState extends State<AuthScreen> {
   void dispose() {
     _niptoId.dispose();
     _displayName.dispose();
-    _email.dispose();
     _password.dispose();
     _confirmPassword.dispose();
     _recoveryNiptoId.dispose();
@@ -97,44 +95,41 @@ class _AuthScreenState extends State<AuthScreen> {
           });
           throw const FormatException('That Nipto ID is no longer available. Choose another ID.');
         }
-        final response = await _client.auth.signUp(
-          email: _email.text.trim(),
-          password: _password.text,
-          data: {
+        final registerResponse = await _client.functions.invoke(
+          'nipto-register',
+          body: {
             'nipto_id': handle,
+            'password': _password.text,
             'display_name': _displayName.text.trim(),
           },
         );
-
-        final recoveryId = _recoveryNiptoId.text.trim().toLowerCase().replaceFirst(RegExp(r'^@'), '');
-        var recoveryRequestFailed = false;
-        if (response.session != null && recoveryId.isNotEmpty) {
-          try {
-            await _client.rpc(
-              'request_recovery_contact',
-              params: {'p_nipto_id': recoveryId},
-            );
-          } catch (_) {
-            recoveryRequestFailed = true;
-          }
+        if (registerResponse.status < 200 || registerResponse.status >= 300) {
+          throw const FormatException('Could not create account. Check the Nipto ID and try again.');
         }
 
-        if (!mounted) return;
-        if (response.session == null) {
-          setState(() {
-            _notice = 'Account created. Verify your email, then open Settings → Security → Recovery Nipto account to add your trusted contact.';
-            _noticeIsError = false;
-          });
-        } else if (recoveryRequestFailed) {
-          setState(() {
-            _notice = 'Account created, but the recovery request could not be sent. You can retry it in Settings → Security → Recovery Nipto account.';
-            _noticeIsError = true;
-          });
-        } else if (recoveryId.isNotEmpty) {
-          setState(() {
-            _notice = 'Account created. Your recovery-contact request has been sent for approval.';
-            _noticeIsError = false;
-          });
+        // Sign in after registration so the app has an authenticated session.
+        final loginResponse = await _client.functions.invoke(
+          'nipto-login',
+          body: {'nipto_id': handle, 'password': _password.text},
+        );
+        final loginData = loginResponse.data;
+        if (loginData is! Map || loginData['refresh_token'] is! String) {
+          throw const FormatException('Account created. Please sign in with your new Nipto ID.');
+        }
+        await _client.auth.setSession(loginData['refresh_token'] as String);
+
+        final recoveryId = _recoveryNiptoId.text.trim().toLowerCase().replaceFirst(RegExp(r'^@'), '');
+        if (recoveryId.isNotEmpty) {
+          try {
+            await _client.rpc('request_recovery_contact', params: {'p_nipto_id': recoveryId});
+          } catch (_) {
+            if (mounted) {
+              setState(() {
+                _notice = 'Account created and signed in. Recovery contact request could not be sent; you can retry it in Settings → Security.';
+                _noticeIsError = true;
+              });
+            }
+          }
         }
       } else {
         final response = await _client.functions.invoke(
@@ -181,51 +176,17 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _recoverPassword() async {
-    final emailController = TextEditingController(text: _email.text.trim());
-    final email = await showDialog<String>(
+    if (!mounted) return;
+    await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Reset your password'),
-        content: TextField(
-          controller: emailController,
-          keyboardType: TextInputType.emailAddress,
-          decoration: const InputDecoration(
-            labelText: 'Verified recovery email',
-            hintText: 'you@example.com',
-          ),
-        ),
+        title: const Text('Recover your Nipto account'),
+        content: const Text('Nipto does not use email-based password recovery. If you set up a recovery Nipto account, ask that trusted account owner to approve a recovery request. Account recovery is not yet available in this build.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, emailController.text.trim()),
-            child: const Text('Send link'),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
         ],
       ),
     );
-    emailController.dispose();
-    if (email == null || email.isEmpty || !mounted) return;
-
-    try {
-      await _client.auth.resetPasswordForEmail(
-        email,
-        redirectTo: 'nipto://auth-callback',
-      );
-      if (!mounted) return;
-      setState(() {
-        _notice = 'If that address belongs to a Nipto account, a reset link will arrive shortly.';
-        _noticeIsError = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _notice = 'Could not send the reset link. Please try again.';
-        _noticeIsError = true;
-      });
-    }
   }
 
   void _toggleMode() {
@@ -324,7 +285,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         keyboardType: TextInputType.emailAddress,
                         autocorrect: false,
                         decoration: const InputDecoration(
-                          labelText: 'Recovery email',
+                          labelText: 'Email',
                           prefixIcon: Icon(Icons.alternate_email_rounded),
                         ),
                         validator: (value) {
@@ -397,7 +358,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                       const SizedBox(height: 12),
                       const Text(
-                        'Your recovery email is used for verification and password recovery. The optional recovery Nipto account must accept your request. You can also add or change it later in Settings → Security.',
+                        'Nipto accounts use your Nipto ID and password. The optional recovery Nipto account must accept your request. You can also add or change it later in Settings → Security.',
                         style: TextStyle(color: NiptoColors.muted, fontSize: 12, height: 1.4),
                       ),
 
