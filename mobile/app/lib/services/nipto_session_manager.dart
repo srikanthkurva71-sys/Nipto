@@ -421,13 +421,29 @@ class NiptoSessionManager {
     }
 
     Map<String, dynamic> data = {};
-    if (response.body.isNotEmpty) {
-      final value = jsonDecode(response.body);
-      if (value is Map) data = Map<String, dynamic>.from(value);
+    if (response.body.trim().isNotEmpty) {
+      try {
+        final value = jsonDecode(response.body);
+        if (value is Map) {
+          data = Map<String, dynamic>.from(value);
+        } else {
+          throw const FormatException('Expected a JSON object response.');
+        }
+      } on FormatException {
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          throw const NiptoAuthException(
+            'Nipto returned an unexpected response. Please try again.',
+          );
+        }
+        // Non-JSON error bodies are intentionally not exposed to the UI.
+      }
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      final message = data['error'] ?? data['message'];
       throw NiptoAuthException(
-        data['error'] as String? ?? 'Nipto could not complete that request.',
+        message is String && message.trim().isNotEmpty
+            ? message
+            : 'Nipto could not complete that request.",
         statusCode: response.statusCode,
       );
     }
