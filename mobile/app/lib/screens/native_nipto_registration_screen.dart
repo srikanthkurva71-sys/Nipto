@@ -12,6 +12,7 @@ class NativeNiptoRegistrationScreen extends StatefulWidget {
   const NativeNiptoRegistrationScreen({
     super.key,
     required this.onSubmit,
+    this.checkNiptoIdAvailability,
   });
 
   final Future<void> Function({
@@ -20,6 +21,7 @@ class NativeNiptoRegistrationScreen extends StatefulWidget {
     required String password,
     String? recoveryNiptoId,
   }) onSubmit;
+  final Future<Map<String, dynamic>> Function(String niptoId)? checkNiptoIdAvailability;
 
   @override
   State<NativeNiptoRegistrationScreen> createState() =>
@@ -110,6 +112,7 @@ class _NativeNiptoRegistrationScreenState
                     const SizedBox(height: 16),
                     NiptoIdAvailabilityField(
                       controller: _idController,
+                      checkAvailability: widget.checkNiptoIdAvailability,
                       onAvailabilityChanged: (available) {
                         if (mounted) {
                           setState(() {
