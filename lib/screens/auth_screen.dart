@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/auth/nipto_id_policy.dart';
+import '../core/auth/nipto_id_availability.dart';
+import '../core/auth/nipto_id_suggestions.dart';
 import '../theme/nipto_theme.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -25,6 +27,10 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _hidePassword = true;
   String? _notice;
   bool _noticeIsError = false;
+  bool? _idAvailable;
+  bool _checkingId = false;
+  int _idCheckGeneration = 0;
+  List<String> _idSuggestions = const [];
 
   SupabaseClient get _client => Supabase.instance.client;
 
@@ -41,6 +47,34 @@ class _AuthScreenState extends State<AuthScreen> {
 
   String? _validateNiptoId(String? value) => NiptoIdPolicy.validate(value);
 
+  Future<void> _checkNiptoIdAvailability(String value) async {
+    final normalized = value.trim().toLowerCase().replaceFirst(RegExp(r'^@'), '');
+    final generation = ++_idCheckGeneration;
+    if (NiptoIdPolicy.validate(normalized) != null) {
+      if (mounted) setState(() { _idAvailable = null; _checkingId = false; _idSuggestions = const []; });
+      return;
+    }
+    if (mounted) setState(() { _checkingId = true; _idAvailable = null; _idSuggestions = const []; });
+    try {
+      final available = await NiptoIdAvailability(client: _client).isAvailable(normalized);
+      if (!mounted || generation != _idCheckGeneration) return;
+      setState(() {
+        _checkingId = false;
+        _idAvailable = available;
+        _idSuggestions = available ? const [] : NiptoIdSuggestions.generate(normalized);
+      });
+    } catch (_) {
+      if (!mounted || generation != _idCheckGeneration) return;
+      setState(() { _checkingId = false; _idAvailable = null; _idSuggestions = const []; });
+    }
+  }
+
+  void _onNiptoIdChanged(String value) {
+    _idAvailable = null;
+    _idSuggestions = const [];
+    if (_creatingAccount) _checkNiptoIdAvailability(value);
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() {
@@ -51,6 +85,9 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       final handle = _niptoId.text.trim().toLowerCase();
       if (_creatingAccount) {
+        if (_idAvailable != true) {
+          throw const FormatException('Please choose a Nipto ID that is confirmed available.');
+        }
         final response = await _client.auth.signUp(
           email: _email.text.trim(),
           password: _password.text,
@@ -186,6 +223,10 @@ class _AuthScreenState extends State<AuthScreen> {
     setState(() {
       _creatingAccount = !_creatingAccount;
       _notice = null;
+      _idAvailable = null;
+      _idSuggestions = const [];
+      _checkingId = false;
+      _idCheckGeneration++;
     });
   }
 
@@ -297,7 +338,21 @@ class _AuthScreenState extends State<AuthScreen> {
                         hintText: 'yourname',
                       ),
                       validator: _validateNiptoId,
+                      onChanged: _onNiptoIdChanged,
                     ),
+                    if (_creatingAccount) ...[
+                      const SizedBox(height: 6),
+                      Row(children: [
+                        if (_checkingId) const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                        if (_checkingId) const SizedBox(width: 8),
+                        if (!_checkingId && _idAvailable == true) const Icon(Icons.check_circle_outline, color: Colors.green, size: 18),
+                        if (!_checkingId && _idAvailable == false) const Icon(Icons.error_outline, color: NiptoColors.danger, size: 18),
+                        Expanded(child: Text(_checkingId ? 'Checking Nipto ID…' : _idAvailable == true ? 'Nipto ID is available' : _idAvailable == false ? 'This Nipto ID is already taken' : 'Enter an ID to check availability', style: const TextStyle(fontSize: 12, color: NiptoColors.muted))),
+                      ]),
+                      if (_idSuggestions.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Wrap(spacing: 8, runSpacing: 6, children: _idSuggestions.map((suggestion) => ActionChip(label: Text(suggestion), onPressed: () { _niptoId.text = suggestion; _onNiptoIdChanged(suggestion); })).toList()),
+                      ],
                     const SizedBox(height: 13),
                     TextFormField(
                       controller: _password,
