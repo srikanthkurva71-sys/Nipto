@@ -27,6 +27,21 @@ const RESERVED_IDS = new Set([
   "service",
   "null",
   "undefined",
+  "nipto_admin",
+  "nipto_support",
+  "nipto_help",
+  "nipto_security",
+  "nipto_staff",
+  "nipto_system",
+  "nipto_service",
+  "nipto_official",
+  "nipto_verified",
+  "nipto_updates",
+  "nipto_news",
+  "nipto_team",
+  "nipto_app",
+  "nipto_api",
+  "nipto_bot",
 ]);
 
 export function isValidNiptoId(value: string): boolean {
