@@ -95,4 +95,22 @@ void main() {
 
     expect(formKey.currentState!.validate(), isFalse);
   });
+  testWidgets('suggested password meets rules and fills confirmation',
+      (tester) async {
+    await tester.pumpWidget(buildHarness());
+
+    await tester.tap(find.text('Suggest a strong password'));
+    await tester.pump();
+
+    final suggestion = passwordController.text;
+    expect(suggestion, isNotEmpty);
+    expect(suggestion.length, greaterThanOrEqualTo(12));
+    expect(RegExp(r'[a-z]').hasMatch(suggestion), isTrue);
+    expect(RegExp(r'[A-Z]').hasMatch(suggestion), isTrue);
+    expect(RegExp(r'[0-9]').hasMatch(suggestion), isTrue);
+    expect(RegExp(r'[^A-Za-z0-9]').hasMatch(suggestion), isTrue);
+    expect(confirmationController.text, suggestion);
+    expect(formKey.currentState!.validate(), isTrue);
+  });
+
 }
