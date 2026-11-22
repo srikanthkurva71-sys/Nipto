@@ -1,6 +1,7 @@
 import { assertEquals } from "jsr:@std/assert@1.0.14";
 import {
   isAllowedOidcScope,
+  isRecoveryChallengeFresh,
   isValidNiptoId,
   isValidPassword,
   isValidRecoveryNiptoId,
@@ -90,7 +91,24 @@ Deno.test("OIDC accepts only the required openid and optional profile scopes", (
   assertEquals(isAllowedOidcScope("openid openid"), false);
   assertEquals(isAllowedOidcScope("profile"), false);
   assertEquals(isAllowedOidcScope(""), false);
-  assertEquals(isAllowedOidcScope("openid\tprofile"), true);
-  assertEquals(isAllowedOidcScope("openid\nprofile"), true);
+  assertEquals(isAllowedOidcScope("openid\\tprofile"), true);
+  assertEquals(isAllowedOidcScope("openid\\nprofile"), true);
   assertEquals(isAllowedOidcScope("OPENID"), false);
+});
+
+Deno.test("recovery challenge freshness accepts age within configured window", () => {
+  const now = 2_000_000;
+  assertEquals(isRecoveryChallengeFresh(now, now), true);
+  assertEquals(isRecoveryChallengeFresh(now - 15 * 60 * 1000, now), true);
+  assertEquals(isRecoveryChallengeFresh(now - 15 * 60 * 1000 - 1, now), false);
+  assertEquals(isRecoveryChallengeFresh(now + 1, now), false);
+});
+
+Deno.test("recovery challenge freshness rejects invalid timestamps and lifetimes", () => {
+  assertEquals(isRecoveryChallengeFresh(Number.NaN, 2_000_000), false);
+  assertEquals(isRecoveryChallengeFresh(Number.POSITIVE_INFINITY, 2_000_000), false);
+  assertEquals(isRecoveryChallengeFresh(0, 2_000_000), false);
+  assertEquals(isRecoveryChallengeFresh(1_000, Number.NaN), false);
+  assertEquals(isRecoveryChallengeFresh(1_000, 2_000, 0), false);
+  assertEquals(isRecoveryChallengeFresh(1_000, 2_000, -1), false);
 });
