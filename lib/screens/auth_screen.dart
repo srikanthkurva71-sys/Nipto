@@ -280,23 +280,6 @@ class _AuthScreenState extends State<AuthScreen> {
                         },
                       ),
                       const SizedBox(height: 13),
-                      TextFormField(
-                        controller: _email,
-                        keyboardType: TextInputType.emailAddress,
-                        autocorrect: false,
-                        decoration: const InputDecoration(
-                          labelText: 'Email',
-                          prefixIcon: Icon(Icons.alternate_email_rounded),
-                        ),
-                        validator: (value) {
-                          final input = (value ?? '').trim();
-                          if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(input)) {
-                            return 'Enter a valid email address.';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 13),
                     ],
                     TextFormField(
                       controller: _niptoId,
