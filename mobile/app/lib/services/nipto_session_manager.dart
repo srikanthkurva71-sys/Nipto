@@ -6,6 +6,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'nipto_recovery_challenge_guard.dart';
+
 class NiptoSession {
   const NiptoSession({
     required this.userId,
@@ -232,10 +234,13 @@ class NiptoSessionManager {
       final existingId = await _storage.read(key: _recoveryIdKey);
       final existingSecret = await _storage.read(key: _recoverySecretKey);
       final startedRaw = await _storage.read(key: _recoveryStartedAtKey);
-      final startedAt = int.tryParse(startedRaw ?? '');
-      if (existingId != null && existingSecret != null && startedAt != null &&
-          DateTime.now().millisecondsSinceEpoch - startedAt <
-              const Duration(minutes: 15).inMilliseconds) {
+      final nowEpochMs = DateTime.now().millisecondsSinceEpoch;
+      if (NiptoRecoveryChallengeGuard.isUsableCache(
+        challengeId: existingId,
+        challengeSecret: existingSecret,
+        startedAtEpochMs: startedRaw,
+        nowEpochMs: nowEpochMs,
+      )) {
         return;
       }
     }
@@ -263,8 +268,15 @@ class NiptoSessionManager {
     if (existingGrant != null) return existingGrant;
     final challengeId = await _storage.read(key: _recoveryIdKey);
     final challengeSecret = await _storage.read(key: _recoverySecretKey);
-    if (challengeId == null || challengeSecret == null) {
-      throw const NiptoAuthException('Start a new recovery request.');
+    final startedRaw = await _storage.read(key: _recoveryStartedAtKey);
+    if (!NiptoRecoveryChallengeGuard.isUsableCache(
+      challengeId: challengeId,
+      challengeSecret: challengeSecret,
+      startedAtEpochMs: startedRaw,
+      nowEpochMs: DateTime.now().millisecondsSinceEpoch,
+    )) {
+      await _clearRecoveryChallenge();
+      throw const NiptoAuthException('Your recovery request expired. Start a new request.');
     }
     final response = await _post('recovery/claim', {
       'challenge_id': challengeId,
