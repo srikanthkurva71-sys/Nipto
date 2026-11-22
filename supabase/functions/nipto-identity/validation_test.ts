@@ -26,11 +26,33 @@ Deno.test("Nipto ID rejects invalid and reserved handles", () => {
   assertEquals(isValidNiptoId("abc_def"), true);
 });
 
+Deno.test("Nipto ID length and separator boundaries are explicit", () => {
+  assertEquals(isValidNiptoId("a".repeat(3)), true);
+  assertEquals(isValidNiptoId("a".repeat(24)), true);
+  assertEquals(isValidNiptoId("a".repeat(2)), false);
+  assertEquals(isValidNiptoId("a".repeat(25)), false);
+  assertEquals(isValidNiptoId("a_b"), true);
+  assertEquals(isValidNiptoId("a_1"), true);
+  assertEquals(isValidNiptoId("a-1"), false);
+  assertEquals(isValidNiptoId("a__1"), false);
+  assertEquals(isValidNiptoId("1_a"), true);
+});
+
+Deno.test("all reserved IDs remain unavailable", () => {
+  for (const reserved of [
+    "admin", "administrator", "support", "help", "nipto",
+    "official", "security", "moderator",
+  ]) {
+    assertEquals(isValidNiptoId(reserved), false, reserved);
+  }
+});
+
 Deno.test("Nipto password length policy is bounded", () => {
   assertEquals(isValidPassword("12345678901"), false);
   assertEquals(isValidPassword("123456789012"), true);
   assertEquals(isValidPassword("x".repeat(128)), true);
   assertEquals(isValidPassword("x".repeat(129)), false);
+  assertEquals(isValidPassword(""), false);
 });
 
 Deno.test("optional recovery Nipto ID accepts empty and valid non-self IDs", () => {
@@ -44,6 +66,7 @@ Deno.test("recovery Nipto ID rejects malformed, reserved and self IDs", () => {
   assertEquals(isValidRecoveryNiptoId("admin"), false);
   assertEquals(isValidRecoveryNiptoId("with space"), false);
   assertEquals(isValidRecoveryNiptoId("owner", "owner"), false);
+  assertEquals(isValidRecoveryNiptoId("Owner", "owner"), false);
 });
 
 Deno.test("password confirmation must match exactly", () => {
@@ -61,4 +84,7 @@ Deno.test("OIDC accepts only the required openid and optional profile scopes", (
   assertEquals(isAllowedOidcScope("openid openid"), false);
   assertEquals(isAllowedOidcScope("profile"), false);
   assertEquals(isAllowedOidcScope(""), false);
+  assertEquals(isAllowedOidcScope("openid\tprofile"), true);
+  assertEquals(isAllowedOidcScope("openid\nprofile"), true);
+  assertEquals(isAllowedOidcScope("OPENID"), false);
 });
