@@ -40,5 +40,27 @@ void main() {
         maxAge: Duration.zero,
       ), isFalse);
     });
+
+    test('parses valid cached timestamp strings', () {
+      expect(NiptoRecoveryChallengeGuard.isFreshTimestamp(
+        startedAtEpochMs: (now - 1000).toString(),
+        nowEpochMs: now,
+      ), isTrue);
+    });
+
+    test('rejects missing, malformed, and future cached timestamp strings', () {
+      expect(NiptoRecoveryChallengeGuard.isFreshTimestamp(
+        startedAtEpochMs: null,
+        nowEpochMs: now,
+      ), isFalse);
+      expect(NiptoRecoveryChallengeGuard.isFreshTimestamp(
+        startedAtEpochMs: 'not-a-timestamp',
+        nowEpochMs: now,
+      ), isFalse);
+      expect(NiptoRecoveryChallengeGuard.isFreshTimestamp(
+        startedAtEpochMs: (now + 1).toString(),
+        nowEpochMs: now,
+      ), isFalse);
+    });
   });
 }
