@@ -72,7 +72,7 @@ Deno.test("Nipto password length policy is bounded", () => {
 Deno.test("optional recovery Nipto ID accepts empty and valid non-self IDs", () => {
   assertEquals(isValidRecoveryNiptoId(""), true);
   assertEquals(isValidRecoveryNiptoId("   "), true);
-  assertEquals(isValidRecoveryNiptoId("\\t\\n"), true);
+  assertEquals(isValidRecoveryNiptoId("\t\n"), true);
   assertEquals(isValidRecoveryNiptoId("trusted_friend"), true);
   assertEquals(isValidRecoveryNiptoId("trusted_friend", "owner"), true);
 });
