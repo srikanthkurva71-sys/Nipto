@@ -57,4 +57,34 @@ void main() {
     expect(find.textContaining('Use 3–24 lowercase letters or numbers'), findsOneWidget);
     expect(formKey.currentState!.validate(), isFalse);
   });
+  testWidgets('revalidates when the text controller is replaced',
+      (tester) async {
+    final replacementController = TextEditingController(text: 'bad__id');
+    var availabilityCallbackCount = 0;
+    Widget buildWithController(TextEditingController controller) => MaterialApp(
+          home: Scaffold(
+            body: NiptoIdAvailabilityField(
+              controller: controller,
+              onAvailabilityChanged: (_) => availabilityCallbackCount++,
+            ),
+          ),
+        );
+
+    await tester.pumpWidget(buildWithController(idController));
+    await tester.pumpWidget(buildWithController(replacementController));
+    await tester.pump();
+
+
+    expect(find.text('Use 3–24 lowercase letters or numbers, with single underscores between parts.'), findsOneWidget);
+    expect(availabilityCallbackCount, greaterThan(0));
+
+
+    idController.text = 'another_valid_id';
+    await tester.pump();
+    expect(find.text('Use 3–24 lowercase letters or numbers, with single underscores between parts.'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    replacementController.dispose();
+  });
+
 }
