@@ -61,3 +61,25 @@ export function isRecoveryChallengeFresh(
   const ageMs = nowMs - startedAtMs;
   return ageMs >= 0 && ageMs <= maxAgeMs;
 }
+
+/** Suggest deterministic alternative handles for the registration UI.
+ * Availability is intentionally not implied; callers must check candidates against the database.
+ */
+export function suggestNiptoIds(value: string, limit = 5): string[] {
+  if (!Number.isInteger(limit) || limit <= 0) return [];
+  const base = normalizeNiptoId(value).replace(/[^a-z0-9_]/g, "_")
+    .replace(/_+/g, "_").replace(/^_+|_+$/g, "");
+  if (base.length < 3) return [];
+  const candidates: string[] = [];
+  const add = (candidate: string) => {
+    if (candidate.length > 24) candidate = candidate.slice(0, 24).replace(/_+$/g, "");
+    if (isValidNiptoId(candidate) && !candidates.includes(candidate)) candidates.push(candidate);
+  };
+  add(base);
+  for (let suffix = 1; candidates.length < limit && suffix <= 9999; suffix++) {
+    const tail = String(suffix);
+    const stem = base.slice(0, Math.max(1, 24 - tail.length));
+    add(stem.replace(/_+$/g, "") + tail);
+  }
+  return candidates.slice(0, limit);
+}
