@@ -91,8 +91,9 @@ class _NiptoIdAvailabilityFieldState extends State<NiptoIdAvailabilityField> {
     widget.onAvailabilityChanged?.call(null);
     final value = _normalizedId();
     if (value.length < 3 || value.length > 24 ||
-        !RegExp(r'^[a-z0-9]+(?:_[a-z0-9]+)*
-      setState(() => _message = 'Use 3–24 lowercase letters or numbers, with single underscores between parts.');
+        !RegExp(r'^[a-z0-9]+(?:_[a-z0-9]+)*$').hasMatch(value) ||
+        _reservedIds.contains(value)) {
+      setState(() => _message = 'Use 3–24 lowercase letters or numbers, with single underscores between parts. Reserved IDs are unavailable.');
       return;
     }
     _debounce = Timer(const Duration(milliseconds: 400), () => _check(value, version));
