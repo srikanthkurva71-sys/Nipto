@@ -183,7 +183,8 @@ class _NiptoIdAvailabilityFieldState extends State<NiptoIdAvailabilityField> {
           ),
           validator: (value) {
             final id = (value ?? '').trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
-            if (!RegExp(r'^[a-z0-9]+(?:_[a-z0-9]+)*
+            if (!RegExp(r'^[a-z0-9]+(?:_[a-z0-9]+)*$').hasMatch(id) ||
+                id.length < 3 || id.length > 24 || _reservedIds.contains(id)) {
               return 'Enter a valid Nipto ID (3–24 characters).';
             }
             if (_available != true || id != _normalizedId() || id != _checkedId) {
