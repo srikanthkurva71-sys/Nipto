@@ -151,6 +151,12 @@ Deno.test("Nipto ID suggestions handle reserved and short inputs safely", () => 
   assertEquals(suggestNiptoIds("name", 0), []);
   assertEquals(suggestNiptoIds("name", -1), []);
 });
+Deno.test("Nipto ID suggestion requests are capped to protect bounded work", () => {
+  const suggestions = suggestNiptoIds("user", 100_000);
+  assertEquals(suggestions.length, 20);
+  assertEquals(suggestions.every(isValidNiptoId), true);
+});
+
 Deno.test("Nipto ID suggestions remain within the 24 character limit", () => {
   const suggestions = suggestNiptoIds("a".repeat(24), 10);
   assertEquals(suggestions.every((candidate) => candidate.length <= 24), true);
