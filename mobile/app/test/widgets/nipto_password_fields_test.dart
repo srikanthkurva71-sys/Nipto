@@ -88,6 +88,14 @@ void main() {
     expect(formKey.currentState!.validate(), isFalse);
   });
 
+  testWidgets('rejects passwords over the 128 character limit', (tester) async {
+    passwordController.text = 'A' * 125 + 'a1!';
+    confirmationController.text = passwordController.text;
+    await tester.pumpWidget(buildHarness());
+
+    expect(formKey.currentState!.validate(), isFalse);
+  });
+
   testWidgets('rejects mismatched confirmation', (tester) async {
     passwordController.text = 'StrongPass123!';
     confirmationController.text = 'DifferentPass123!';
