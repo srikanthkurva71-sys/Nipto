@@ -121,6 +121,9 @@ class _NiptoPasswordFieldsState extends State<NiptoPasswordFields> {
           obscureText: !_showPassword,
           autocorrect: false,
           enableSuggestions: false,
+          autofillHints: const [AutofillHints.newPassword],
+          maxLength: 128,
+          textInputAction: TextInputAction.next,
           decoration: InputDecoration(
             labelText: 'Password',
             prefixIcon: const Icon(Icons.lock_outline_rounded),
@@ -163,6 +166,9 @@ class _NiptoPasswordFieldsState extends State<NiptoPasswordFields> {
           obscureText: !_showConfirmation,
           autocorrect: false,
           enableSuggestions: false,
+          autofillHints: const [AutofillHints.newPassword],
+          maxLength: 128,
+          textInputAction: TextInputAction.done,
           decoration: InputDecoration(
             labelText: 'Confirm password',
             prefixIcon: const Icon(Icons.lock_outline_rounded),
