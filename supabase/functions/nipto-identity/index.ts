@@ -187,22 +187,49 @@ async function signJwt(claims: Json): Promise<string> {
   return input + "." + base64url(new Uint8Array(signature));
 }
 async function verifyJwt(token: string, tokenUse: string): Promise<Json> {
-  const parts = token.split(".");
-  if (parts.length !== 3) throw new ApiError("Invalid token", 401);
-  const header = JSON.parse(decoder.decode(fromBase64url(parts[0]))) as Json;
-  const claims = JSON.parse(decoder.decode(fromBase64url(parts[1]))) as Json;
-  if (header.alg !== "ES256" || typeof header.kid !== "string") {
+  // Bound parsing work and reject malformed token structure before decoding.
+  if (typeof token !== "string" || token.length > 16_384) {
     throw new ApiError("Invalid token", 401);
   }
-  const valid = await crypto.subtle.verify(
-    { name: "ECDSA", hash: "SHA-256" },
-    await verificationKey(header.kid),
-    fromBase64url(parts[2]),
-    encoder.encode(parts[0] + "." + parts[1]),
-  );
+  const parts = token.split(".");
+  if (parts.length !== 3 || parts.some((part) => !part || !/^[A-Za-z0-9_-]+$/.test(part))) {
+    throw new ApiError("Invalid token", 401);
+  }
+
+  let header: Json;
+  let claims: Json;
+  try {
+    header = JSON.parse(decoder.decode(fromBase64url(parts[0]))) as Json;
+    claims = JSON.parse(decoder.decode(fromBase64url(parts[1]))) as Json;
+    if (typeof header !== "object" || header === null || Array.isArray(header)
+      || typeof claims !== "object" || claims === null || Array.isArray(claims)) {
+      throw new Error("Malformed JWT payload");
+    }
+  } catch {
+    throw new ApiError("Invalid token", 401);
+  }
+
+  if (header.alg !== "ES256" || header.typ !== "JWT" || typeof header.kid !== "string"
+    || header.kid.length > 128) {
+    throw new ApiError("Invalid token", 401);
+  }
+
+  let valid = false;
+  try {
+    valid = await crypto.subtle.verify(
+      { name: "ECDSA", hash: "SHA-256" },
+      await verificationKey(header.kid),
+      fromBase64url(parts[2]),
+      encoder.encode(parts[0] + "." + parts[1]),
+    );
+  } catch {
+    throw new ApiError("Invalid token", 401);
+  }
+
   const now = Math.floor(Date.now() / 1000);
   if (!valid || claims.iss !== issuer() || claims.aud !== oidcClientId()
-    || typeof claims.exp !== "number" || claims.exp <= now
+    || typeof claims.exp !== "number" || !Number.isFinite(claims.exp) || claims.exp <= now
+    || (typeof claims.nbf === "number" && claims.nbf > now)
     || claims.token_use !== tokenUse) {
     throw new ApiError("Invalid or expired token", 401);
   }
