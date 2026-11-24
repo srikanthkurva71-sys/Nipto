@@ -35,6 +35,7 @@ class _NativeNiptoRegistrationScreenState
   final _idController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmationController = TextEditingController();
+  final _recoveryIdController = TextEditingController();
   bool _busy = false;
   bool? _idAvailable;
   String? _error;
@@ -45,6 +46,7 @@ class _NativeNiptoRegistrationScreenState
     _idController.dispose();
     _passwordController.dispose();
     _confirmationController.dispose();
+    _recoveryIdController.dispose();
     super.dispose();
   }
 
@@ -66,7 +68,9 @@ class _NativeNiptoRegistrationScreenState
         displayName: _nameController.text.trim(),
         niptoId: _normalizedId(_idController.text),
         password: _passwordController.text,
-        recoveryNiptoId: null,
+        recoveryNiptoId: _normalizedId(_recoveryIdController.text).isEmpty
+            ? null
+            : _normalizedId(_recoveryIdController.text),
       );
     } catch (_) {
       if (mounted) setState(() => _error = 'Registration could not be completed. Please try again.');
@@ -127,6 +131,59 @@ class _NativeNiptoRegistrationScreenState
                     NiptoPasswordFields(
                       passwordController: _passwordController,
                       confirmationController: _confirmationController,
+                    ),
+                    const SizedBox(height: 18),
+                    TextFormField(
+                      controller: _recoveryIdController,
+                      autocorrect: false,
+                      textCapitalization: TextCapitalization.none,
+                      decoration: const InputDecoration(
+                        labelText: 'Recovery Nipto ID (optional)',
+                        hintText: 'trusted_person',
+                        prefixText: '@',
+                        prefixIcon: Icon(Icons.shield_outlined),
+                      ),
+                      validator: (value) {
+                        final id = _normalizedId(value ?? '');
+                        if (id.isEmpty) return null;
+                        if (!RegExp(r'^[a-z0-9]+(?:_[a-z0-9]+)*                      const SizedBox(height: 16),
+                      Text(_error!, style: const TextStyle(color: Colors.red)),
+                    ],
+                    const SizedBox(height: 24),
+                    FilledButton(
+                      onPressed: _busy ? null : _submit,
+                      child: _busy
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Create Nipto account'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+).hasMatch(id) ||
+                            id.length < 3 || id.length > 24) {
+                          return 'Enter a valid recovery Nipto ID.';
+                        }
+                        if (id == _normalizedId(_idController.text)) {
+                          return 'Recovery ID must be different from your own ID.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Optional. The recovery account owner must approve the connection.',
+                      style: TextStyle(fontSize: 12, color: Colors.black54),
                     ),
                     const SizedBox(height: 18),
                     if (_error != null) ...[
