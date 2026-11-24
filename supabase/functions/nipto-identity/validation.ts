@@ -67,6 +67,8 @@ export function isRecoveryChallengeFresh(
  */
 export function suggestNiptoIds(value: string, limit = 5): string[] {
   if (!Number.isInteger(limit) || limit <= 0) return [];
+  // Bound caller-requested work even if a future caller passes an untrusted limit.
+  const boundedLimit = Math.min(limit, 20);
   const base = normalizeNiptoId(value).replace(/[^a-z0-9_]/g, "_")
     .replace(/_+/g, "_").replace(/^_+|_+$/g, "");
   if (base.length < 3) return [];
@@ -76,10 +78,10 @@ export function suggestNiptoIds(value: string, limit = 5): string[] {
     if (isValidNiptoId(candidate) && !candidates.includes(candidate)) candidates.push(candidate);
   };
   add(base);
-  for (let suffix = 1; candidates.length < limit && suffix <= 9999; suffix++) {
+  for (let suffix = 1; candidates.length < boundedLimit && suffix <= 9999; suffix++) {
     const tail = String(suffix);
     const stem = base.slice(0, Math.max(1, 24 - tail.length));
     add(stem.replace(/_+$/g, "") + tail);
   }
-  return candidates.slice(0, limit);
+  return candidates.slice(0, boundedLimit);
 }
