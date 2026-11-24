@@ -47,14 +47,16 @@ function json(data: unknown, status = 200, extra: HeadersInit = {}): Response {
   });
 }
 function html(content: string, status = 200): Response {
-  return new Response(content, {
+  const scriptNonce = randomToken(18);
+  const securedContent = content.replaceAll("<script>", `<script nonce="${scriptNonce}">`);
+  return new Response(securedContent, {
     status,
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
       "X-Content-Type-Options": "nosniff",
       "Referrer-Policy": "no-referrer",
-      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+      "Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${scriptNonce}'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`,
     },
   });
 }
