@@ -2,6 +2,8 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
+import '../services/nipto_password_policy.dart';
+
 /// Password and confirmation fields for native Nipto account forms.
 /// This widget validates locally for UX; server-side password policy is authoritative.
 class NiptoPasswordFields extends StatefulWidget {
@@ -53,11 +55,11 @@ class _NiptoPasswordFieldsState extends State<NiptoPasswordFields> {
     widget.confirmationController.text = suggestion;
   }
 
-  bool get _longEnough => widget.passwordController.text.length >= 12;
-  bool get _hasLower => RegExp(r'[a-z]').hasMatch(widget.passwordController.text);
-  bool get _hasUpper => RegExp(r'[A-Z]').hasMatch(widget.passwordController.text);
-  bool get _hasNumber => RegExp(r'[0-9]').hasMatch(widget.passwordController.text);
-  bool get _hasSymbol => RegExp(r'[^A-Za-z0-9]').hasMatch(widget.passwordController.text);
+  bool get _longEnough => NiptoPasswordPolicy.hasMinimumLength(widget.passwordController.text);
+  bool get _hasLower => NiptoPasswordPolicy.hasLowercase(widget.passwordController.text);
+  bool get _hasUpper => NiptoPasswordPolicy.hasUppercase(widget.passwordController.text);
+  bool get _hasNumber => NiptoPasswordPolicy.hasNumber(widget.passwordController.text);
+  bool get _hasSymbol => NiptoPasswordPolicy.hasSymbol(widget.passwordController.text);
 
   @override
   void initState() {
@@ -111,8 +113,10 @@ class _NiptoPasswordFieldsState extends State<NiptoPasswordFields> {
 
   @override
   Widget build(BuildContext context) {
-    final matching = widget.confirmationController.text.isNotEmpty &&
-        widget.passwordController.text == widget.confirmationController.text;
+    final matching = NiptoPasswordPolicy.matches(
+      widget.passwordController.text,
+      widget.confirmationController.text,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -134,7 +138,7 @@ class _NiptoPasswordFieldsState extends State<NiptoPasswordFields> {
             ),
           ),
           validator: (value) {
-            if (value == null || value.length < 12 || !_hasLower || !_hasUpper || !_hasNumber || !_hasSymbol) {
+            if (value == null || !NiptoPasswordPolicy.isValid(value)) {
               return 'Use at least 12 characters, including uppercase, lowercase, number and symbol.';
             }
             return null;
