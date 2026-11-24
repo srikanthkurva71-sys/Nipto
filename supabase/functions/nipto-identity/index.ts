@@ -621,6 +621,20 @@ async function authorizePost(request: Request): Promise<Response> {
   const password = String(form.get("password") ?? "");
   const displayName = String(form.get("display_name") ?? "").trim();
   const passwordConfirmation = String(form.get("password_confirmation") ?? "");
+
+  // Reject malformed form fields before database calls or password hashing.
+  if (!transactionId || transactionId.length > 128
+    || !/^[A-Za-z0-9_-]{43,128}$/.test(csrfToken)) {
+    throw new ApiError("This sign-in request is invalid. Return to Nipto and try again.", 400);
+  }
+  if (action !== "login" && action !== "register" && action !== "link") {
+    throw new ApiError("Invalid authentication action.", 400);
+  }
+  if (niptoId.length > 24 || password.length > 128 || passwordConfirmation.length > 128
+    || displayName.length > 50) {
+    throw new ApiError("One or more fields exceed the allowed length.", 400);
+  }
+
   const txRows = await rpc("nipto_oidc_get_transaction", {
     p_id: transactionId,
     p_csrf_hash: await sha256Hex(csrfToken),
