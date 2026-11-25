@@ -227,9 +227,13 @@ async function verifyJwt(token: string, tokenUse: string): Promise<Json> {
   }
 
   const now = Math.floor(Date.now() / 1000);
+  const hasNbf = Object.prototype.hasOwnProperty.call(claims, "nbf");
   if (!valid || claims.iss !== issuer() || claims.aud !== oidcClientId()
-    || typeof claims.exp !== "number" || !Number.isFinite(claims.exp) || claims.exp <= now
-    || (typeof claims.nbf === "number" && claims.nbf > now)
+    || typeof claims.iat !== "number" || !Number.isFinite(claims.iat)
+    || claims.iat > now + 60
+    || typeof claims.exp !== "number" || !Number.isFinite(claims.exp)
+    || claims.exp <= now || claims.exp <= claims.iat
+    || (hasNbf && (typeof claims.nbf !== "number" || !Number.isFinite(claims.nbf) || claims.nbf > now))
     || claims.token_use !== tokenUse) {
     throw new ApiError("Invalid or expired token", 401);
   }
