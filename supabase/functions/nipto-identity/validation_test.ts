@@ -1,6 +1,7 @@
 import { assertEquals } from "jsr:@std/assert@1.0.14";
 import {
   areJwtTemporalClaimsValid,
+  isCanonicalUuid,
   isAllowedOidcScope,
   isRecoveryChallengeFresh,
   isValidNiptoId,
@@ -181,4 +182,19 @@ Deno.test("JWT temporal claims reject invalid, expired and future claims", () =>
   assertEquals(areJwtTemporalClaimsValid({ iat: now - 10, exp: now + 60, nbf: now + 1 }, now), false);
   assertEquals(areJwtTemporalClaimsValid({ iat: Number.NaN, exp: now + 60 }, now), false);
   assertEquals(areJwtTemporalClaimsValid({ iat: now - 10, exp: Number.POSITIVE_INFINITY }, now), false);
+});
+
+Deno.test("canonical UUID validator accepts standard UUID variants", () => {
+  assertEquals(isCanonicalUuid("550e8400-e29b-41d4-a716-446655440000"), true);
+  assertEquals(isCanonicalUuid("550e8400-e29b-81d4-a716-446655440000"), true);
+  assertEquals(isCanonicalUuid("550e8400-e29b-41d4-b716-446655440000".toUpperCase()), true);
+});
+
+Deno.test("canonical UUID validator rejects malformed strings and invalid variant/version", () => {
+  assertEquals(isCanonicalUuid(null), false);
+  assertEquals(isCanonicalUuid(123), false);
+  assertEquals(isCanonicalUuid(""), false);
+  assertEquals(isCanonicalUuid("550e8400e29b41d4a716446655440000"), false);
+  assertEquals(isCanonicalUuid("550e8400-e29b-01d4-a716-446655440000"), false);
+  assertEquals(isCanonicalUuid("550e8400-e29b-41d4-c716-446655440000"), false);
 });
