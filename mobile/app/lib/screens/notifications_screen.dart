@@ -38,10 +38,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   Future<void> _markRead(Map<String, dynamic> item) async {
     if (item['read_at'] != null) return;
+    final userId = NiptoSessionManager.instance.userId;
+    final notificationId = item['id'];
+    if (userId == null || notificationId == null) return;
     try {
+      // Scope acknowledgement to the signed-in recipient as well as the row ID.
       await _client.from('notifications').update({
         'read_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', item['id']);
+      }).eq('id', notificationId).eq('user_id', userId);
       if (mounted) {
         // Refresh the shared Chats badge after the notification is acknowledged.
         await _refresh();
