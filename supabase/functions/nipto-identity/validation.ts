@@ -9,6 +9,13 @@ const RESERVED_IDS = new Set([
   "nipto_app", "nipto_api", "nipto_bot",
 ]);
 
+/** Accept only a single well-formed Bearer token and normalize the scheme casing. */
+export function normalizeBearerAuthorization(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 16_500) return null;
+  const match = /^Bearer ([A-Za-z0-9._-]{1,16_384})$/i.exec(value);
+  return match ? "Bearer " + match[1] : null;
+}
+
 /** Validate a canonical RFC 4122 UUID string, including version and variant bits. */
 export function isCanonicalUuid(value: unknown): value is string {
   return typeof value === "string"
