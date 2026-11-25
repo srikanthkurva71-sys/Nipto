@@ -925,6 +925,7 @@ async function handleRoute(request: Request): Promise<Response> {
   if (path.endsWith("/recovery/start") && method === "POST") {
     const input = await requestBody(request);
     const niptoId = String(input.nipto_id ?? "").trim().replace(/^@/, "").toLowerCase();
+    if (!isValidNiptoId(niptoId)) throw new ApiError("Enter a valid Nipto ID.", 400);
     await enforceRateLimit(request, "recovery-start:" + niptoId);
     const challengeSecret = randomToken(32);
     const rows = await rpc("nipto_native_start_recovery", {
@@ -943,6 +944,9 @@ async function handleRoute(request: Request): Promise<Response> {
     const input = await requestBody(request);
     const challengeId = String(input.challenge_id ?? "");
     const challengeSecret = String(input.challenge_secret ?? "");
+    if (!/^[0-9a-f-]{36}$/i.test(challengeId) || !/^[A-Za-z0-9_-]{43}$/.test(challengeSecret)) {
+      throw new ApiError("Invalid recovery request.", 400);
+    }
     await enforceRateLimit(request, "recovery-claim:" + challengeId);
     const challengeHash = await sha256Hex(challengeSecret);
     const status = await rpc("nipto_native_recovery_status", {
@@ -965,6 +969,7 @@ async function handleRoute(request: Request): Promise<Response> {
     const input = await requestBody(request);
     const grant = String(input.reset_grant ?? "");
     const password = String(input.new_password ?? "");
+    if (!/^[A-Za-z0-9_-]{43}$/.test(grant)) throw new ApiError("This reset request is invalid or expired.", 400);
     if (password.length < 12 || password.length > 128) {
       throw new ApiError("Use a password between 12 and 128 characters.");
     }
@@ -991,9 +996,11 @@ async function handleRoute(request: Request): Promise<Response> {
   if (path.endsWith("/recovery/link") && method === "POST") {
     const userId = await authenticatedUserId(request);
     const input = await requestBody(request);
+    const recoveryId = String(input.recovery_nipto_id ?? "").trim().replace(/^@/, "").toLowerCase();
+    if (!isValidNiptoId(recoveryId)) throw new ApiError("Enter a valid recovery Nipto ID.", 400);
     const requestId = await rpc("nipto_native_request_recovery_contact", {
       p_owner_user_id: userId,
-      p_nipto_id: String(input.recovery_nipto_id ?? "").trim().replace(/^@/, "").toLowerCase(),
+      p_nipto_id: recoveryId,
     });
     return json({ request_id: requestId });
   }
@@ -1035,6 +1042,7 @@ async function handleRoute(request: Request): Promise<Response> {
     const input = await requestBody(request);
     const currentPassword = String(input.current_password ?? "");
     const newPassword = String(input.new_password ?? "");
+    if (currentPassword.length > 128) throw new ApiError("Current password is invalid.", 400);
     if (newPassword.length < 12 || newPassword.length > 128) {
       throw new ApiError("Use a password between 12 and 128 characters.");
     }
