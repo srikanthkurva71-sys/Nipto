@@ -737,10 +737,22 @@ class _ChatImageState extends State<_ChatImage> {
       future: _signedUrl,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return const SizedBox(
+          return SizedBox(
             width: 180,
             height: 120,
-            child: Center(child: Icon(Icons.broken_image_outlined, color: NiptoColors.muted)),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.broken_image_outlined, color: NiptoColors.muted),
+                  TextButton.icon(
+                    onPressed: () => setState(() => _signedUrl = _load()),
+                    icon: const Icon(Icons.refresh, size: 16),
+                    label: const Text('Retry photo'),
+                  ),
+                ],
+              ),
+            ),
           );
         }
         if (!snapshot.hasData) {
@@ -757,10 +769,16 @@ class _ChatImageState extends State<_ChatImage> {
             width: 230,
             height: 220,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const SizedBox(
+            errorBuilder: (_, __, ___) => SizedBox(
               width: 180,
               height: 120,
-              child: Center(child: Icon(Icons.broken_image_outlined, color: NiptoColors.muted)),
+              child: Center(
+                child: IconButton(
+                  tooltip: 'Retry photo',
+                  onPressed: () => setState(() => _signedUrl = _load()),
+                  icon: const Icon(Icons.refresh, color: NiptoColors.muted),
+                ),
+              ),
             ),
           ),
         );
