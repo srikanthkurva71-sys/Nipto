@@ -18,6 +18,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   bool _loading = true;
   bool _loadingMore = false;
   bool _hasMore = true;
+  int _feedGeneration = 0;
   String? _error;
   final ScrollController _scroll = ScrollController();
   final Set<String> _busyLikes = {};
@@ -42,31 +43,40 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
   }
 
   Future<void> _loadFeed() async {
-    setState(() { _loading = true; _error = null; });
+    final generation = ++_feedGeneration;
+    setState(() { _loading = true; _loadingMore = false; _hasMore = true; _error = null; });
     try {
       final rows = await _fetchPage();
-      if (!mounted) return;
+      if (!mounted || generation != _feedGeneration) return;
       setState(() { _posts = rows; _hasMore = rows.length == 20; _loading = false; });
     } catch (_) {
-      if (mounted) setState(() { _error = 'Your feed could not load. Please try again.'; _loading = false; });
+      if (mounted && generation == _feedGeneration) {
+        setState(() { _error = 'Your feed could not load. Please try again.'; _loading = false; });
+      }
     }
   }
 
   Future<void> _loadMore() async {
     if (_posts.isEmpty || _loadingMore || !_hasMore) return;
+    final generation = _feedGeneration;
     setState(() => _loadingMore = true);
     try {
       final before = DateTime.tryParse(_posts.last['created_at'] as String? ?? '');
       final beforeId = _posts.last['id'] as String?;
+      if (before == null || beforeId == null) {
+        if (mounted && generation == _feedGeneration) setState(() => _hasMore = false);
+        return;
+      }
       final rows = await _fetchPage(before: before, beforeId: beforeId);
-      if (mounted) setState(() {
+      if (!mounted || generation != _feedGeneration) return;
+      setState(() {
         final existingIds = _posts.map((post) => post['id']).toSet();
         _posts.addAll(rows.where((post) => !existingIds.contains(post['id'])));
         _hasMore = rows.length == 20;
       });
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not load more posts.')));
-    } finally { if (mounted) setState(() => _loadingMore = false); }
+      if (mounted && generation == _feedGeneration) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not load more posts.')));
+    } finally { if (mounted && generation == _feedGeneration) setState(() => _loadingMore = false); }
   }
 
   Future<void> _toggleLike(Map<String, dynamic> post) async {
