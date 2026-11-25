@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { argon2id, argon2Verify } from "npm:hash-wasm@4.13.0";
-import { areJwtTemporalClaimsValid, isCanonicalUuid, isAllowedOidcScope, isValidNiptoId, isValidPassword, passwordsMatch } from "./validation.ts";
+import { areJwtTemporalClaimsValid, isCanonicalUuid, normalizeBearerAuthorization, isAllowedOidcScope, isValidNiptoId, isValidPassword, passwordsMatch } from "./validation.ts";
 import { FormBodyError, readUrlEncodedForm } from "./form_body.ts";
 
 type Json = Record<string, unknown>;
@@ -322,10 +322,8 @@ async function requestBody(request: Request): Promise<Json> {
   return value as Json;
 }
 async function authenticatedUserId(request: Request): Promise<string> {
-  const authorization = request.headers.get("authorization") ?? "";
-  if (!/^Bearer [A-Za-z0-9._-]+$/.test(authorization)) {
-    throw new ApiError("Sign in to continue", 401);
-  }
+  const authorization = normalizeBearerAuthorization(request.headers.get("authorization"));
+  if (!authorization) throw new ApiError("Sign in to continue", 401);
   const response = await fetch(supabaseUrl() + "/rest/v1/rpc/nipto_native_current_user", {
     method: "POST",
     headers: {
@@ -343,7 +341,8 @@ async function authenticatedUserId(request: Request): Promise<string> {
   return userId;
 }
 async function rpcAsUser(request: Request, name: string): Promise<any> {
-  const authorization = request.headers.get("authorization") ?? "";
+  const authorization = normalizeBearerAuthorization(request.headers.get("authorization"));
+  if (!authorization) throw new ApiError("Sign in to continue", 401);
   const response = await fetch(supabaseUrl() + "/rest/v1/rpc/" + name, {
     method: "POST",
     headers: {
