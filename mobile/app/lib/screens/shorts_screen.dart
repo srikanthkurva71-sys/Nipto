@@ -175,6 +175,51 @@ class _ShortsScreenState extends State<ShortsScreen> {
     }
   }
 
+  Future<void> _reportShort(Map<String, dynamic> clip) async {
+    final userId = NiptoSessionManager.instance.userId;
+    final creatorId = clip['creator_id'] as String?;
+    if (userId == null || creatorId == null || creatorId == userId) return;
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Report this Short'),
+        children: [
+          for (final option in const [
+            ('spam', 'Spam or misleading'),
+            ('harassment', 'Harassment or bullying'),
+            ('hate', 'Hateful content'),
+            ('unsafe_content', 'Unsafe content'),
+            ('other', 'Something else'),
+          ])
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialogContext, option.$1),
+              child: Text(option.$2),
+            ),
+        ],
+      ),
+    );
+    if (reason == null || !mounted) return;
+    try {
+      await _client.from('user_reports').insert({
+        'reporter_id': userId,
+        'reported_user_id': creatorId,
+        'reason': reason,
+        'content_type': 'short',
+        'content_id': clip['id'],
+        'details': 'Report submitted from Nipto Shorts.',
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Thank you. Your report has been submitted.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Your report could not be submitted. Please try again.')),
+      );
+    }
+  }
+
   Future<void> _showComments(Map<String, dynamic> clip) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -221,6 +266,7 @@ class _ShortsScreenState extends State<ShortsScreen> {
                 clip: clips[index],
                 isActive: _activeIndex == index,
                 onComment: () => _showComments(clips[index]),
+                onReport: () => _reportShort(clips[index]),
               ),
             ),
             Positioned(
@@ -272,11 +318,13 @@ class _ShortTile extends StatefulWidget {
     required this.clip,
     required this.isActive,
     required this.onComment,
+    required this.onReport,
   });
 
   final Map<String, dynamic> clip;
   final bool isActive;
   final VoidCallback onComment;
+  final VoidCallback onReport;
 
   @override
   State<_ShortTile> createState() => _ShortTileState();
@@ -471,6 +519,12 @@ class _ShortTileState extends State<_ShortTile> with WidgetsBindingObserver {
                     icon: Icons.mode_comment_outlined,
                     label: 'Comment',
                     onTap: widget.onComment,
+                  ),
+                  const SizedBox(height: 17),
+                  _ActionIcon(
+                    icon: Icons.flag_outlined,
+                    label: 'Report',
+                    onTap: widget.onReport,
                   ),
                   const SizedBox(height: 17),
                   _ActionIcon(
