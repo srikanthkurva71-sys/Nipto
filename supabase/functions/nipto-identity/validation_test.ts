@@ -1,5 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1.0.14";
 import {
+  areJwtTemporalClaimsValid,
   isAllowedOidcScope,
   isRecoveryChallengeFresh,
   isValidNiptoId,
@@ -161,4 +162,23 @@ Deno.test("Nipto ID suggestions remain within the 24 character limit", () => {
   const suggestions = suggestNiptoIds("a".repeat(24), 10);
   assertEquals(suggestions.every((candidate) => candidate.length <= 24), true);
   assertEquals(suggestions.every(isValidNiptoId), true);
+});
+
+Deno.test("JWT temporal claims accept valid bounded tokens", () => {
+  const now = 1_700_000_000;
+  assertEquals(areJwtTemporalClaimsValid({ iat: now - 10, exp: now + 60 }, now), true);
+  assertEquals(areJwtTemporalClaimsValid({ iat: now + 60, exp: now + 120 }, now), true);
+  assertEquals(areJwtTemporalClaimsValid({ iat: now - 10, exp: now + 60, nbf: now }, now), true);
+});
+
+Deno.test("JWT temporal claims reject invalid, expired and future claims", () => {
+  const now = 1_700_000_000;
+  assertEquals(areJwtTemporalClaimsValid({ exp: now + 60 }, now), false);
+  assertEquals(areJwtTemporalClaimsValid({ iat: now - 10, exp: now }, now), false);
+  assertEquals(areJwtTemporalClaimsValid({ iat: now - 10, exp: now - 1 }, now), false);
+  assertEquals(areJwtTemporalClaimsValid({ iat: now + 61, exp: now + 120 }, now), false);
+  assertEquals(areJwtTemporalClaimsValid({ iat: now - 10, exp: now + 60, nbf: "later" }, now), false);
+  assertEquals(areJwtTemporalClaimsValid({ iat: now - 10, exp: now + 60, nbf: now + 1 }, now), false);
+  assertEquals(areJwtTemporalClaimsValid({ iat: Number.NaN, exp: now + 60 }, now), false);
+  assertEquals(areJwtTemporalClaimsValid({ iat: now - 10, exp: Number.POSITIVE_INFINITY }, now), false);
 });
