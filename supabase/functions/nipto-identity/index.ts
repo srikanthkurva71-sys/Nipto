@@ -944,7 +944,8 @@ async function handleRoute(request: Request): Promise<Response> {
     const input = await requestBody(request);
     const challengeId = String(input.challenge_id ?? "");
     const challengeSecret = String(input.challenge_secret ?? "");
-    if (!/^[0-9a-f-]{36}$/i.test(challengeId) || !/^[A-Za-z0-9_-]{43}$/.test(challengeSecret)) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(challengeId)
+      || !/^[A-Za-z0-9_-]{43}$/.test(challengeSecret)) {
       throw new ApiError("Invalid recovery request.", 400);
     }
     await enforceRateLimit(request, "recovery-claim:" + challengeId);
