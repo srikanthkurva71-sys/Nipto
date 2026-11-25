@@ -107,20 +107,32 @@ class _ChatsScreenState extends State<ChatsScreen> {
       }
     }
 
-    final latestMessages = await _client
-        .from('messages')
-        .select('conversation_id, body, message_type, sender_id, created_at, deleted_at, media_path')
-        .inFilter('conversation_id', ids)
-        .order('created_at', ascending: false)
-        .limit(ids.length * 4);
-
+    // A fixed multiplier (e.g. 4 messages per conversation) can omit a
+    // conversation's newest message when a few chats are very active. Page
+    // through the globally ordered stream until every conversation has its
+    // newest row, or the server returns no more rows.
     final lastByConversation = <String, Map<String, dynamic>>{};
-    for (final message in latestMessages as List) {
-      final conversationId = message['conversation_id'] as String;
-      lastByConversation.putIfAbsent(
-        conversationId,
-        () => Map<String, dynamic>.from(message),
-      );
+    const messagePageSize = 100;
+    var messageOffset = 0;
+    while (lastByConversation.length < ids.length) {
+      final page = await _client
+          .from('messages')
+          .select('conversation_id, body, message_type, sender_id, created_at, deleted_at, media_path')
+          .inFilter('conversation_id', ids)
+          .order('created_at', ascending: false)
+          .range(messageOffset, messageOffset + messagePageSize - 1);
+      final rows = page as List;
+      if (rows.isEmpty) break;
+      for (final message in rows) {
+        final conversationId = message['conversation_id'] as String;
+        lastByConversation.putIfAbsent(
+          conversationId,
+          () => Map<String, dynamic>.from(message),
+        );
+      }
+      if (lastByConversation.length >= ids.length) break;
+      messageOffset += rows.length;
+      if (rows.length < messagePageSize) break;
     }
 
     return (conversations as List).where((raw) {
