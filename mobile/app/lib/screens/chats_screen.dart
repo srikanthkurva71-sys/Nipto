@@ -107,18 +107,20 @@ class _ChatsScreenState extends State<ChatsScreen> {
       }
     }
 
-    // A fixed multiplier (e.g. 4 messages per conversation) can omit a
-    // conversation's newest message when a few chats are very active. Page
-    // through the globally ordered stream until every conversation has its
-    // newest row, or the server returns no more rows.
+    // Only fetch previews for the conversations returned by this inbox page.
+    // A fixed multiplier can miss the newest message in quieter chats; paging
+    // the globally ordered stream avoids that while keeping the query bounded.
+    final previewConversationIds = (conversations as List)
+        .map((row) => row['id'] as String)
+        .toSet();
     final lastByConversation = <String, Map<String, dynamic>>{};
     const messagePageSize = 100;
     var messageOffset = 0;
-    while (lastByConversation.length < ids.length) {
+    while (lastByConversation.length < previewConversationIds.length) {
       final page = await _client
           .from('messages')
           .select('conversation_id, body, message_type, sender_id, created_at, deleted_at, media_path')
-          .inFilter('conversation_id', ids)
+          .inFilter('conversation_id', previewConversationIds.toList())
           .order('created_at', ascending: false)
           .range(messageOffset, messageOffset + messagePageSize - 1);
       final rows = page as List;
@@ -130,7 +132,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
           () => Map<String, dynamic>.from(message),
         );
       }
-      if (lastByConversation.length >= ids.length) break;
+      if (lastByConversation.length >= previewConversationIds.length) break;
       messageOffset += rows.length;
       if (rows.length < messagePageSize) break;
     }
