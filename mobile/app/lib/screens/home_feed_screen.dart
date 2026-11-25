@@ -109,6 +109,51 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
     } finally { if (mounted) setState(() => _busyLikes.remove(id)); }
   }
 
+  Future<void> _reportPost(Map<String, dynamic> post) async {
+    final userId = NiptoSessionManager.instance.userId;
+    final authorId = post['author_id'] as String?;
+    if (userId == null || authorId == null || authorId == userId) return;
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: const Text('Report this post'),
+        children: [
+          for (final option in const [
+            ('spam', 'Spam or misleading'),
+            ('harassment', 'Harassment or bullying'),
+            ('hate', 'Hateful content'),
+            ('unsafe_content', 'Unsafe content'),
+            ('other', 'Something else'),
+          ])
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialogContext, option.$1),
+              child: Text(option.$2),
+            ),
+        ],
+      ),
+    );
+    if (reason == null || !mounted) return;
+    try {
+      await _client.from('user_reports').insert({
+        'reporter_id': userId,
+        'reported_user_id': authorId,
+        'reason': reason,
+        'content_type': 'post',
+        'content_id': post['id'],
+        'details': 'Report submitted from Nipto feed.',
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Thank you. Your report has been submitted.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Your report could not be submitted. Please try again.')),
+      );
+    }
+  }
+
   Future<void> _showComments(Map<String, dynamic> post) async {
     await showModalBottomSheet<void>(
       context: context, isScrollControlled: true, showDragHandle: true,
@@ -194,6 +239,7 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
                                 timeAgo: _timeAgo(post['created_at'] as String?),
                                 onLike: () => _toggleLike(post),
                                 onComments: () => _showComments(post),
+                                onReport: () => _reportPost(post),
                               );
                             },
                           ),
@@ -208,11 +254,12 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
 }
 
 class _FeedPostCard extends StatefulWidget {
-  const _FeedPostCard({super.key, required this.post, required this.timeAgo, required this.onLike, required this.onComments});
+  const _FeedPostCard({super.key, required this.post, required this.timeAgo, required this.onLike, required this.onComments, required this.onReport});
   final Map<String, dynamic> post;
   final String timeAgo;
   final VoidCallback onLike;
   final VoidCallback onComments;
+  final VoidCallback onReport;
   @override
   State<_FeedPostCard> createState() => _FeedPostCardState();
 }
@@ -253,7 +300,25 @@ class _FeedPostCardState extends State<_FeedPostCard> {
             Text(name, style: const TextStyle(fontWeight: FontWeight.w800)),
             Text('@$handle · ${widget.timeAgo}', style: const TextStyle(color: NiptoColors.muted, fontSize: 11)),
           ])),
-          const Icon(Icons.more_horiz_rounded, color: NiptoColors.muted),
+          PopupMenuButton<String>(
+            tooltip: 'Post options',
+            icon: const Icon(Icons.more_horiz_rounded, color: NiptoColors.muted),
+            onSelected: (action) {
+              if (action == 'report') widget.onReport();
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem<String>(
+                value: 'report',
+                child: Row(
+                  children: [
+                    Icon(Icons.flag_outlined, color: NiptoColors.danger),
+                    SizedBox(width: 10),
+                    Text('Report post'),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ]),
       ),
       FutureBuilder<String>(
