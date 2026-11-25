@@ -179,7 +179,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
       });
     } catch (_) {
       if (!mounted) return;
-      _controller.text = text;
+      // Keep any text the user typed while the request was in flight. Restoring
+      // the failed message by replacing the controller would silently discard it.
+      final currentDraft = _controller.text;
+      _controller.text = currentDraft.trim().isEmpty
+          ? text
+          : text + '\n' + currentDraft;
+      _controller.selection = TextSelection.collapsed(
+        offset: _controller.text.length,
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Message not sent. Please try again.')),
       );
