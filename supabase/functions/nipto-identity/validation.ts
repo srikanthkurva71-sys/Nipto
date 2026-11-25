@@ -12,7 +12,7 @@ const RESERVED_IDS = new Set([
 /** Accept only a single well-formed Bearer token and normalize the scheme casing. */
 export function normalizeBearerAuthorization(value: unknown): string | null {
   if (typeof value !== "string" || value.length > 16_500) return null;
-  const match = /^Bearer ([A-Za-z0-9._-]{1,16_384})$/i.exec(value);
+  const match = /^Bearer ([A-Za-z0-9._-]{1,16384})$/i.exec(value);
   return match ? "Bearer " + match[1] : null;
 }
 
