@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { argon2id, argon2Verify } from "npm:hash-wasm@4.13.0";
-import { areJwtTemporalClaimsValid, isAllowedOidcScope, isValidNiptoId, isValidPassword, passwordsMatch } from "./validation.ts";
+import { areJwtTemporalClaimsValid, isCanonicalUuid, isAllowedOidcScope, isValidNiptoId, isValidPassword, passwordsMatch } from "./validation.ts";
 import { FormBodyError, readUrlEncodedForm } from "./form_body.ts";
 
 type Json = Record<string, unknown>;
@@ -337,7 +337,7 @@ async function authenticatedUserId(request: Request): Promise<string> {
   });
   if (!response.ok) throw new ApiError("Sign in to continue", 401);
   const userId = await response.json();
-  if (typeof userId !== "string" || !/^[0-9a-f-]{36}$/i.test(userId)) {
+  if (!isCanonicalUuid(userId)) {
     throw new ApiError("Sign in to continue", 401);
   }
   return userId;
