@@ -380,6 +380,12 @@ class _PostCommentsSheetState extends State<_PostCommentsSheet> {
     setState(() => _editingCommentId = comment['id'] as String);
   }
 
+
+  void _cancelCommentEdit() {
+    _text.clear();
+    setState(() => _editingCommentId = null);
+  }
+
   Future<void> _deleteComment(String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -464,7 +470,9 @@ class _PostCommentsSheetState extends State<_PostCommentsSheet> {
         Row(children: [
           Expanded(child: TextField(controller: _text, maxLength: 2000, maxLines: 2, decoration: InputDecoration(hintText: _editingCommentId == null ? 'Write a comment…' : 'Edit your comment…', counterText: ''))),
           const SizedBox(width: 8),
-          IconButton.filled(onPressed: _sending ? null : _send, icon: _sending ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.arrow_upward_rounded)),
+          if (_editingCommentId != null)
+            IconButton(tooltip: 'Cancel edit', onPressed: _sending ? null : _cancelCommentEdit, icon: const Icon(Icons.close_rounded)),
+          IconButton.filled(onPressed: _sending ? null : _send, icon: _sending ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : Icon(_editingCommentId == null ? Icons.arrow_upward_rounded : Icons.check_rounded)),
         ]),
       ])),
     ));
