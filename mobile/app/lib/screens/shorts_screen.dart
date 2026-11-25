@@ -130,6 +130,8 @@ class _ShortsScreenState extends State<ShortsScreen> {
 
     setState(() => _uploading = true);
     VideoPlayerController? preview;
+    String? uploadedPath;
+    var uploaded = false;
     try {
       preview = VideoPlayerController.file(File(file.path));
       await preview.initialize();
@@ -142,11 +144,13 @@ class _ShortsScreenState extends State<ShortsScreen> {
 
       final userId = NiptoSessionManager.instance.userId!;
       final path = userId + '/' + DateTime.now().microsecondsSinceEpoch.toString() + '.mp4';
+      uploadedPath = path;
       await _client.storage.from('shorts').upload(
         path,
         File(file.path),
         fileOptions: const FileOptions(contentType: 'video/mp4', upsert: false),
       );
+      uploaded = true;
       await _client.from('shorts').insert({
         'creator_id': userId,
         'video_path': path,
@@ -165,6 +169,13 @@ class _ShortsScreenState extends State<ShortsScreen> {
         SnackBar(content: Text(error.message)),
       );
     } catch (_) {
+      if (uploaded && uploadedPath != null) {
+        try {
+          await _client.storage.from('shorts').remove([uploadedPath]);
+        } catch (_) {
+          // The private object remains inaccessible; cleanup can retry later.
+        }
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Short upload failed. Please try again.')),
