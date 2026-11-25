@@ -487,6 +487,14 @@ class _FeedVideoPlayerState extends State<_FeedVideoPlayer>
   bool _failed = false;
   bool _playing = false;
 
+  void _syncPlaybackState() {
+    final controller = _controller;
+    if (!mounted || controller == null) return;
+    final playing = controller.value.isPlaying;
+    if (playing != _playing) setState(() => _playing = playing);
+  }
+
+
   @override
   void initState() {
     super.initState();
@@ -500,6 +508,7 @@ class _FeedVideoPlayerState extends State<_FeedVideoPlayer>
       _controller = controller;
       await controller.initialize();
       await controller.setLooping(false);
+      controller.addListener(_syncPlaybackState);
       if (mounted) setState(() => _loading = false);
     } catch (_) {
       if (mounted) setState(() {
@@ -521,7 +530,7 @@ class _FeedVideoPlayerState extends State<_FeedVideoPlayer>
         }
         await controller.play();
       }
-      if (mounted) setState(() => _playing = controller.value.isPlaying);
+      _syncPlaybackState();
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -541,6 +550,7 @@ class _FeedVideoPlayerState extends State<_FeedVideoPlayer>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _controller?.removeListener(_syncPlaybackState);
     _controller?.dispose();
     super.dispose();
   }
