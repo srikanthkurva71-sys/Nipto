@@ -2,6 +2,7 @@ import { assertEquals } from "jsr:@std/assert@1.0.14";
 import {
   areJwtTemporalClaimsValid,
   isCanonicalUuid,
+  normalizeBearerAuthorization,
   isAllowedOidcScope,
   isRecoveryChallengeFresh,
   isValidNiptoId,
@@ -197,4 +198,17 @@ Deno.test("canonical UUID validator rejects malformed strings and invalid varian
   assertEquals(isCanonicalUuid("550e8400e29b41d4a716446655440000"), false);
   assertEquals(isCanonicalUuid("550e8400-e29b-01d4-a716-446655440000"), false);
   assertEquals(isCanonicalUuid("550e8400-e29b-41d4-c716-446655440000"), false);
+});
+
+Deno.test("Bearer authorization parser accepts one well-formed token", () => {
+  assertEquals(normalizeBearerAuthorization("Bearer abc.def-ghi_xyz"), "Bearer abc.def-ghi_xyz");
+  assertEquals(normalizeBearerAuthorization("bearer token"), "Bearer token");
+});
+
+Deno.test("Bearer authorization parser rejects malformed headers", () => {
+  for (const value of [
+    null, undefined, 42, "", "Basic abc", "Bearer", "Bearer token extra",
+    "Bearer token\n", " Bearer token", "Bearer token with spaces",
+  ]) assertEquals(normalizeBearerAuthorization(value), null);
+  assertEquals(normalizeBearerAuthorization("Bearer " + "x".repeat(16_385)), null);
 });
