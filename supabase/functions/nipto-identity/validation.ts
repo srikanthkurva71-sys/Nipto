@@ -9,6 +9,26 @@ const RESERVED_IDS = new Set([
   "nipto_app", "nipto_api", "nipto_bot",
 ]);
 
+/** Validates JWT temporal claims with bounded clock-skew tolerance. */
+export function areJwtTemporalClaimsValid(
+  claims: Record<string, unknown>,
+  nowSeconds: number,
+  clockSkewSeconds = 60,
+): boolean {
+  if (!Number.isFinite(nowSeconds) || !Number.isFinite(clockSkewSeconds) || clockSkewSeconds < 0) return false;
+  const issuedAt = claims.iat;
+  const expiresAt = claims.exp;
+  if (typeof issuedAt !== "number" || !Number.isFinite(issuedAt)
+    || typeof expiresAt !== "number" || !Number.isFinite(expiresAt)
+    || issuedAt > nowSeconds + clockSkewSeconds
+    || expiresAt <= nowSeconds || expiresAt <= issuedAt) return false;
+  if (Object.prototype.hasOwnProperty.call(claims, "nbf")) {
+    const notBefore = claims.nbf;
+    if (typeof notBefore !== "number" || !Number.isFinite(notBefore) || notBefore > nowSeconds) return false;
+  }
+  return true;
+}
+
 /** Canonicalize user-entered Nipto handles consistently before lookup. */
 export function normalizeNiptoId(value: string): string {
   return value.trim().replace(/^@/, "").toLowerCase();
