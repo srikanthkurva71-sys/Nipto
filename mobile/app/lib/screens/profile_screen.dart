@@ -217,16 +217,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final userId = NiptoSessionManager.instance.userId;
     if (userId == null) return;
-    final path = userId + '/avatar.' + extension;
+    // Use a new object key for every avatar so clients never reuse a stale cached image.
+    final path = userId + '/avatar_' + DateTime.now().microsecondsSinceEpoch.toString() + '.' + extension;
+    var uploaded = false;
     try {
       await _client.storage.from('avatars').upload(
         path,
         File(file.path),
-        fileOptions: FileOptions(contentType: contentType, upsert: true),
+        fileOptions: FileOptions(contentType: contentType, upsert: false),
       );
+      uploaded = true;
       await _client.from('profiles').update({'avatar_path': path}).eq('id', userId);
       if (mounted) setState(() => _profile = _loadProfile());
     } catch (_) {
+      if (uploaded) {
+        try {
+          await _client.storage.from('avatars').remove([path]);
+        } catch (_) {
+          // Cleanup is best-effort; the new object is not referenced by the profile.
+        }
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profile photo could not be updated.')),
