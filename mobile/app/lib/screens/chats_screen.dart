@@ -416,7 +416,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: RefreshIndicator(
-        onRefresh: () async => setState(() => _inbox = _loadInbox()),
+        onRefresh: () async {
+          final refreshed = _loadInbox();
+          setState(() => _inbox = refreshed);
+          await refreshed;
+        },
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
