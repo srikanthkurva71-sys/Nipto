@@ -71,7 +71,9 @@ class _HomeFeedScreenState extends State<HomeFeedScreen> {
       if (!mounted || generation != _feedGeneration) return;
       setState(() {
         final existingIds = _posts.map((post) => post['id']).toSet();
-        _posts.addAll(rows.where((post) => !existingIds.contains(post['id'])));
+        for (final post in rows) {
+          if (existingIds.add(post['id'])) _posts.add(post);
+        }
         _hasMore = rows.length == 20;
       });
     } catch (_) {
