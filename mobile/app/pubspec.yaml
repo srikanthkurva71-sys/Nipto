@@ -24,6 +24,14 @@ dependencies:
   flutter_secure_storage: ^10.0.0
   # Non-secret local PKCE metadata.
   shared_preferences: ^2.5.4
+  # Firebase Cloud Messaging push registration and delivery.
+  firebase_core: ^5.2.0
+  firebase_messaging: ^17.1.0
+  # Foreground notification display for FCM messages received while open.
+  # Pin below 23: v23 raises compileSdk to 37, while the app targets SDK 36.
+  flutter_local_notifications: ^22.3.3
+  # Opening external privacy/policy links from settings.
+  url_launcher: ^6.3.3
 
 # Test and lint tooling only; never imported by production app code.
 dev_dependencies:

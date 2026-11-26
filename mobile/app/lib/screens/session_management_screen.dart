@@ -7,7 +7,8 @@ class SessionManagementScreen extends StatefulWidget {
   const SessionManagementScreen({super.key});
 
   @override
-  State<SessionManagementScreen> createState() => _SessionManagementScreenState();
+  State<SessionManagementScreen> createState() =>
+      _SessionManagementScreenState();
 }
 
 class _SessionManagementScreenState extends State<SessionManagementScreen> {
@@ -28,11 +29,16 @@ class _SessionManagementScreenState extends State<SessionManagementScreen> {
   Future<void> _revoke(Map<String, dynamic> session) async {
     final id = session['session_id'] as String?;
     if (id == null || _busy) return;
-    final isCurrent = id == NiptoSessionManager.instance.currentSession?.sessionId;
+    final isCurrent =
+        id == NiptoSessionManager.instance.currentSession?.sessionId;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(isCurrent ? 'Sign out this device?' : 'Sign out this device remotely?'),
+        title: Text(
+          isCurrent
+              ? 'Sign out this device?'
+              : 'Sign out this device remotely?',
+        ),
         content: Text(
           isCurrent
               ? 'You will need your Nipto ID and password to sign in again.'
@@ -61,9 +67,9 @@ class _SessionManagementScreenState extends State<SessionManagementScreen> {
         return;
       }
       setState(() => _sessions = NiptoSessionManager.instance.listSessions());
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Session revoked.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Session revoked.')));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -114,7 +120,11 @@ class _SessionManagementScreenState extends State<SessionManagementScreen> {
               return ListView(
                 children: const [
                   SizedBox(height: 100),
-                  Icon(Icons.devices_outlined, size: 48, color: NiptoColors.muted),
+                  Icon(
+                    Icons.devices_outlined,
+                    size: 48,
+                    color: NiptoColors.muted,
+                  ),
                   SizedBox(height: 12),
                   Center(child: Text('No active sessions found.')),
                 ],
@@ -131,12 +141,17 @@ class _SessionManagementScreenState extends State<SessionManagementScreen> {
                 ...sessions.map((session) {
                   final id = session['session_id'] as String?;
                   final isCurrent = id != null && id == currentId;
-                  final label = session['device_label'] as String? ?? 'Nipto device';
+                  final label =
+                      session['device_label'] as String? ?? 'Nipto device';
                   return Card(
                     child: ListTile(
                       leading: Icon(
-                        isCurrent ? Icons.phone_android_rounded : Icons.devices_other_rounded,
-                        color: isCurrent ? NiptoColors.violet : NiptoColors.muted,
+                        isCurrent
+                            ? Icons.phone_android_rounded
+                            : Icons.devices_other_rounded,
+                        color: isCurrent
+                            ? NiptoColors.violet
+                            : NiptoColors.muted,
                       ),
                       title: Text(isCurrent ? '$label · This device' : label),
                       subtitle: Text(

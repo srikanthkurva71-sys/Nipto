@@ -28,7 +28,9 @@ This repository is the first implementation of Nipto Social. The former ride-hai
 | Database | Supabase PostgreSQL |
 | Authorization | PostgreSQL Row Level Security |
 | Live messaging | Supabase Realtime |
-| Media | Private Supabase Storage buckets |
+| Media | Private Supabase Storage buckets with server-side magic-byte validation and staff review |
+| Push | FCM HTTP v1 via a secret-protected dispatcher and a durable outbox; client-only Firebase identifiers |
+| Privacy | Authenticated export/deletion requests with a secret-protected fulfillment worker |
 | Server-side logic | Supabase Edge Functions |
 
 Connected Supabase project: Nipto  
@@ -89,7 +91,7 @@ Nipto v1 is an Android app, not a web product. Use an Android emulator or physic
 
 ## Supabase state
 
-The connected Supabase project has the social schema and the Nipto native-auth database migrations applied. The retired `nipto-login` endpoint has been removed from this repository and undeployed from the project; `nipto-identity` is the only active Edge Function. The `custom:nipto` OIDC provider is enabled with `email_optional=true`, scopes `openid profile`, and `custom_claims_allowlist=["nipto_id","display_name"]`. Discovery, JWKS, native authorization, Supabase callback, PKCE token exchange and authenticated user lookup have all returned successful responses in a live protocol probe. Device-level Flutter validation remains outstanding.
+The connected Supabase project has the social schema and the Nipto native-auth database migrations applied. The retired `nipto-login` endpoint has been removed from this repository and undeployed from the project. The active Edge Functions are `nipto-identity` (v8), `nipto-push-dispatch` (v2), `nipto-media` (v2) and `nipto-privacy` (v2); media uses JWT verification while the identity, push and privacy functions self-verify their custom routes. The `custom:nipto` OIDC provider is enabled with `email_optional=true`, scopes `openid profile`, and `custom_claims_allowlist=["nipto_id","display_name"]`. Discovery, JWKS, native authorization, Supabase callback, PKCE token exchange and authenticated user lookup have all returned successful responses in a live protocol probe. Device-level Flutter validation remains outstanding.
 
 **Authentication status:** The Nipto identity Edge Function is deployed with its OIDC client/signing secrets configured server-side, and the Supabase `custom:nipto` OIDC provider is enabled. The primary app buttons now open native Nipto ID/password forms that complete the real OIDC/PKCE session bridge; browser OIDC sign-in is only a fallback. The identity model is Nipto ID + password only, with no email or phone required. A recovery Nipto account is optional and is linked only after sign-in in Settings, with approval from the other account owner. A live protocol probe created a real account, exchanged a PKCE code for a Supabase session, verified a `custom:nipto` identity with empty email, and then removed the probe identity. Refresh, recovery, deep-link restoration, and the Flutter forms on a physical device still require end-to-end validation. See `docs/NIPTO_NATIVE_AUTH_DESIGN.md` and `docs/NIPTO_OIDC_DEPLOYMENT.md`. Do not present Nipto sign-in as production-ready until those device gates pass.
 
@@ -97,21 +99,46 @@ The connected Supabase project has the social schema and the Nipto native-auth d
 
 The repository contains a Flutter Android app and a Supabase-backed social schema. Implemented app areas include profile editing and avatar uploads, photo posts, Nipto ID discovery and follow requests, direct/group conversations, text messages and basic media attachments, 24-hour statuses with viewer lists and Close Friends controls, Shorts upload/feed interactions, Home feed, in-app notifications, privacy controls, blocking/reporting, and private feedback intake/history. The Nipto identity branch now contains the Nipto ID/password UI, encrypted session manager, ES256 JWT issuer/JWKS, existing-session migration bridge, optional recovery Nipto account flow, one-time password reset grants, device-session management, and self-hosted TURN credential issuance. The authentication issuer and provider are deployed/configured and the protocol-level registration → PKCE → session flow is verified; the Flutter forms, calling, and recovery flows remain unverified end to end and are not production-validated. Other app areas still require deeper end-to-end, device, moderation, and performance validation.
 
+Push delivery is implemented with an outbox, service-role-only dispatch RPCs, a real FCM HTTP v1 dispatcher and a client service that registers/unregisters tokens around the genuine session lifecycle. Media uploads are validated server-side with magic-byte and size checks; unresolved images wait for human review and videos wait for processing, with no fabricated scanner verdict. Privacy export/deletion requests, cancellation, retention, attribution anonymization and hard auth-user deletion are implemented and their migrations/functions are live. Firebase credentials, worker secrets, schedules, scanner/processor integration and real-device runs are still outstanding, so these areas are not production-validated.
+
 The feedback subsystem is separate from abuse reports. Signed-in users can submit app-experience ratings, bug reports, feature ideas or support requests and view their own submission status. Feedback is protected by RLS and limited to five submissions per account per 24 hours. A trusted staff-role backend, moderation queues, audit logging and user response notifications are implemented. A role-gated staff console for feedback, reports and content review is implemented, including private signed media previews. Formatting, static analysis, unit/widget tests and Android debug APK CI have passed. Production staff-session acceptance testing remains an operational gate.
 
 All public application tables currently have Row Level Security enabled. Anonymous table privileges were revoked and client writes were narrowed. Authenticated application and moderation SECURITY DEFINER RPCs are explicitly granted to signed-in users and validate access server-side; private policy helpers and staff tables are not client-readable. The Supabase advisor continues to report these authenticated RPCs for manual review.
 
 GitHub Actions generates the Android platform project, then runs Dart formatting, static analysis, tests and an Android debug APK build. The resulting `nipto-android-debug` APK is available as a workflow artifact. A passing CI run proves that the checked commit builds; it does not prove complete device-level or production readiness.
 
+## Backend operations
+
+Deployed workers and their setup are documented in:
+
+- [Push delivery](docs/PUSH_DELIVERY.md) — Firebase Android app, build-time
+  client identifiers, service-account JSON, `CRON_SECRET`, dispatcher invocation
+  and device verification checklist.
+- [Media and privacy operations](docs/MEDIA_PRIVACY_OPERATIONS.md) — media
+  inspection, staff review, service-role cleanup, privacy export/deletion worker,
+  retention windows and verification checklist.
+
+`CRON_SECRET` protects both the push dispatcher and the privacy worker. Run the
+schedulers only from trusted server-side environments; no worker secret, service
+account or service-role key is ever embedded in Flutter or committed to Git.
+
 ## Remaining production gates
 
 - Verify the latest commit's full CI run and test critical flows on physical Android devices.
 - Verify the new `flutter_secure_storage` adapters for Supabase sessions and PKCE verifiers on supported Android versions, including OAuth callback restoration after app restart.
 - Verify the native Flutter forms end to end on Android: registration, login, authorization-code/PKCE exchange, no-email user provisioning, refresh, logout, account migration and recovery. Verify deep-link restoration after app restart before production cutover. The equivalent protocol-level checks already passed; see `docs/NIPTO_OIDC_DEPLOYMENT.md` for the exact sequence.
-- Implement push delivery and notification routing.
-- Implement video scanning/transcoding, thumbnails and resilient upload processing.
-- Build the role-gated staff console for an appropriately staffed adult operations team; the staff backend, audit log, review RPCs and user notifications are already provisioned.
-- Complete account deletion, data export and retention workflows.
+- Supply Firebase/Android credentials and `CRON_SECRET`, schedule the push and
+  privacy workers, and verify real FCM delivery, tap routing, deep-link
+  restoration and refresh/logout lifecycle on a physical Android device.
+- Connect a real media scanner/processor or continue human review only; verify
+  magic-byte rejection, thumbnails when present, staff overrides and cleanup
+  scheduling. No synthetic verdict is acceptable.
+- Operate the role-gated staff console with an appropriately staffed adult
+  operations team; the staff backend, audit log, review RPCs and user
+  notifications are already provisioned.
+- Run privacy export/deletion requests end to end, including the 14-day
+  cancellation window, 7-day export TTL, attribution anonymization and final
+  auth-user deletion.
 - `20261126115641_nipto_least_privilege_hardening.sql` and `20261126122909_nipto_oidc_custom_claims_provisioning.sql` are applied to the connected project. These filenames match the versions recorded by Supabase; the hardening migration was originally authored as `20261126160836_nipto_least_privilege_hardening.sql`, and the remote row retains that descriptive name. Add automated multi-user RLS/storage tests, accessibility checks, performance tests and independent security review.
 - Verify generated launcher and splash artwork on physical devices and different Android launchers; the official logo PNG is bundled and used by in-app branding, launcher icons and native splash.
 - Configure release signing, Play Console compliance and a production AAB.

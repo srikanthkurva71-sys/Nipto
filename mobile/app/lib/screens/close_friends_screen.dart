@@ -64,7 +64,11 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not update your Close Friends list. Please try again.')),
+        const SnackBar(
+          content: Text(
+            'Could not update your Close Friends list. Please try again.',
+          ),
+        ),
       );
     } finally {
       _busy.remove(friendId);
@@ -101,12 +105,16 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
             );
           }
           final people = snapshot.data ?? [];
-          final selectedCount = people.where((person) => person['is_close_friend'] == true).length;
+          final selectedCount = people
+              .where((person) => person['is_close_friend'] == true)
+              .length;
           if (people.isEmpty) {
             return const Center(
               child: Padding(
                 padding: EdgeInsets.all(28),
-                child: Text('Follow people to add them to your Close Friends list.'),
+                child: Text(
+                  'Follow people to add them to your Close Friends list.',
+                ),
               ),
             );
           }
@@ -129,10 +137,12 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
                   child: ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
                     itemCount: people.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1, indent: 64),
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1, indent: 64),
                     itemBuilder: (context, index) {
                       final person = people[index];
-                      final name = person['display_name'] as String? ?? 'Nipto member';
+                      final name =
+                          person['display_name'] as String? ?? 'Nipto member';
                       final handle = person['nipto_id'] as String? ?? '';
                       final id = person['user_id'] as String;
                       final selected = person['is_close_friend'] == true;
@@ -140,20 +150,37 @@ class _CloseFriendsScreenState extends State<CloseFriendsScreen> {
                         leading: CircleAvatar(
                           backgroundColor: NiptoColors.violetSoft,
                           child: Text(
-                            name.isEmpty ? 'N' : name.substring(0, 1).toUpperCase(),
-                            style: const TextStyle(color: NiptoColors.violet, fontWeight: FontWeight.w800),
+                            name.isEmpty
+                                ? 'N'
+                                : name.substring(0, 1).toUpperCase(),
+                            style: const TextStyle(
+                              color: NiptoColors.violet,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
                         title: Text(name),
                         subtitle: Text('@$handle'),
                         trailing: _busy.contains(id)
-                            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
                             : IconButton(
-                                tooltip: selected ? 'Remove from Close Friends' : 'Add to Close Friends',
+                                tooltip: selected
+                                    ? 'Remove from Close Friends'
+                                    : 'Add to Close Friends',
                                 onPressed: () => _toggle(person),
                                 icon: Icon(
-                                  selected ? Icons.check_circle_rounded : Icons.add_circle_outline_rounded,
-                                  color: selected ? NiptoColors.violet : NiptoColors.muted,
+                                  selected
+                                      ? Icons.check_circle_rounded
+                                      : Icons.add_circle_outline_rounded,
+                                  color: selected
+                                      ? NiptoColors.violet
+                                      : NiptoColors.muted,
                                 ),
                               ),
                       );

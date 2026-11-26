@@ -36,10 +36,7 @@ class _GroupCreateScreenState extends State<GroupCreateScreen> {
 
   void _scheduleSearch(String value) {
     _debounce?.cancel();
-    _debounce = Timer(
-      const Duration(milliseconds: 300),
-      () => _search(value),
-    );
+    _debounce = Timer(const Duration(milliseconds: 300), () => _search(value));
   }
 
   Future<void> _search(String value) async {
@@ -89,7 +86,9 @@ class _GroupCreateScreenState extends State<GroupCreateScreen> {
     }
     if (_selected.length >= 49) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('A group can have up to 50 people, including you.')),
+        const SnackBar(
+          content: Text('A group can have up to 50 people, including you.'),
+        ),
       );
       return;
     }
@@ -100,7 +99,9 @@ class _GroupCreateScreenState extends State<GroupCreateScreen> {
     final title = _titleController.text.trim();
     if (title.isEmpty || title.length > 80) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a group name between 1 and 80 characters.')),
+        const SnackBar(
+          content: Text('Enter a group name between 1 and 80 characters.'),
+        ),
       );
       return;
     }
@@ -115,10 +116,7 @@ class _GroupCreateScreenState extends State<GroupCreateScreen> {
     try {
       final result = await _client.rpc(
         'create_group_conversation',
-        params: {
-          'p_title': title,
-          'p_member_ids': _selected.keys.toList(),
-        },
+        params: {'p_title': title, 'p_member_ids': _selected.keys.toList()},
       );
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
@@ -133,7 +131,11 @@ class _GroupCreateScreenState extends State<GroupCreateScreen> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('The group could not be created. Check the selected accounts and try again.')),
+        const SnackBar(
+          content: Text(
+            'The group could not be created. Check the selected accounts and try again.',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _creating = false);
@@ -144,7 +146,8 @@ class _GroupCreateScreenState extends State<GroupCreateScreen> {
     final parts = value.trim().split(RegExp(r'\s+'));
     if (parts.isEmpty || parts.first.isEmpty) return 'N';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+        .toUpperCase();
   }
 
   @override
@@ -200,45 +203,58 @@ class _GroupCreateScreenState extends State<GroupCreateScreen> {
             child: _searching
                 ? const Center(child: CircularProgressIndicator())
                 : _error != null
-                    ? Center(child: Text(_error!, style: const TextStyle(color: NiptoColors.danger)))
-                    : _results.isEmpty
-                        ? const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(28),
-                              child: Text(
-                                'Search for people, then select who to invite.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(color: NiptoColors.muted),
-                              ),
+                ? Center(
+                    child: Text(
+                      _error!,
+                      style: const TextStyle(color: NiptoColors.danger),
+                    ),
+                  )
+                : _results.isEmpty
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(28),
+                      child: Text(
+                        'Search for people, then select who to invite.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: NiptoColors.muted),
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _results.length,
+                    separatorBuilder: (_, __) =>
+                        const Divider(height: 1, indent: 60),
+                    itemBuilder: (context, index) {
+                      final profile = _results[index];
+                      final id = profile['id'] as String;
+                      final name =
+                          profile['display_name'] as String? ?? 'Nipto member';
+                      final handle = profile['nipto_id'] as String? ?? '';
+                      final selected = _selected.containsKey(id);
+                      return CheckboxListTile(
+                        value: selected,
+                        onChanged: (_) => _toggle(profile),
+                        controlAffinity: ListTileControlAffinity.trailing,
+                        secondary: CircleAvatar(
+                          backgroundColor: NiptoColors.violetSoft,
+                          child: Text(
+                            _initials(name),
+                            style: const TextStyle(
+                              color: NiptoColors.violet,
+                              fontWeight: FontWeight.w800,
                             ),
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            itemCount: _results.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1, indent: 60),
-                            itemBuilder: (context, index) {
-                              final profile = _results[index];
-                              final id = profile['id'] as String;
-                              final name = profile['display_name'] as String? ?? 'Nipto member';
-                              final handle = profile['nipto_id'] as String? ?? '';
-                              final selected = _selected.containsKey(id);
-                              return CheckboxListTile(
-                                value: selected,
-                                onChanged: (_) => _toggle(profile),
-                                controlAffinity: ListTileControlAffinity.trailing,
-                                secondary: CircleAvatar(
-                                  backgroundColor: NiptoColors.violetSoft,
-                                  child: Text(
-                                    _initials(name),
-                                    style: const TextStyle(color: NiptoColors.violet, fontWeight: FontWeight.w800),
-                                  ),
-                                ),
-                                title: Text(name),
-                                subtitle: Text('@$handle', style: const TextStyle(color: NiptoColors.muted)),
-                                activeColor: NiptoColors.violet,
-                              );
-                            },
                           ),
+                        ),
+                        title: Text(name),
+                        subtitle: Text(
+                          '@$handle',
+                          style: const TextStyle(color: NiptoColors.muted),
+                        ),
+                        activeColor: NiptoColors.violet,
+                      );
+                    },
+                  ),
           ),
           SafeArea(
             top: false,
@@ -250,9 +266,14 @@ class _GroupCreateScreenState extends State<GroupCreateScreen> {
                     ? const SizedBox(
                         height: 20,
                         width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
-                    : Text('Create group (' + _selected.length.toString() + ')'),
+                    : Text(
+                        'Create group (' + _selected.length.toString() + ')',
+                      ),
               ),
             ),
           ),

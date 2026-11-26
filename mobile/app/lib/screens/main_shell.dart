@@ -69,13 +69,17 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   }
 
   Future<void> _pollIncomingCalls() async {
-    if (!mounted || _incomingDialogOpen || _pollingIncomingCalls ||
+    if (!mounted ||
+        _incomingDialogOpen ||
+        _pollingIncomingCalls ||
         NiptoSessionManager.instance.userId == null) {
       return;
     }
     _pollingIncomingCalls = true;
     try {
-      final result = await Supabase.instance.client.rpc('list_my_incoming_calls');
+      final result = await Supabase.instance.client.rpc(
+        'list_my_incoming_calls',
+      );
       final calls = List<Map<String, dynamic>>.from(result as List);
       for (final call in calls) {
         final callId = call['call_id']?.toString();
@@ -88,7 +92,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           barrierDismissible: false,
           builder: (dialogContext) => AlertDialog(
             title: Text(
-              call['media_type'] == 'video' ? 'Incoming video call' : 'Incoming voice call',
+              call['media_type'] == 'video'
+                  ? 'Incoming video call'
+                  : 'Incoming voice call',
             ),
             content: Text(
               (call['caller_display_name'] as String? ?? 'Nipto user') +
@@ -115,7 +121,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 callId: callId,
                 mediaType: call['media_type'] as String? ?? 'audio',
                 isCaller: false,
-                peerTitle: call['caller_display_name'] as String? ?? 'Nipto user',
+                peerTitle:
+                    call['caller_display_name'] as String? ?? 'Nipto user',
               ),
             ),
           );
@@ -153,17 +160,11 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         event: 'signal',
         payload: {'type': 'decline'},
       );
-      await client.rpc(
-        'decline_nipto_call',
-        params: {'p_call_id': callId},
-      );
+      await client.rpc('decline_nipto_call', params: {'p_call_id': callId});
     } catch (_) {
       // The server-side decline remains authoritative even if signaling is offline.
       try {
-        await client.rpc(
-          'decline_nipto_call',
-          params: {'p_call_id': callId},
-        );
+        await client.rpc('decline_nipto_call', params: {'p_call_id': callId});
       } catch (_) {}
     } finally {
       await client.removeChannel(channel);

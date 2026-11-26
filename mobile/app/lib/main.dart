@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'nipto_app.dart';
+import 'services/nipto_push_service.dart';
 import 'services/nipto_secure_auth_storage.dart';
 import 'services/nipto_session_manager.dart';
 
@@ -26,18 +27,21 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final parsedUrl = Uri.tryParse(_supabaseUrl);
-  final validUrl = parsedUrl != null &&
+  final validUrl =
+      parsedUrl != null &&
       parsedUrl.isAbsolute &&
       parsedUrl.scheme == 'https' &&
       parsedUrl.host.isNotEmpty;
   final validKey = _supabasePublishableKey.trim().isNotEmpty;
 
   if (!validUrl || !validKey) {
-    runApp(const _ConfigurationMessage(
-      title: 'Supabase configuration is invalid.',
-      message:
-          'Check SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY in your build configuration.',
-    ));
+    runApp(
+      const _ConfigurationMessage(
+        title: 'Supabase configuration is invalid.',
+        message:
+            'Check SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY in your build configuration.',
+      ),
+    );
     return;
   }
 
@@ -56,15 +60,20 @@ Future<void> main() async {
       _supabaseUrl,
       _supabasePublishableKey,
     );
+    // Firebase/FCM stays disabled unless all NIPTO_FIREBASE_* defines are
+    // supplied. A missing push configuration never blocks normal app startup.
+    await NiptoPushService.instance.initialize();
   } catch (error, stackTrace) {
     // Do not print response bodies, credentials, or tokens to application logs.
     debugPrint('Nipto startup failed (${error.runtimeType}).');
     debugPrintStack(stackTrace: stackTrace);
-    runApp(const _ConfigurationMessage(
-      title: 'Could not start Nipto.',
-      message:
-          'Check your internet connection and try again. If the problem continues, contact Nipto support.',
-    ));
+    runApp(
+      const _ConfigurationMessage(
+        title: 'Could not start Nipto.',
+        message:
+            'Check your internet connection and try again. If the problem continues, contact Nipto support.',
+      ),
+    );
     return;
   }
 
@@ -72,10 +81,7 @@ Future<void> main() async {
 }
 
 class _ConfigurationMessage extends StatelessWidget {
-  const _ConfigurationMessage({
-    required this.title,
-    required this.message,
-  });
+  const _ConfigurationMessage({required this.title, required this.message});
 
   final String title;
   final String message;

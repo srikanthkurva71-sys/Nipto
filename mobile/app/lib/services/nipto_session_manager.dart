@@ -6,11 +6,17 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'nipto_push_service.dart';
 import 'nipto_recovery_challenge_guard.dart';
 import 'nipto_reset_grant_cache_guard.dart';
 
 class NiptoSession {
-  const NiptoSession({required this.userId, required this.niptoId, required this.displayName, required this.sessionId});
+  const NiptoSession({
+    required this.userId,
+    required this.niptoId,
+    required this.displayName,
+    required this.sessionId,
+  });
   final String userId;
   final String niptoId;
   final String displayName;
@@ -36,7 +42,8 @@ class NiptoSessionManager {
   static const _recoveryStartedAtKey = 'nipto.recovery.started_at.v1';
   static const _recoveryNiptoIdKey = 'nipto.recovery.nipto_id.v1';
   static const _resetGrantKey = 'nipto.recovery.reset_grant.v1';
-  static const _resetGrantIssuedAtKey = 'nipto.recovery.reset_grant_issued_at.v1';
+  static const _resetGrantIssuedAtKey =
+      'nipto.recovery.reset_grant_issued_at.v1';
   static const _pendingLinkNiptoIdKey = 'nipto.auth.pending_link_id.v1';
 
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
@@ -48,15 +55,17 @@ class NiptoSessionManager {
   String? _linkedUserId;
 
   SupabaseClient get _client => Supabase.instance.client;
-  Stream<NiptoSession?> get changes => _client.auth.onAuthStateChange.map((event) {
-    final session = event.session;
-    return session == null ? null : _fromSession(session);
-  });
+  Stream<NiptoSession?> get changes =>
+      _client.auth.onAuthStateChange.map((event) {
+        final session = event.session;
+        return session == null ? null : _fromSession(session);
+      });
 
   NiptoSession? get currentSession {
     final session = _client.auth.currentSession;
     return session == null ? null : _fromSession(session);
   }
+
   String? get userId => _client.auth.currentUser?.id;
   bool get isSignedIn => _client.auth.currentSession != null;
 
@@ -64,7 +73,9 @@ class NiptoSessionManager {
     final user = _client.auth.currentUser;
     if (user == null) return false;
     final identities = user.identities ?? [];
-    final hasNiptoIdentity = identities.any((identity) => identity.provider == 'custom:nipto');
+    final hasNiptoIdentity = identities.any(
+      (identity) => identity.provider == 'custom:nipto',
+    );
     return user.email != null || !hasNiptoIdentity;
   }
 
@@ -73,8 +84,16 @@ class NiptoSessionManager {
     final claims = _jwtPayload(session.accessToken);
     return NiptoSession(
       userId: user.id,
-      niptoId: _niptoMetadataValue(user.userMetadata, 'nipto_id', 'preferred_username'),
-      displayName: _niptoMetadataValue(user.userMetadata, 'display_name', 'name'),
+      niptoId: _niptoMetadataValue(
+        user.userMetadata,
+        'nipto_id',
+        'preferred_username',
+      ),
+      displayName: _niptoMetadataValue(
+        user.userMetadata,
+        'display_name',
+        'name',
+      ),
       sessionId: (claims['session_id'] ?? '').toString(),
     );
   }
@@ -88,9 +107,14 @@ class NiptoSessionManager {
   ) {
     if (metadata == null) return '';
     final customClaims = metadata['custom_claims'];
-    final custom = customClaims is Map ? customClaims : const <dynamic, dynamic>{};
-    return (metadata[customKey] ?? custom[customKey] ??
-            metadata[standardKey] ?? custom[standardKey] ?? '')
+    final custom = customClaims is Map
+        ? customClaims
+        : const <dynamic, dynamic>{};
+    return (metadata[customKey] ??
+            custom[customKey] ??
+            metadata[standardKey] ??
+            custom[standardKey] ??
+            '')
         .toString();
   }
 
@@ -98,7 +122,9 @@ class NiptoSessionManager {
     try {
       final parts = token.split('.');
       if (parts.length != 3) return const {};
-      final decoded = utf8.decode(base64Url.decode(base64Url.normalize(parts[1])));
+      final decoded = utf8.decode(
+        base64Url.decode(base64Url.normalize(parts[1])),
+      );
       final value = jsonDecode(decoded);
       return value is Map ? Map<String, dynamic>.from(value) : const {};
     } catch (_) {
@@ -112,7 +138,8 @@ class NiptoSessionManager {
     _baseUrl = '$normalizedUrl/functions/v1/nipto-identity';
     _authSubscription ??= _client.auth.onAuthStateChange.listen((event) {
       final user = event.session?.user ?? _client.auth.currentUser;
-      if (user != null && _hasNiptoIdentity(user)) unawaited(_completeIdentityLink(user));
+      if (user != null && _hasNiptoIdentity(user))
+        unawaited(_completeIdentityLink(user));
     });
     final currentUser = _client.auth.currentUser;
     if (currentUser != null && _hasNiptoIdentity(currentUser)) {
@@ -136,16 +163,25 @@ class NiptoSessionManager {
       if (_client.auth.currentUser?.id != user.id) return;
       final pendingId = await _storage.read(key: _pendingLinkNiptoIdKey);
       if (_client.auth.currentUser?.id != user.id) return;
-      final niptoId = (pendingId ?? _niptoMetadataValue(
-            user.userMetadata, 'nipto_id', 'preferred_username',
-          )).trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
+      final niptoId =
+          (pendingId ??
+                  _niptoMetadataValue(
+                    user.userMetadata,
+                    'nipto_id',
+                    'preferred_username',
+                  ))
+              .trim()
+              .replaceFirst(RegExp(r'^@'), '')
+              .toLowerCase();
       if (niptoId.isEmpty) return;
       await _post('account/link', {'nipto_id': niptoId}, authenticated: true);
       if (_client.auth.currentUser?.id != user.id) return;
       await _client.auth.refreshSession();
       final refreshedUser = _client.auth.currentUser;
-      if (refreshedUser != null && refreshedUser.id == user.id &&
-          refreshedUser.email == null && _hasNiptoIdentity(refreshedUser)) {
+      if (refreshedUser != null &&
+          refreshedUser.id == user.id &&
+          refreshedUser.email == null &&
+          _hasNiptoIdentity(refreshedUser)) {
         _linkedUserId = refreshedUser.id;
         await _storage.delete(key: _pendingLinkNiptoIdKey);
       }
@@ -155,15 +191,20 @@ class NiptoSessionManager {
       _linkCompletionInFlight = false;
       final queuedUser = _queuedLinkUser;
       _queuedLinkUser = null;
-      if (queuedUser != null && queuedUser.id != _linkedUserId) unawaited(_completeIdentityLink(queuedUser));
+      if (queuedUser != null && queuedUser.id != _linkedUserId)
+        unawaited(_completeIdentityLink(queuedUser));
     }
   }
 
   /// Validates syntax locally, then asks the server whether the ID is available.
   /// The server remains authoritative and registration must handle races.
   Future<Map<String, dynamic>> checkNiptoId(String niptoId) async {
-    final normalized = niptoId.trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
-    if (normalized.length < 3 || normalized.length > 24 ||
+    final normalized = niptoId
+        .trim()
+        .replaceFirst(RegExp(r'^@'), '')
+        .toLowerCase();
+    if (normalized.length < 3 ||
+        normalized.length > 24 ||
         !RegExp(r'^[a-z0-9]+(?:_[a-z0-9]+)*$').hasMatch(normalized)) {
       throw const NiptoAuthException(
         'Use 3–24 lowercase letters or numbers, with single underscores between parts.',
@@ -182,12 +223,11 @@ class NiptoSessionManager {
   Future<void> signInWithNiptoId({
     required String niptoId,
     required String password,
-  }) =>
-      _nativeAuthenticate(
-        action: 'login',
-        niptoId: niptoId,
-        password: password,
-      );
+  }) => _nativeAuthenticate(
+    action: 'login',
+    niptoId: niptoId,
+    password: password,
+  );
 
   /// Native registration with the same OIDC/PKCE session bridge used by sign-in.
   Future<void> registerNiptoAccount({
@@ -195,14 +235,13 @@ class NiptoSessionManager {
     required String niptoId,
     required String password,
     required String passwordConfirmation,
-  }) =>
-      _nativeAuthenticate(
-        action: 'register',
-        displayName: displayName,
-        niptoId: niptoId,
-        password: password,
-        passwordConfirmation: passwordConfirmation,
-      );
+  }) => _nativeAuthenticate(
+    action: 'register',
+    displayName: displayName,
+    niptoId: niptoId,
+    password: password,
+    passwordConfirmation: passwordConfirmation,
+  );
 
   Future<void> _nativeAuthenticate({
     required String action,
@@ -212,7 +251,8 @@ class NiptoSessionManager {
     String? passwordConfirmation,
   }) async {
     final key = _publishableKey;
-    if (key == null) throw const NiptoAuthException('Nipto is not initialized.');
+    if (key == null)
+      throw const NiptoAuthException('Nipto is not initialized.');
     final redirectTo = kIsWeb ? Uri.base.origin : 'nipto://auth-callback';
 
     final preflightClient = http.Client();
@@ -233,7 +273,8 @@ class NiptoSessionManager {
           .timeout(const Duration(seconds: 15));
       await preflight.stream.drain<void>();
       final location = preflight.headers['location'];
-      final isRedirect = preflight.statusCode >= 300 && preflight.statusCode < 400;
+      final isRedirect =
+          preflight.statusCode >= 300 && preflight.statusCode < 400;
       if (!isRedirect || location == null || location.isEmpty) {
         throw const NiptoAuthException(
           'Nipto could not start secure sign-in. Please try again.',
@@ -244,8 +285,11 @@ class NiptoSessionManager {
       final state = params['state'] ?? '';
       final challenge = params['code_challenge'] ?? '';
       final method = params['code_challenge_method'] ?? '';
-      if (state.isEmpty || state.length > 512 || challenge.isEmpty ||
-          method.toUpperCase() != 'S256' || params['response_type'] != 'code') {
+      if (state.isEmpty ||
+          state.length > 512 ||
+          challenge.isEmpty ||
+          method.toUpperCase() != 'S256' ||
+          params['response_type'] != 'code') {
         throw const NiptoAuthException(
           'Nipto received an invalid sign-in request. Please try again.',
         );
@@ -308,18 +352,33 @@ class NiptoSessionManager {
         redirectTo: kIsWeb ? Uri.base.origin : 'nipto://auth-callback',
         queryParams: {'screen': screen},
       );
-      if (!launched) throw const NiptoAuthException('Nipto sign-in could not be opened. Please try again.');
+      if (!launched)
+        throw const NiptoAuthException(
+          'Nipto sign-in could not be opened. Please try again.',
+        );
     } on AuthException catch (error) {
-      throw NiptoAuthException(error.message, statusCode: error.statusCode == null ? null : int.tryParse(error.statusCode!));
+      throw NiptoAuthException(
+        error.message,
+        statusCode: error.statusCode == null
+            ? null
+            : int.tryParse(error.statusCode!),
+      );
     }
   }
 
   Future<void> linkLegacyAccount() async {
     try {
-      final migration = await _post('migration/prepare', const {}, authenticated: true);
+      final migration = await _post(
+        'migration/prepare',
+        const {},
+        authenticated: true,
+      );
       final ticket = migration['migration_ticket'] as String?;
       final niptoId = migration['nipto_id'] as String?;
-      if (ticket == null || niptoId == null) throw const NiptoAuthException('Could not prepare your Nipto account migration.');
+      if (ticket == null || niptoId == null)
+        throw const NiptoAuthException(
+          'Could not prepare your Nipto account migration.',
+        );
       await _storage.write(key: _pendingLinkNiptoIdKey, value: niptoId);
       await _client.auth.linkIdentity(
         OAuthProvider('custom:nipto'),
@@ -333,88 +392,145 @@ class NiptoSessionManager {
   }
 
   Future<void> signOut() async {
-    try { await _client.auth.signOut(scope: SignOutScope.local); }
-    on AuthException catch (error) { throw NiptoAuthException(error.message); }
+    await NiptoPushService.instance.unregisterToken();
+    try {
+      await _client.auth.signOut(scope: SignOutScope.local);
+    } on AuthException catch (error) {
+      throw NiptoAuthException(error.message);
+    }
   }
+
   Future<void> signOutEverywhere() async {
-    try { await _client.auth.signOut(scope: SignOutScope.global); }
-    on AuthException catch (error) { throw NiptoAuthException(error.message); }
+    await NiptoPushService.instance.unregisterToken();
+    try {
+      await _client.auth.signOut(scope: SignOutScope.global);
+    } on AuthException catch (error) {
+      throw NiptoAuthException(error.message);
+    }
   }
 
   Future<void> startPasswordRecovery(String niptoId) async {
-    final normalized = niptoId.trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
-    if (normalized.isEmpty) throw const NiptoAuthException('Enter your Nipto ID.');
+    final normalized = niptoId
+        .trim()
+        .replaceFirst(RegExp(r'^@'), '')
+        .toLowerCase();
+    if (normalized.isEmpty)
+      throw const NiptoAuthException('Enter your Nipto ID.');
     final savedId = await _storage.read(key: _recoveryNiptoIdKey);
     final cachedGrant = await _storage.read(key: _resetGrantKey);
     if (savedId == normalized) {
       final grantTime = await _storage.read(key: _resetGrantIssuedAtKey);
-      if (NiptoResetGrantCacheGuard.isUsable(grant: cachedGrant, issuedAtEpochMs: grantTime, nowEpochMs: DateTime.now().millisecondsSinceEpoch)) return;
+      if (NiptoResetGrantCacheGuard.isUsable(
+        grant: cachedGrant,
+        issuedAtEpochMs: grantTime,
+        nowEpochMs: DateTime.now().millisecondsSinceEpoch,
+      ))
+        return;
       if (cachedGrant != null) await _clearResetGrant();
       final challengeId = await _storage.read(key: _recoveryIdKey);
       final challengeSecret = await _storage.read(key: _recoverySecretKey);
       final startedAt = await _storage.read(key: _recoveryStartedAtKey);
       if (NiptoRecoveryChallengeGuard.isUsableCache(
-        challengeId: challengeId, challengeSecret: challengeSecret, startedAtEpochMs: startedAt,
+        challengeId: challengeId,
+        challengeSecret: challengeSecret,
+        startedAtEpochMs: startedAt,
         nowEpochMs: DateTime.now().millisecondsSinceEpoch,
-      )) return;
+      ))
+        return;
     }
     await _clearRecoveryChallenge();
     await _clearResetGrant();
     final response = await _post('recovery/start', {'nipto_id': normalized});
     final challengeId = response['challenge_id'] as String?;
     final challengeSecret = response['challenge_secret'] as String?;
-    if (challengeId == null || challengeId.trim().isEmpty || challengeSecret == null || challengeSecret.trim().isEmpty) {
+    if (challengeId == null ||
+        challengeId.trim().isEmpty ||
+        challengeSecret == null ||
+        challengeSecret.trim().isEmpty) {
       throw const NiptoAuthException('Could not start account recovery.');
     }
     await _storage.write(key: _recoveryIdKey, value: challengeId);
     await _storage.write(key: _recoverySecretKey, value: challengeSecret);
     await _storage.write(key: _recoveryNiptoIdKey, value: normalized);
-    await _storage.write(key: _recoveryStartedAtKey, value: DateTime.now().millisecondsSinceEpoch.toString());
+    await _storage.write(
+      key: _recoveryStartedAtKey,
+      value: DateTime.now().millisecondsSinceEpoch.toString(),
+    );
   }
 
   Future<String?> checkPasswordRecoveryApproval() async {
     final cachedGrant = await _storage.read(key: _resetGrantKey);
     final grantTime = await _storage.read(key: _resetGrantIssuedAtKey);
-    if (NiptoResetGrantCacheGuard.isUsable(grant: cachedGrant, issuedAtEpochMs: grantTime, nowEpochMs: DateTime.now().millisecondsSinceEpoch)) return cachedGrant;
+    if (NiptoResetGrantCacheGuard.isUsable(
+      grant: cachedGrant,
+      issuedAtEpochMs: grantTime,
+      nowEpochMs: DateTime.now().millisecondsSinceEpoch,
+    ))
+      return cachedGrant;
     if (cachedGrant != null) await _clearResetGrant();
     final challengeId = await _storage.read(key: _recoveryIdKey);
     final challengeSecret = await _storage.read(key: _recoverySecretKey);
     final startedAt = await _storage.read(key: _recoveryStartedAtKey);
     if (!NiptoRecoveryChallengeGuard.isUsableCache(
-      challengeId: challengeId, challengeSecret: challengeSecret, startedAtEpochMs: startedAt,
+      challengeId: challengeId,
+      challengeSecret: challengeSecret,
+      startedAtEpochMs: startedAt,
       nowEpochMs: DateTime.now().millisecondsSinceEpoch,
     )) {
       await _clearRecoveryChallenge();
-      throw const NiptoAuthException('Your recovery request expired. Start a new request.');
+      throw const NiptoAuthException(
+        'Your recovery request expired. Start a new request.',
+      );
     }
-    final response = await _post('recovery/claim', {'challenge_id': challengeId, 'challenge_secret': challengeSecret});
+    final response = await _post('recovery/claim', {
+      'challenge_id': challengeId,
+      'challenge_secret': challengeSecret,
+    });
     final status = response['status'];
     if (status == 'rejected') {
       await _clearRecoveryChallenge();
-      throw const NiptoAuthException('Your trusted Nipto account declined the request. Contact them or choose another recovery account.');
+      throw const NiptoAuthException(
+        'Your trusted Nipto account declined the request. Contact them or choose another recovery account.',
+      );
     }
     if (status == 'expired') {
       await _clearRecoveryChallenge();
-      throw const NiptoAuthException('This recovery request expired. Start a new request.');
+      throw const NiptoAuthException(
+        'This recovery request expired. Start a new request.',
+      );
     }
     if (status == 'consumed') {
       await _clearRecoveryChallenge();
-      throw const NiptoAuthException('This recovery approval has already been used. Start a new request if you still need to reset your password.');
+      throw const NiptoAuthException(
+        'This recovery approval has already been used. Start a new request if you still need to reset your password.',
+      );
     }
     final grant = response['reset_grant'] as String?;
     if (status == 'approved' && grant != null && grant.trim().isNotEmpty) {
       await _storage.write(key: _resetGrantKey, value: grant);
-      await _storage.write(key: _resetGrantIssuedAtKey, value: DateTime.now().millisecondsSinceEpoch.toString());
+      await _storage.write(
+        key: _resetGrantIssuedAtKey,
+        value: DateTime.now().millisecondsSinceEpoch.toString(),
+      );
       return grant;
     }
     return null;
   }
 
-  Future<void> resetPassword({required String resetGrant, required String newPassword}) async {
+  Future<void> resetPassword({
+    required String resetGrant,
+    required String newPassword,
+  }) async {
     try {
-      await _post('recovery/reset', {'reset_grant': resetGrant, 'new_password': newPassword});
+      await _post('recovery/reset', {
+        'reset_grant': resetGrant,
+        'new_password': newPassword,
+      });
     } on NiptoAuthException catch (error) {
-      if (error.statusCode == 400) { await _clearRecoveryChallenge(); await _clearResetGrant(); }
+      if (error.statusCode == 400) {
+        await _clearRecoveryChallenge();
+        await _clearResetGrant();
+      }
       rethrow;
     }
     await _clearRecoveryChallenge();
@@ -427,13 +543,20 @@ class NiptoSessionManager {
     await _storage.delete(key: _recoveryStartedAtKey);
     await _storage.delete(key: _recoveryNiptoIdKey);
   }
+
   Future<void> _clearResetGrant() async {
     await _storage.delete(key: _resetGrantKey);
     await _storage.delete(key: _resetGrantIssuedAtKey);
   }
 
-  Future<void> changePassword({required String currentPassword, required String newPassword}) async {
-    await _post('change-password', {'current_password': currentPassword, 'new_password': newPassword}, authenticated: true);
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    await _post('change-password', {
+      'current_password': currentPassword,
+      'new_password': newPassword,
+    }, authenticated: true);
     await signOut();
   }
 
@@ -441,74 +564,131 @@ class NiptoSessionManager {
     final response = await _get('turn-credentials');
     return _asMapList(response['ice_servers']);
   }
+
   Future<List<Map<String, dynamic>>> listRecoveryContacts() async {
     final response = await _get('recovery/contacts');
     return _asMapList(response['contacts']);
   }
+
   Future<List<Map<String, dynamic>>> listPasswordRecoveryRequests() async {
     final response = await _get('recovery/requests');
     return _asMapList(response['requests']);
   }
+
   Future<void> requestRecoveryContact(String niptoId) async {
-    await _post('recovery/link', {'recovery_nipto_id': niptoId}, authenticated: true);
+    await _post('recovery/link', {
+      'recovery_nipto_id': niptoId,
+    }, authenticated: true);
   }
-  Future<void> respondRecoveryContact({required String requestId, required bool accept}) async {
-    await _post('recovery/contact-response', {'request_id': requestId, 'accept': accept}, authenticated: true);
+
+  Future<void> respondRecoveryContact({
+    required String requestId,
+    required bool accept,
+  }) async {
+    await _post('recovery/contact-response', {
+      'request_id': requestId,
+      'accept': accept,
+    }, authenticated: true);
   }
+
   Future<void> removeRecoveryContact(String requestId) async {
-    await _post('recovery/contact-remove', {'request_id': requestId}, authenticated: true);
+    await _post('recovery/contact-remove', {
+      'request_id': requestId,
+    }, authenticated: true);
   }
-  Future<void> respondPasswordRecovery({required String challengeId, required bool approve}) async {
-    await _post('recovery/respond', {'challenge_id': challengeId, 'approve': approve}, authenticated: true);
+
+  Future<void> respondPasswordRecovery({
+    required String challengeId,
+    required bool approve,
+  }) async {
+    await _post('recovery/respond', {
+      'challenge_id': challengeId,
+      'approve': approve,
+    }, authenticated: true);
   }
+
   Future<List<Map<String, dynamic>>> listSessions() async {
     final response = await _get('sessions');
     return _asMapList(response['sessions']);
   }
+
   Future<void> revokeSession(String sessionId) async {
-    await _post('sessions/revoke', {'session_id': sessionId}, authenticated: true);
+    await _post('sessions/revoke', {
+      'session_id': sessionId,
+    }, authenticated: true);
     if (sessionId == currentSession?.sessionId) await signOut();
   }
 
-  Future<Map<String, dynamic>> _get(String path) => _send('GET', path, null, authenticated: true);
-  Future<Map<String, dynamic>> _post(String path, Map<String, dynamic> payload, {bool authenticated = false}) =>
-      _send('POST', path, payload, authenticated: authenticated);
+  Future<Map<String, dynamic>> _get(String path) =>
+      _send('GET', path, null, authenticated: true);
+  Future<Map<String, dynamic>> _post(
+    String path,
+    Map<String, dynamic> payload, {
+    bool authenticated = false,
+  }) => _send('POST', path, payload, authenticated: authenticated);
 
-  Future<Map<String, dynamic>> _send(String method, String path, Map<String, dynamic>? payload, {required bool authenticated}) async {
+  Future<Map<String, dynamic>> _send(
+    String method,
+    String path,
+    Map<String, dynamic>? payload, {
+    required bool authenticated,
+  }) async {
     final base = _baseUrl;
     final key = _publishableKey;
-    if (base == null || key == null) throw const NiptoAuthException('Nipto is not initialized.');
+    if (base == null || key == null)
+      throw const NiptoAuthException('Nipto is not initialized.');
     final uri = Uri.parse('$base/$path');
-    final headers = <String, String>{'Accept': 'application/json', 'apikey': key};
+    final headers = <String, String>{
+      'Accept': 'application/json',
+      'apikey': key,
+    };
     if (payload != null) headers['Content-Type'] = 'application/json';
     if (authenticated) {
       final token = _client.auth.currentSession?.accessToken;
-      if (token == null) throw const NiptoAuthException('Sign in to continue.', statusCode: 401);
+      if (token == null)
+        throw const NiptoAuthException('Sign in to continue.', statusCode: 401);
       headers['Authorization'] = 'Bearer $token';
     }
     late final http.Response response;
     try {
-      response = await (method == 'GET' ? http.get(uri, headers: headers) : http.post(uri, headers: headers, body: jsonEncode(payload))).timeout(const Duration(seconds: 15));
+      response =
+          await (method == 'GET'
+                  ? http.get(uri, headers: headers)
+                  : http.post(uri, headers: headers, body: jsonEncode(payload)))
+              .timeout(const Duration(seconds: 15));
     } on TimeoutException {
-      throw const NiptoAuthException('The Nipto service took too long to respond. Please try again.');
+      throw const NiptoAuthException(
+        'The Nipto service took too long to respond. Please try again.',
+      );
     } on http.ClientException {
-      throw const NiptoAuthException('Could not connect to Nipto. Check your internet connection.');
+      throw const NiptoAuthException(
+        'Could not connect to Nipto. Check your internet connection.',
+      );
     }
     Map<String, dynamic> data = {};
     if (response.body.trim().isNotEmpty) {
       try {
         final parsed = jsonDecode(response.body);
-        if (parsed is Map) data = Map<String, dynamic>.from(parsed);
-        else throw const FormatException('Expected JSON object.');
+        if (parsed is Map)
+          data = Map<String, dynamic>.from(parsed);
+        else
+          throw const FormatException('Expected JSON object.');
       } on FormatException {
         if (response.statusCode >= 200 && response.statusCode < 300) {
-          throw const NiptoAuthException('Nipto returned an unexpected response. Please try again.');
+          throw const NiptoAuthException(
+            'Nipto returned an unexpected response. Please try again.',
+          );
         }
       }
     }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final message = data['error'] ?? data['message'];
-      throw NiptoAuthException(message is String && message.trim().isNotEmpty ? message : 'Nipto could not complete that request.', statusCode: response.statusCode);
+      throw NiptoAuthException(
+        message is String && message.trim().isNotEmpty
+            ? message
+            : 'Nipto could not complete that request.',
+        statusCode: response.statusCode,
+      );
     }
     return data;
   }

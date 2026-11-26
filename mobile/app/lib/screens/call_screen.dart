@@ -54,7 +54,9 @@ class _CallScreenState extends State<CallScreen> {
           _connectedAt = DateTime.now();
           _durationTicker = Timer.periodic(const Duration(seconds: 1), (_) {
             if (!mounted || _connectedAt == null) return;
-            setState(() => _callDuration = DateTime.now().difference(_connectedAt!));
+            setState(
+              () => _callDuration = DateTime.now().difference(_connectedAt!),
+            );
           });
         }
         if (phase == NiptoCallPhase.ended || phase == NiptoCallPhase.failed) {
@@ -173,142 +175,156 @@ class _CallScreenState extends State<CallScreen> {
         if (!didPop) unawaited(_endCall());
       },
       child: Scaffold(
-      backgroundColor: const Color(0xFF101323),
-      appBar: AppBar(
         backgroundColor: const Color(0xFF101323),
-        foregroundColor: Colors.white,
-        title: Text(widget.peerTitle),
-        actions: [
-          if (isVideo)
-            IconButton(
-              tooltip: 'Switch camera',
-              onPressed: _renderersReady ? _service.switchCamera : null,
-              icon: const Icon(Icons.cameraswitch_outlined),
-            ),
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (isVideo && _remoteRenderer.srcObject != null)
-                    RTCVideoView(
-                      _remoteRenderer,
-                      objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-                    )
-                  else
-                    Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          CircleAvatar(
-                            radius: 48,
-                            backgroundColor: NiptoColors.violet,
-                            child: Text(
-                              widget.peerTitle.isEmpty
-                                  ? 'N'
-                                  : widget.peerTitle.characters.first.toUpperCase(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 34,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 22),
-                          Text(
-                            _phaseLabel,
-                            style: const TextStyle(color: Colors.white, fontSize: 17),
-                          ),
-                        ],
-                      ),
-                    ),
-                  if (isVideo && _localRenderer.srcObject != null)
-                    Positioned(
-                      right: 16,
-                      top: 16,
-                      width: 112,
-                      height: 158,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: RTCVideoView(
-                          _localRenderer,
-                          mirror: true,
-                          objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-                        ),
-                      ),
-                    ),
-                  if (_error != null)
-                    Positioned(
-                      left: 20,
-                      right: 20,
-                      bottom: 20,
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade900.withValues(alpha: 0.9),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Text(
-                            _error!,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+        appBar: AppBar(
+          backgroundColor: const Color(0xFF101323),
+          foregroundColor: Colors.white,
+          title: Text(widget.peerTitle),
+          actions: [
+            if (isVideo)
+              IconButton(
+                tooltip: 'Switch camera',
+                onPressed: _renderersReady ? _service.switchCamera : null,
+                icon: const Icon(Icons.cameraswitch_outlined),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(22, 20, 22, 24),
-              child: Column(
-                children: [
-                  Text(
-                    connected ? _durationLabel : _phaseLabel,
-                    style: const TextStyle(color: Colors.white70, fontSize: 14),
-                  ),
-                  const SizedBox(height: 22),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _CallControl(
-                        icon: _microphoneEnabled ? Icons.mic_rounded : Icons.mic_off_rounded,
-                        label: _microphoneEnabled ? 'Mute' : 'Unmute',
-                        onPressed: _toggleMicrophone,
-                      ),
-                      if (isVideo)
-                        _CallControl(
-                          icon: _cameraEnabled
-                              ? Icons.videocam_rounded
-                              : Icons.videocam_off_rounded,
-                          label: _cameraEnabled ? 'Camera off' : 'Camera on',
-                          onPressed: _toggleCamera,
-                        ),
-                      _CallControl(
-                        icon: _speakerEnabled ? Icons.volume_up_rounded : Icons.hearing_rounded,
-                        label: _speakerEnabled ? 'Speaker' : 'Earpiece',
-                        onPressed: _toggleSpeaker,
-                      ),
-                      _CallControl(
-                        icon: Icons.call_end_rounded,
-                        label: 'End',
-                        background: Colors.red,
-                        onPressed: _endCall,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
+        body: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (isVideo && _remoteRenderer.srcObject != null)
+                      RTCVideoView(
+                        _remoteRenderer,
+                        objectFit:
+                            RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                      )
+                    else
+                      Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircleAvatar(
+                              radius: 48,
+                              backgroundColor: NiptoColors.violet,
+                              child: Text(
+                                widget.peerTitle.isEmpty
+                                    ? 'N'
+                                    : widget.peerTitle.characters.first
+                                          .toUpperCase(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 34,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+                            Text(
+                              _phaseLabel,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 17,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (isVideo && _localRenderer.srcObject != null)
+                      Positioned(
+                        right: 16,
+                        top: 16,
+                        width: 112,
+                        height: 158,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: RTCVideoView(
+                            _localRenderer,
+                            mirror: true,
+                            objectFit: RTCVideoViewObjectFit
+                                .RTCVideoViewObjectFitCover,
+                          ),
+                        ),
+                      ),
+                    if (_error != null)
+                      Positioned(
+                        left: 20,
+                        right: 20,
+                        bottom: 20,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade900.withValues(alpha: 0.9),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Text(
+                              _error!,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(22, 20, 22, 24),
+                child: Column(
+                  children: [
+                    Text(
+                      connected ? _durationLabel : _phaseLabel,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _CallControl(
+                          icon: _microphoneEnabled
+                              ? Icons.mic_rounded
+                              : Icons.mic_off_rounded,
+                          label: _microphoneEnabled ? 'Mute' : 'Unmute',
+                          onPressed: _toggleMicrophone,
+                        ),
+                        if (isVideo)
+                          _CallControl(
+                            icon: _cameraEnabled
+                                ? Icons.videocam_rounded
+                                : Icons.videocam_off_rounded,
+                            label: _cameraEnabled ? 'Camera off' : 'Camera on',
+                            onPressed: _toggleCamera,
+                          ),
+                        _CallControl(
+                          icon: _speakerEnabled
+                              ? Icons.volume_up_rounded
+                              : Icons.hearing_rounded,
+                          label: _speakerEnabled ? 'Speaker' : 'Earpiece',
+                          onPressed: _toggleSpeaker,
+                        ),
+                        _CallControl(
+                          icon: Icons.call_end_rounded,
+                          label: 'End',
+                          background: Colors.red,
+                          onPressed: _endCall,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      ));
+    );
   }
 }
 
@@ -341,7 +357,10 @@ class _CallControl extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 12),
+        ),
       ],
     );
   }

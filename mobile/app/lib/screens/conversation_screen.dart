@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/nipto_media_service.dart';
 import '../services/nipto_session_manager.dart';
 
 import '../theme/nipto_theme.dart';
@@ -31,6 +32,7 @@ class _ConversationScreenState extends State<ConversationScreen> {
   final _controller = TextEditingController();
   final _scrollController = ScrollController();
   final _picker = ImagePicker();
+  final _media = NiptoMediaService();
   static const _messagePageSize = 50;
   final List<Map<String, dynamic>> _olderMessages = [];
   bool _sending = false;
@@ -282,6 +284,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
         'message_type': 'image',
         'media_path': path,
       });
+      try {
+        // Best effort: the message is already stored. Validation can be
+        // retried; a validator outage must not delete a referenced object.
+        await _media.enqueue('chat-media', path);
+      } catch (_) {
+        // The private object remains referenced by the saved message.
+      }
     } catch (_) {
       if (uploaded) {
         try {

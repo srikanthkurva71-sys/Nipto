@@ -26,7 +26,8 @@ class _StaffConsoleScreenState extends State<StaffConsoleScreen>
     _access = _checkAccess();
   }
 
-  Future<bool> _checkAccess() async => await _client.rpc('staff_can_access') == true;
+  Future<bool> _checkAccess() async =>
+      await _client.rpc('staff_can_access') == true;
 
   Future<List<Map<String, dynamic>>> _load(
     String function,
@@ -62,8 +63,15 @@ class _StaffConsoleScreenState extends State<StaffConsoleScreen>
           decoration: InputDecoration(hintText: hint),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, controller.text.trim()), child: const Text('Continue')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('Continue'),
+          ),
         ],
       ),
     );
@@ -77,14 +85,18 @@ class _StaffConsoleScreenState extends State<StaffConsoleScreen>
     try {
       await action();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Review action saved.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Review action saved.')));
       setState(() {});
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not save this review action. Check staff access and retry.')),
+        const SnackBar(
+          content: Text(
+            'Could not save this review action. Check staff access and retry.',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -92,49 +104,94 @@ class _StaffConsoleScreenState extends State<StaffConsoleScreen>
   }
 
   Future<void> _feedback(Map<String, dynamic> row, String status) async {
-    final response = await _askNote('Update feedback', 'Optional response visible to the user');
+    final response = await _askNote(
+      'Update feedback',
+      'Optional response visible to the user',
+    );
     if (response == null || !mounted) return;
     final note = await _askNote('Internal note', 'Optional staff-only note');
     if (note == null || !mounted) return;
-    await _act(() => _client.rpc('staff_review_feedback', params: {
-      'p_feedback_id': row['id'],
-      'p_status': status,
-      'p_response_message': response.isEmpty ? null : response,
-      'p_staff_note': note.isEmpty ? null : note,
-    }));
+    await _act(
+      () => _client.rpc(
+        'staff_review_feedback',
+        params: {
+          'p_feedback_id': row['id'],
+          'p_status': status,
+          'p_response_message': response.isEmpty ? null : response,
+          'p_staff_note': note.isEmpty ? null : note,
+        },
+      ),
+    );
   }
 
   Future<void> _report(Map<String, dynamic> row, String status) async {
     final note = await _askNote('Review report', 'Optional resolution note');
     if (note == null || !mounted) return;
-    await _act(() => _client.rpc('staff_review_report', params: {
-      'p_report_id': row['id'],
-      'p_status': status,
-      'p_resolution_note': note.isEmpty ? null : note,
-    }));
+    await _act(
+      () => _client.rpc(
+        'staff_review_report',
+        params: {
+          'p_report_id': row['id'],
+          'p_status': status,
+          'p_resolution_note': note.isEmpty ? null : note,
+        },
+      ),
+    );
   }
 
   Future<void> _content(Map<String, dynamic> row, String decision) async {
+    final mediaState = row['media_state']?.toString() ?? 'not_enqueued';
+    final needsOverride =
+        decision == 'approved' &&
+        mediaState != 'clean' &&
+        mediaState != 'ready';
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(decision == 'approved' ? 'Approve content?' : 'Reject content?'),
-        content: const Text('This decision will be recorded in the staff audit log.'),
+        title: Text(
+          needsOverride
+              ? 'Override media validation?'
+              : decision == 'approved'
+              ? 'Approve content?'
+              : 'Reject content?',
+        ),
+        content: Text(
+          needsOverride
+              ? 'No scanner or processor verdict exists for this media '
+                    '(validation: $mediaState). Approving requires an explicit '
+                    'staff override after you personally review the object.'
+              : 'This decision will be recorded in the staff audit log.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Continue')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(needsOverride ? 'Review and override' : 'Continue'),
+          ),
         ],
       ),
     );
     if (confirmed != true || !mounted) return;
-    final reason = await _askNote('Moderation reason', 'Optional reason recorded in the audit log');
+    final reason = await _askNote(
+      'Moderation reason',
+      'Optional reason recorded in the audit log',
+    );
     if (reason == null || !mounted) return;
-    await _act(() => _client.rpc('staff_review_content', params: {
-      'p_kind': row['content_type'],
-      'p_content_id': row['content_id'],
-      'p_decision': decision,
-      'p_reason': reason.isEmpty ? null : reason,
-    }));
+    await _act(
+      () => _client.rpc(
+        'staff_review_content',
+        params: {
+          'p_kind': row['content_type'],
+          'p_content_id': row['content_id'],
+          'p_decision': decision,
+          'p_reason': reason.isEmpty ? null : reason,
+          'p_override': needsOverride,
+        },
+      ),
+    );
   }
 
   Widget _queue({
@@ -155,7 +212,10 @@ class _StaffConsoleScreenState extends State<StaffConsoleScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text('Queue could not load.'),
-                TextButton(onPressed: () => setState(() {}), child: const Text('Retry')),
+                TextButton(
+                  onPressed: () => setState(() {}),
+                  child: const Text('Retry'),
+                ),
               ],
             ),
           );
@@ -176,10 +236,8 @@ class _StaffConsoleScreenState extends State<StaffConsoleScreen>
     );
   }
 
-  Widget _button(String label, VoidCallback callback) => OutlinedButton(
-    onPressed: _busy ? null : callback,
-    child: Text(label),
-  );
+  Widget _button(String label, VoidCallback callback) =>
+      OutlinedButton(onPressed: _busy ? null : callback, child: Text(label));
 
   Widget _status(String value) => Chip(
     label: Text(value, style: const TextStyle(fontSize: 11)),
@@ -192,22 +250,40 @@ class _StaffConsoleScreenState extends State<StaffConsoleScreen>
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Expanded(child: Text(row['subject']?.toString() ?? 'Feedback', style: const TextStyle(fontWeight: FontWeight.w800))),
-            _status(row['status']?.toString() ?? 'received'),
-          ]),
-          Text('@' + (row['nipto_id']?.toString() ?? 'member') + ' · ' + (row['category']?.toString() ?? 'feedback')),
-          const SizedBox(height: 8),
-          Text(row['message']?.toString() ?? ''),
-          const SizedBox(height: 8),
-          Wrap(spacing: 6, children: [
-            _button('Reviewing', () => _feedback(row, 'reviewing')),
-            _button('Planned', () => _feedback(row, 'planned')),
-            _button('Resolved', () => _feedback(row, 'resolved')),
-            _button('Closed', () => _feedback(row, 'closed')),
-          ]),
-        ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    row['subject']?.toString() ?? 'Feedback',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                _status(row['status']?.toString() ?? 'received'),
+              ],
+            ),
+            Text(
+              '@' +
+                  (row['nipto_id']?.toString() ?? 'member') +
+                  ' · ' +
+                  (row['category']?.toString() ?? 'feedback'),
+            ),
+            const SizedBox(height: 8),
+            Text(row['message']?.toString() ?? ''),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              children: [
+                _button('Reviewing', () => _feedback(row, 'reviewing')),
+                _button('Planned', () => _feedback(row, 'planned')),
+                _button('Resolved', () => _feedback(row, 'resolved')),
+                _button('Closed', () => _feedback(row, 'closed')),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -216,50 +292,93 @@ class _StaffConsoleScreenState extends State<StaffConsoleScreen>
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Expanded(child: Text(row['reason']?.toString() ?? 'Safety report', style: const TextStyle(fontWeight: FontWeight.w800))),
-            _status(row['status']?.toString() ?? 'received'),
-          ]),
-          Text('Reporter: @' + (row['reporter_nipto_id']?.toString() ?? 'member')),
-          Text('Reported account: @' + (row['reported_nipto_id']?.toString() ?? 'unavailable')),
-          if ((row['details']?.toString() ?? '').isNotEmpty) ...[
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    row['reason']?.toString() ?? 'Safety report',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+                _status(row['status']?.toString() ?? 'received'),
+              ],
+            ),
+            Text(
+              'Reporter: @' +
+                  (row['reporter_nipto_id']?.toString() ?? 'member'),
+            ),
+            Text(
+              'Reported account: @' +
+                  (row['reported_nipto_id']?.toString() ?? 'unavailable'),
+            ),
+            if ((row['details']?.toString() ?? '').isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(row['details'].toString()),
+            ],
             const SizedBox(height: 8),
-            Text(row['details'].toString()),
+            Wrap(
+              spacing: 6,
+              children: [
+                _button('Reviewing', () => _report(row, 'reviewing')),
+                _button('Actioned', () => _report(row, 'actioned')),
+                _button('Dismiss', () => _report(row, 'dismissed')),
+              ],
+            ),
           ],
-          const SizedBox(height: 8),
-          Wrap(spacing: 6, children: [
-            _button('Reviewing', () => _report(row, 'reviewing')),
-            _button('Actioned', () => _report(row, 'actioned')),
-            _button('Dismiss', () => _report(row, 'dismissed')),
-          ]),
-        ]),
+        ),
       ),
     );
   }
 
   Widget _contentCard(Map<String, dynamic> row) {
     final kind = row['content_type']?.toString() ?? 'content';
+    final mediaState = row['media_state']?.toString() ?? 'not_enqueued';
+    final mediaError = row['media_error']?.toString() ?? '';
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(kind.toUpperCase() + ' · @' + (row['nipto_id']?.toString() ?? 'member'),
-              style: const TextStyle(fontWeight: FontWeight.w800)),
-          const SizedBox(height: 8),
-          Text((row['caption']?.toString().isNotEmpty == true) ? row['caption'].toString() : 'No caption'),
-          const SizedBox(height: 10),
-          StaffMediaPreview(
-            bucket: kind == 'short' ? 'shorts' : 'posts',
-            path: row['media_path']?.toString() ?? '',
-            isVideo: row['media_type']?.toString() == 'video',
-          ),
-          const SizedBox(height: 8),
-          Wrap(spacing: 6, children: [
-            _button('Approve', () => _content(row, 'approved')),
-            _button('Reject', () => _content(row, 'rejected')),
-          ]),
-        ]),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              kind.toUpperCase() +
+                  ' · @' +
+                  (row['nipto_id']?.toString() ?? 'member'),
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              (row['caption']?.toString().isNotEmpty == true)
+                  ? row['caption'].toString()
+                  : 'No caption',
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              children: [
+                _status('validation: $mediaState'),
+                if (mediaError.isNotEmpty) _status('error: $mediaError'),
+              ],
+            ),
+            const SizedBox(height: 10),
+            StaffMediaPreview(
+              bucket: kind == 'short' ? 'shorts' : 'posts',
+              path: row['media_path']?.toString() ?? '',
+              isVideo: row['media_type']?.toString() == 'video',
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              children: [
+                _button('Approve', () => _content(row, 'approved')),
+                _button('Reject', () => _content(row, 'rejected')),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -270,7 +389,9 @@ class _StaffConsoleScreenState extends State<StaffConsoleScreen>
       future: _access,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
         if (snapshot.hasError || snapshot.data != true) {
           return Scaffold(
@@ -278,7 +399,10 @@ class _StaffConsoleScreenState extends State<StaffConsoleScreen>
             body: const Center(
               child: Padding(
                 padding: EdgeInsets.all(28),
-                child: Text('Staff access is not enabled for this account.', textAlign: TextAlign.center),
+                child: Text(
+                  'Staff access is not enabled for this account.',
+                  textAlign: TextAlign.center,
+                ),
               ),
             ),
           );
@@ -288,29 +412,52 @@ class _StaffConsoleScreenState extends State<StaffConsoleScreen>
             title: const Text('Staff review'),
             bottom: TabBar(
               controller: _tabs,
-              tabs: const [Tab(text: 'Feedback'), Tab(text: 'Reports'), Tab(text: 'Content')],
-            ),
-          ),
-          body: Stack(children: [
-            TabBarView(
-              controller: _tabs,
-              children: [
-                _queue(function: 'staff_list_feedback', params: {'p_status': null, 'p_limit': 50},
-                    cardBuilder: _feedbackCard, emptyText: 'No feedback is waiting for review.'),
-                _queue(function: 'staff_list_reports', params: {'p_limit': 50},
-                    cardBuilder: _reportCard, emptyText: 'No reports are waiting for review.'),
-                _queue(function: 'staff_list_pending_content', params: {'p_kind': 'all', 'p_limit': 50},
-                    cardBuilder: _contentCard, emptyText: 'No content is waiting for review.'),
+              tabs: const [
+                Tab(text: 'Feedback'),
+                Tab(text: 'Reports'),
+                Tab(text: 'Content'),
               ],
             ),
-            if (_busy) const Positioned(top: 0, left: 0, right: 0, child: LinearProgressIndicator()),
-          ]),
+          ),
+          body: Stack(
+            children: [
+              TabBarView(
+                controller: _tabs,
+                children: [
+                  _queue(
+                    function: 'staff_list_feedback',
+                    params: {'p_status': null, 'p_limit': 50},
+                    cardBuilder: _feedbackCard,
+                    emptyText: 'No feedback is waiting for review.',
+                  ),
+                  _queue(
+                    function: 'staff_list_reports',
+                    params: {'p_limit': 50},
+                    cardBuilder: _reportCard,
+                    emptyText: 'No reports are waiting for review.',
+                  ),
+                  _queue(
+                    function: 'staff_list_pending_content',
+                    params: {'p_kind': 'all', 'p_limit': 50},
+                    cardBuilder: _contentCard,
+                    emptyText: 'No content is waiting for review.',
+                  ),
+                ],
+              ),
+              if (_busy)
+                const Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: LinearProgressIndicator(),
+                ),
+            ],
+          ),
         );
       },
     );
   }
 }
-
 
 class StaffMediaPreview extends StatefulWidget {
   const StaffMediaPreview({

@@ -55,11 +55,16 @@ class _NiptoPasswordFieldsState extends State<NiptoPasswordFields> {
     widget.confirmationController.text = suggestion;
   }
 
-  bool get _longEnough => NiptoPasswordPolicy.hasMinimumLength(widget.passwordController.text);
-  bool get _hasLower => NiptoPasswordPolicy.hasLowercase(widget.passwordController.text);
-  bool get _hasUpper => NiptoPasswordPolicy.hasUppercase(widget.passwordController.text);
-  bool get _hasNumber => NiptoPasswordPolicy.hasNumber(widget.passwordController.text);
-  bool get _hasSymbol => NiptoPasswordPolicy.hasSymbol(widget.passwordController.text);
+  bool get _longEnough =>
+      NiptoPasswordPolicy.hasMinimumLength(widget.passwordController.text);
+  bool get _hasLower =>
+      NiptoPasswordPolicy.hasLowercase(widget.passwordController.text);
+  bool get _hasUpper =>
+      NiptoPasswordPolicy.hasUppercase(widget.passwordController.text);
+  bool get _hasNumber =>
+      NiptoPasswordPolicy.hasNumber(widget.passwordController.text);
+  bool get _hasSymbol =>
+      NiptoPasswordPolicy.hasSymbol(widget.passwordController.text);
 
   @override
   void initState() {
@@ -86,7 +91,6 @@ class _NiptoPasswordFieldsState extends State<NiptoPasswordFields> {
     widget.onPasswordChanged?.call(widget.passwordController.text);
   }
 
-
   void _onConfirmationChanged() {
     if (mounted) setState(() {});
   }
@@ -99,17 +103,26 @@ class _NiptoPasswordFieldsState extends State<NiptoPasswordFields> {
   }
 
   Widget _rule(String label, bool passed) => Padding(
-        padding: const EdgeInsets.only(top: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(passed ? Icons.check_circle : Icons.circle_outlined,
-                size: 14, color: passed ? Colors.green : Colors.grey),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(fontSize: 12, color: passed ? Colors.green : Colors.grey)),
-          ],
+    padding: const EdgeInsets.only(top: 4),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          passed ? Icons.check_circle : Icons.circle_outlined,
+          size: 14,
+          color: passed ? Colors.green : Colors.grey,
         ),
-      );
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: passed ? Colors.green : Colors.grey,
+          ),
+        ),
+      ],
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -134,7 +147,9 @@ class _NiptoPasswordFieldsState extends State<NiptoPasswordFields> {
             suffixIcon: IconButton(
               tooltip: _showPassword ? 'Hide password' : 'Show password',
               onPressed: () => setState(() => _showPassword = !_showPassword),
-              icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility),
+              icon: Icon(
+                _showPassword ? Icons.visibility_off : Icons.visibility,
+              ),
             ),
           ),
           validator: (value) {
@@ -178,13 +193,17 @@ class _NiptoPasswordFieldsState extends State<NiptoPasswordFields> {
             prefixIcon: const Icon(Icons.lock_outline_rounded),
             suffixIcon: IconButton(
               tooltip: _showConfirmation ? 'Hide password' : 'Show password',
-              onPressed: () => setState(() => _showConfirmation = !_showConfirmation),
-              icon: Icon(_showConfirmation ? Icons.visibility_off : Icons.visibility),
+              onPressed: () =>
+                  setState(() => _showConfirmation = !_showConfirmation),
+              icon: Icon(
+                _showConfirmation ? Icons.visibility_off : Icons.visibility,
+              ),
             ),
           ),
           validator: (value) {
             if (value == null || value.isEmpty) return 'Confirm your password.';
-            if (value != widget.passwordController.text) return 'Passwords do not match.';
+            if (value != widget.passwordController.text)
+              return 'Passwords do not match.';
             return null;
           },
         ),
@@ -192,7 +211,10 @@ class _NiptoPasswordFieldsState extends State<NiptoPasswordFields> {
           const SizedBox(height: 6),
           Text(
             matching ? 'Passwords match.' : 'Passwords do not match.',
-            style: TextStyle(fontSize: 12, color: matching ? Colors.green : Colors.red),
+            style: TextStyle(
+              fontSize: 12,
+              color: matching ? Colors.green : Colors.red,
+            ),
           ),
         ],
       ],

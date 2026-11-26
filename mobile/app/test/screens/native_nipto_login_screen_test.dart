@@ -4,8 +4,8 @@ import 'package:nipto/screens/native_nipto_login_screen.dart';
 import 'package:nipto/services/nipto_session_manager.dart';
 
 Finder findField(String label) => find.byWidgetPredicate(
-      (widget) => widget is InputDecorator && widget.decoration.labelText == label,
-    );
+  (widget) => widget is InputDecorator && widget.decoration.labelText == label,
+);
 
 void main() {
   testWidgets('normalizes the Nipto ID and submits both credentials', (

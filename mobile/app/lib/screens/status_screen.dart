@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/nipto_media_service.dart';
 import '../services/nipto_session_manager.dart';
 import 'package:video_player/video_player.dart';
 
@@ -19,6 +20,7 @@ class StatusTray extends StatefulWidget {
 class _StatusTrayState extends State<StatusTray> {
   late Future<List<_StatusGroup>> _groups;
   final _picker = ImagePicker();
+  final _media = NiptoMediaService();
   bool _uploading = false;
   String _statusVisibility = 'followers';
 
@@ -34,7 +36,9 @@ class _StatusTrayState extends State<StatusTray> {
     final now = DateTime.now().toUtc().toIso8601String();
     final rows = await _client
         .from('statuses')
-        .select('id, owner_id, status_type, text_content, media_path, background_color, visibility, expires_at, created_at')
+        .select(
+          'id, owner_id, status_type, text_content, media_path, background_color, visibility, expires_at, created_at',
+        )
         .gt('expires_at', now)
         .order('created_at', ascending: false)
         .limit(120);
@@ -85,22 +89,41 @@ class _StatusTrayState extends State<StatusTray> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Share a status', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800)),
+              const Text(
+                'Share a status',
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+              ),
               const SizedBox(height: 6),
-              const Text('A status disappears after 24 hours.', style: TextStyle(color: NiptoColors.muted)),
+              const Text(
+                'A status disappears after 24 hours.',
+                style: TextStyle(color: NiptoColors.muted),
+              ),
               const SizedBox(height: 8),
               StatefulBuilder(
                 builder: (context, setSheetState) => ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.visibility_outlined, color: NiptoColors.violet),
+                  leading: const Icon(
+                    Icons.visibility_outlined,
+                    color: NiptoColors.violet,
+                  ),
                   title: const Text('Audience'),
-                  subtitle: Text(_statusVisibility == 'close_friends' ? 'Close Friends' : 'Followers'),
+                  subtitle: Text(
+                    _statusVisibility == 'close_friends'
+                        ? 'Close Friends'
+                        : 'Followers',
+                  ),
                   trailing: DropdownButton<String>(
                     value: _statusVisibility,
                     underline: const SizedBox.shrink(),
                     items: const [
-                      DropdownMenuItem(value: 'followers', child: Text('Followers')),
-                      DropdownMenuItem(value: 'close_friends', child: Text('Close Friends')),
+                      DropdownMenuItem(
+                        value: 'followers',
+                        child: Text('Followers'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'close_friends',
+                        child: Text('Close Friends'),
+                      ),
                     ],
                     onChanged: (value) {
                       if (value == null) return;
@@ -111,7 +134,10 @@ class _StatusTrayState extends State<StatusTray> {
               ),
               const SizedBox(height: 8),
               ListTile(
-                leading: const Icon(Icons.text_fields_rounded, color: NiptoColors.violet),
+                leading: const Icon(
+                  Icons.text_fields_rounded,
+                  color: NiptoColors.violet,
+                ),
                 title: const Text('Text status'),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -119,7 +145,10 @@ class _StatusTrayState extends State<StatusTray> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.photo_outlined, color: NiptoColors.violet),
+                leading: const Icon(
+                  Icons.photo_outlined,
+                  color: NiptoColors.violet,
+                ),
                 title: const Text('Photo status'),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -127,7 +156,10 @@ class _StatusTrayState extends State<StatusTray> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.videocam_outlined, color: NiptoColors.violet),
+                leading: const Icon(
+                  Icons.videocam_outlined,
+                  color: NiptoColors.violet,
+                ),
                 title: const Text('Video status'),
                 onTap: () {
                   Navigator.pop(sheetContext);
@@ -155,9 +187,13 @@ class _StatusTrayState extends State<StatusTray> {
           decoration: const InputDecoration(hintText: 'What’s on your mind?'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
             child: const Text('Share'),
           ),
         ],
@@ -178,15 +214,24 @@ class _StatusTrayState extends State<StatusTray> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Status could not be shared. Please try again.')),
+        const SnackBar(
+          content: Text('Status could not be shared. Please try again.'),
+        ),
       );
     }
   }
 
   Future<void> _pickMediaStatus({required bool isVideo}) async {
     final file = isVideo
-        ? await _picker.pickVideo(source: ImageSource.gallery, maxDuration: const Duration(seconds: 60))
-        : await _picker.pickImage(source: ImageSource.gallery, imageQuality: 88, maxWidth: 1800);
+        ? await _picker.pickVideo(
+            source: ImageSource.gallery,
+            maxDuration: const Duration(seconds: 60),
+          )
+        : await _picker.pickImage(
+            source: ImageSource.gallery,
+            imageQuality: 88,
+            maxWidth: 1800,
+          );
     if (file == null || !mounted) return;
 
     final extension = file.name.split('.').last.toLowerCase();
@@ -199,7 +244,9 @@ class _StatusTrayState extends State<StatusTray> {
     final contentType = isVideo ? 'video/mp4' : imageTypes[extension];
     if (contentType == null || (isVideo && extension != 'mp4')) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Choose a supported JPG, PNG, WebP or MP4 file.')),
+        const SnackBar(
+          content: Text('Choose a supported JPG, PNG, WebP or MP4 file.'),
+        ),
       );
       return;
     }
@@ -207,35 +254,62 @@ class _StatusTrayState extends State<StatusTray> {
     final size = await file.length();
     if (size > 48 * 1024 * 1024) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Status media must be smaller than 48 MB.')),
+        const SnackBar(
+          content: Text('Status media must be smaller than 48 MB.'),
+        ),
       );
       return;
     }
 
     setState(() => _uploading = true);
+    String? uploadedPath;
+    var inserted = false;
     try {
       final userId = NiptoSessionManager.instance.userId!;
-      final path = userId + '/' + DateTime.now().microsecondsSinceEpoch.toString() + '.' + extension;
-      await _client.storage.from('statuses').upload(
-        path,
-        File(file.path),
-        fileOptions: FileOptions(contentType: contentType, upsert: false),
-      );
+      final path =
+          userId +
+          '/' +
+          DateTime.now().microsecondsSinceEpoch.toString() +
+          '.' +
+          extension;
+      uploadedPath = path;
+      await _client.storage
+          .from('statuses')
+          .upload(
+            path,
+            File(file.path),
+            fileOptions: FileOptions(contentType: contentType, upsert: false),
+          );
       await _client.from('statuses').insert({
         'owner_id': userId,
         'status_type': isVideo ? 'video' : 'image',
         'media_path': path,
         'visibility': _statusVisibility,
       });
+      inserted = true;
+      try {
+        await _media.enqueue('statuses', path);
+      } catch (_) {
+        // The status row is already saved; validation can be retried later.
+      }
       await _refresh();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Status shared with your followers.')),
       );
     } catch (_) {
+      if (uploadedPath != null && !inserted) {
+        try {
+          await _client.storage.from('statuses').remove([uploadedPath]);
+        } catch (_) {
+          // Best-effort cleanup of an object not yet referenced by a status.
+        }
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Upload failed. Check your connection and try again.')),
+        const SnackBar(
+          content: Text('Upload failed. Check your connection and try again.'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _uploading = false);
@@ -250,7 +324,8 @@ class _StatusTrayState extends State<StatusTray> {
     final parts = name.trim().split(RegExp(r'\s+'));
     if (parts.isEmpty || parts.first.isEmpty) return 'N';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+        .toUpperCase();
   }
 
   @override
@@ -271,19 +346,26 @@ class _StatusTrayState extends State<StatusTray> {
                 isOwn: true,
                 onTap: _showCreateOptions,
               ),
-              ...groups.map((group) => _StatusAvatar(
-                    label: group.ownerId == NiptoSessionManager.instance.userId ? 'Your update' : group.name,
-                    initials: _initials(group.name),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => StatusViewerPage(group: group),
-                      ),
+              ...groups.map(
+                (group) => _StatusAvatar(
+                  label: group.ownerId == NiptoSessionManager.instance.userId
+                      ? 'Your update'
+                      : group.name,
+                  initials: _initials(group.name),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => StatusViewerPage(group: group),
                     ),
-                  )),
+                  ),
+                ),
+              ),
               if (snapshot.hasError)
                 const Padding(
                   padding: EdgeInsets.only(left: 8, top: 20),
-                  child: Text('Statuses unavailable', style: TextStyle(color: NiptoColors.muted, fontSize: 11)),
+                  child: Text(
+                    'Statuses unavailable',
+                    style: TextStyle(color: NiptoColors.muted, fontSize: 11),
+                  ),
                 ),
             ],
           );
@@ -339,18 +421,30 @@ class _StatusAvatar extends StatelessWidget {
                 padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  border: Border.all(color: isOwn ? NiptoColors.border : NiptoColors.coral, width: 2),
+                  border: Border.all(
+                    color: isOwn ? NiptoColors.border : NiptoColors.coral,
+                    width: 2,
+                  ),
                 ),
                 child: CircleAvatar(
                   backgroundColor: NiptoColors.violetSoft,
                   child: Text(
                     initials,
-                    style: const TextStyle(color: NiptoColors.violet, fontWeight: FontWeight.w800, fontSize: 19),
+                    style: const TextStyle(
+                      color: NiptoColors.violet,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 19,
+                    ),
                   ),
                 ),
               ),
               const SizedBox(height: 7),
-              Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11)),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11),
+              ),
             ],
           ),
         ),
@@ -374,17 +468,21 @@ class StatusViewerPage extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(group.name, style: const TextStyle(color: Colors.white, fontSize: 16)),
-            Text('@' + group.niptoId, style: const TextStyle(color: Colors.white60, fontSize: 11)),
+            Text(
+              group.name,
+              style: const TextStyle(color: Colors.white, fontSize: 16),
+            ),
+            Text(
+              '@' + group.niptoId,
+              style: const TextStyle(color: Colors.white60, fontSize: 11),
+            ),
           ],
         ),
       ),
       body: PageView.builder(
         itemCount: group.statuses.length,
-        itemBuilder: (context, index) => _StatusPage(
-          status: group.statuses[index],
-          ownerId: group.ownerId,
-        ),
+        itemBuilder: (context, index) =>
+            _StatusPage(status: group.statuses[index], ownerId: group.ownerId),
       ),
     );
   }
@@ -435,7 +533,9 @@ class _StatusPageState extends State<_StatusPage> {
     final path = widget.status['media_path'] as String?;
     if (type == 'text' || path == null) return;
     try {
-      final url = await Supabase.instance.client.storage.from('statuses').createSignedUrl(path, 1800);
+      final url = await Supabase.instance.client.storage
+          .from('statuses')
+          .createSignedUrl(path, 1800);
       if (!mounted) return;
       setState(() => _signedUrl = url);
       if (type == 'video') {
@@ -459,7 +559,8 @@ class _StatusPageState extends State<_StatusPage> {
 
   Color _background() {
     final raw = widget.status['background_color'] as String?;
-    if (raw == null || !RegExp(r'^#[0-9A-Fa-f]{6}$').hasMatch(raw)) return NiptoColors.violet;
+    if (raw == null || !RegExp(r'^#[0-9A-Fa-f]{6}$').hasMatch(raw))
+      return NiptoColors.violet;
     return Color(int.parse(raw.substring(1), radix: 16) + 0xFF000000);
   }
 
@@ -479,9 +580,14 @@ class _StatusPageState extends State<_StatusPage> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Delete this status?'),
-        content: const Text('This status will be removed for everyone who can see it.'),
+        content: const Text(
+          'This status will be removed for everyone who can see it.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(dialogContext, true),
             style: FilledButton.styleFrom(backgroundColor: NiptoColors.danger),
@@ -516,14 +622,20 @@ class _StatusPageState extends State<_StatusPage> {
       Navigator.of(context).pop(true);
       if (mediaCleanupFailed) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Status deleted. Its media file could not be cleaned up yet.')),
+          const SnackBar(
+            content: Text(
+              'Status deleted. Its media file could not be cleaned up yet.',
+            ),
+          ),
         );
       }
     } catch (_) {
       if (!mounted) return;
       setState(() => _deleting = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not delete this status. Please try again.')),
+        const SnackBar(
+          content: Text('Could not delete this status. Please try again.'),
+        ),
       );
     }
   }
@@ -541,7 +653,10 @@ class _StatusPageState extends State<_StatusPage> {
             children: [
               const Padding(
                 padding: EdgeInsets.fromLTRB(20, 4, 20, 12),
-                child: Text('Status viewers', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                child: Text(
+                  'Status viewers',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                ),
               ),
               Expanded(
                 child: FutureBuilder<List<Map<String, dynamic>>>(
@@ -551,7 +666,9 @@ class _StatusPageState extends State<_StatusPage> {
                       return const Center(child: CircularProgressIndicator());
                     }
                     if (snapshot.hasError) {
-                      return const Center(child: Text('Could not load viewers. Please retry.'));
+                      return const Center(
+                        child: Text('Could not load viewers. Please retry.'),
+                      );
                     }
                     final viewers = snapshot.data ?? [];
                     if (viewers.isEmpty) {
@@ -559,24 +676,42 @@ class _StatusPageState extends State<_StatusPage> {
                     }
                     return ListView.separated(
                       itemCount: viewers.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: 1, indent: 72),
                       itemBuilder: (context, index) {
                         final viewer = viewers[index];
-                        final name = viewer['display_name']?.toString() ?? 'Nipto member';
+                        final name =
+                            viewer['display_name']?.toString() ??
+                            'Nipto member';
                         final handle = viewer['nipto_id']?.toString() ?? '';
-                        final viewedAt = DateTime.tryParse(viewer['viewed_at']?.toString() ?? '')?.toLocal();
+                        final viewedAt = DateTime.tryParse(
+                          viewer['viewed_at']?.toString() ?? '',
+                        )?.toLocal();
                         final time = viewedAt == null
                             ? ''
-                            : viewedAt.hour.toString().padLeft(2, '0') + ':' +
-                                viewedAt.minute.toString().padLeft(2, '0');
+                            : viewedAt.hour.toString().padLeft(2, '0') +
+                                  ':' +
+                                  viewedAt.minute.toString().padLeft(2, '0');
                         return ListTile(
                           leading: CircleAvatar(
                             backgroundColor: NiptoColors.violetSoft,
-                            child: Text(name.isEmpty ? 'N' : name.substring(0, 1).toUpperCase()),
+                            child: Text(
+                              name.isEmpty
+                                  ? 'N'
+                                  : name.substring(0, 1).toUpperCase(),
+                            ),
                           ),
                           title: Text(name),
-                          subtitle: Text(handle.isEmpty ? 'Nipto member' : '@$handle'),
-                          trailing: Text(time, style: const TextStyle(color: NiptoColors.muted, fontSize: 12)),
+                          subtitle: Text(
+                            handle.isEmpty ? 'Nipto member' : '@$handle',
+                          ),
+                          trailing: Text(
+                            time,
+                            style: const TextStyle(
+                              color: NiptoColors.muted,
+                              fontSize: 12,
+                            ),
+                          ),
                         );
                       },
                     );
@@ -604,13 +739,25 @@ class _StatusPageState extends State<_StatusPage> {
         child: Text(
           text,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: Colors.white, fontSize: 27, fontWeight: FontWeight.w800, height: 1.35),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 27,
+            fontWeight: FontWeight.w800,
+            height: 1.35,
+          ),
         ),
       );
     } else if (_failed) {
-      content = const Center(child: Text('This status is unavailable.', style: TextStyle(color: Colors.white70)));
+      content = const Center(
+        child: Text(
+          'This status is unavailable.',
+          style: TextStyle(color: Colors.white70),
+        ),
+      );
     } else if (_signedUrl == null) {
-      content = const Center(child: CircularProgressIndicator(color: Colors.white));
+      content = const Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      );
     } else if (type == 'image') {
       content = Center(child: Image.network(_signedUrl!, fit: BoxFit.contain));
     } else if (_video != null && _video!.value.isInitialized) {
@@ -621,7 +768,9 @@ class _StatusPageState extends State<_StatusPage> {
         ),
       );
     } else {
-      content = const Center(child: CircularProgressIndicator(color: Colors.white));
+      content = const Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      );
     }
 
     final isOwner = NiptoSessionManager.instance.userId == widget.ownerId;
@@ -643,7 +792,14 @@ class _StatusPageState extends State<_StatusPage> {
                     side: const BorderSide(color: Colors.white54),
                   ),
                   icon: _deleting
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
                       : const Icon(Icons.delete_outline_rounded, size: 18),
                   label: const Text('Delete'),
                 ),

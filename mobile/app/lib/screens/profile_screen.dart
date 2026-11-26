@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/nipto_media_service.dart';
 import '../services/nipto_session_manager.dart';
 
 import '../theme/nipto_theme.dart';
@@ -23,6 +24,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   late Future<_ProfileData> _profile;
   final _picker = ImagePicker();
+  final _media = NiptoMediaService();
   bool _uploadingPost = false;
 
   SupabaseClient get _client => Supabase.instance.client;
@@ -35,7 +37,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<_ProfileData> _loadProfile() async {
     final userId = NiptoSessionManager.instance.userId!;
-    final raw = await _client.from('profiles').select().eq('id', userId).single();
+    final raw = await _client
+        .from('profiles')
+        .select()
+        .eq('id', userId)
+        .single();
     final profile = Map<String, dynamic>.from(raw);
 
     final followers = await _client
@@ -58,14 +64,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String? avatarUrl;
     final avatarPath = profile['avatar_path'] as String?;
     if (avatarPath != null && avatarPath.isNotEmpty) {
-      avatarUrl = await _client.storage.from('avatars').createSignedUrl(avatarPath, 1800);
+      avatarUrl = await _client.storage
+          .from('avatars')
+          .createSignedUrl(avatarPath, 1800);
     }
 
     return _ProfileData(
       profile: profile,
       followers: (followers as List).length,
       following: (following as List).length,
-      posts: (posts as List).map((row) => Map<String, dynamic>.from(row)).toList(),
+      posts: (posts as List)
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList(),
       avatarUrl: avatarUrl,
     );
   }
@@ -108,40 +118,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, setDialogState) => AlertDialog(
-        title: const Text('Add a caption'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: captionController,
-              maxLength: 2200,
-              maxLines: 4,
-              decoration: const InputDecoration(hintText: 'Write something about this photo…'),
+          title: const Text('Add a caption'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: captionController,
+                maxLength: 2200,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  hintText: 'Write something about this photo…',
+                ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: visibility,
+                decoration: const InputDecoration(
+                  labelText: 'Who can see this post',
+                ),
+                items: const [
+                  DropdownMenuItem(
+                    value: 'followers',
+                    child: Text('Followers'),
+                  ),
+                  DropdownMenuItem(value: 'public', child: Text('Everyone')),
+                ],
+                onChanged: (value) {
+                  if (value != null) setDialogState(() => visibility = value);
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
             ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: visibility,
-              decoration: const InputDecoration(labelText: 'Who can see this post'),
-              items: const [
-                DropdownMenuItem(value: 'followers', child: Text('Followers')),
-                DropdownMenuItem(value: 'public', child: Text('Everyone')),
-              ],
-              onChanged: (value) {
-                if (value != null) setDialogState(() => visibility = value);
-              },
+            FilledButton(
+              onPressed: () =>
+                  Navigator.pop(dialogContext, captionController.text.trim()),
+              child: const Text('Continue'),
             ),
           ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, captionController.text.trim()),
-            child: const Text('Continue'),
-          ),
-        ],
         ),
       ),
     );
@@ -150,16 +168,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final userId = NiptoSessionManager.instance.userId;
     if (userId == null) return;
-    final path = userId + '/' + DateTime.now().microsecondsSinceEpoch.toString() + '.' + extension;
+    final path =
+        userId +
+        '/' +
+        DateTime.now().microsecondsSinceEpoch.toString() +
+        '.' +
+        extension;
 
     setState(() => _uploadingPost = true);
     var uploaded = false;
     try {
-      await _client.storage.from('posts').upload(
-        path,
-        File(file.path),
-        fileOptions: FileOptions(contentType: contentType, upsert: false),
-      );
+      await _client.storage
+          .from('posts')
+          .upload(
+            path,
+            File(file.path),
+            fileOptions: FileOptions(contentType: contentType, upsert: false),
+          );
       uploaded = true;
 
       await _client.from('posts').insert({
@@ -169,10 +194,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
         'media_type': 'image',
         'visibility': visibility,
       });
+      try {
+        // Enqueue is best-effort: the private object and post row already exist,
+        // so a validator outage must not remove the uploaded media.
+        await _media.enqueue('posts', path);
+      } catch (_) {
+        // The object stays private and can be re-enqueued or reclaimed by cleanup.
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Photo submitted. It will appear to followers after review.')),
+        const SnackBar(
+          content: Text(
+            'Photo submitted. It will appear to followers after review.',
+          ),
+        ),
       );
       setState(() => _profile = _loadProfile());
     } catch (_) {
@@ -185,10 +221,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Photo could not be shared. Please try again.')),
+        const SnackBar(
+          content: Text('Photo could not be shared. Please try again.'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _uploadingPost = false);
+    }
+  }
+
+  Future<void> _deletePost(String postId, String path) async {
+    final userId = NiptoSessionManager.instance.userId;
+    if (userId == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete this post?'),
+        content: const Text('Your post will be removed from your profile.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: NiptoColors.danger),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await _client
+          .from('posts')
+          .delete()
+          .eq('id', postId)
+          .eq('author_id', userId);
+      try {
+        await _client.storage.from('posts').remove([path]);
+      } catch (_) {
+        // Best effort; the object remains private if cleanup cannot run.
+      }
+      if (mounted) setState(() => _profile = _loadProfile());
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Post could not be deleted. Please try again.'),
+        ),
+      );
     }
   }
 
@@ -210,7 +292,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final contentType = mimeTypes[extension];
     if (contentType == null || await file.length() > 8 * 1024 * 1024) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Choose a JPG, PNG or WebP image smaller than 8 MB.')),
+        const SnackBar(
+          content: Text('Choose a JPG, PNG or WebP image smaller than 8 MB.'),
+        ),
       );
       return;
     }
@@ -218,16 +302,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final userId = NiptoSessionManager.instance.userId;
     if (userId == null) return;
     // Use a new object key for every avatar so clients never reuse a stale cached image.
-    final path = userId + '/avatar_' + DateTime.now().microsecondsSinceEpoch.toString() + '.' + extension;
+    final path =
+        userId +
+        '/avatar_' +
+        DateTime.now().microsecondsSinceEpoch.toString() +
+        '.' +
+        extension;
     var uploaded = false;
     try {
-      await _client.storage.from('avatars').upload(
-        path,
-        File(file.path),
-        fileOptions: FileOptions(contentType: contentType, upsert: false),
-      );
+      await _client.storage
+          .from('avatars')
+          .upload(
+            path,
+            File(file.path),
+            fileOptions: FileOptions(contentType: contentType, upsert: false),
+          );
       uploaded = true;
-      await _client.from('profiles').update({'avatar_path': path}).eq('id', userId);
+      await _client
+          .from('profiles')
+          .update({'avatar_path': path})
+          .eq('id', userId);
+      try {
+        await _media.enqueue('avatars', path);
+      } catch (_) {
+        // Validation can be retried without losing the uploaded avatar.
+      }
       if (mounted) setState(() => _profile = _loadProfile());
     } catch (_) {
       if (uploaded) {
@@ -298,10 +397,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     try {
-      await _client.from('profiles').update(result).eq(
-        'id',
-        NiptoSessionManager.instance.userId!,
-      );
+      await _client
+          .from('profiles')
+          .update(result)
+          .eq('id', NiptoSessionManager.instance.userId!);
       if (mounted) setState(() => _profile = _loadProfile());
     } catch (_) {
       if (!mounted) return;
@@ -337,7 +436,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
           final data = snapshot.data!;
           final profile = data.profile;
-          final displayName = profile['display_name'] as String? ?? 'Nipto user';
+          final displayName =
+              profile['display_name'] as String? ?? 'Nipto user';
           final handle = profile['nipto_id'] as String? ?? '';
           final bio = profile['bio'] as String? ?? '';
 
@@ -348,27 +448,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 sliver: SliverToBoxAdapter(
                   child: Row(
                     children: [
-                      Text('Your space', style: Theme.of(context).textTheme.headlineSmall),
+                      Text(
+                        'Your space',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
                       const Spacer(),
                       IconButton(
                         tooltip: 'Notifications',
                         onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()),
+                          MaterialPageRoute<void>(
+                            builder: (_) => const NotificationsScreen(),
+                          ),
                         ),
                         icon: widget.unreadCount > 0
                             ? Badge(
-                                label: Text(widget.unreadCount > 99 ? '99+' : widget.unreadCount.toString()),
-                                child: const Icon(Icons.notifications_none_rounded),
+                                label: Text(
+                                  widget.unreadCount > 99
+                                      ? '99+'
+                                      : widget.unreadCount.toString(),
+                                ),
+                                child: const Icon(
+                                  Icons.notifications_none_rounded,
+                                ),
                               )
                             : const Icon(Icons.notifications_none_rounded),
                       ),
                       IconButton(
                         tooltip: 'Settings',
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
-                        ).then((_) {
-                          if (mounted) setState(() => _profile = _loadProfile());
-                        }),
+                        onPressed: () => Navigator.of(context)
+                            .push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const SettingsScreen(),
+                              ),
+                            )
+                            .then((_) {
+                              if (mounted)
+                                setState(() => _profile = _loadProfile());
+                            }),
                         icon: const Icon(Icons.settings_outlined),
                       ),
                     ],
@@ -395,7 +511,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ? Text(
                                       displayName.isEmpty
                                           ? 'N'
-                                          : displayName.substring(0, 1).toUpperCase(),
+                                          : displayName
+                                                .substring(0, 1)
+                                                .toUpperCase(),
                                       style: const TextStyle(
                                         color: NiptoColors.violet,
                                         fontSize: 28,
@@ -413,7 +531,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 decoration: BoxDecoration(
                                   color: NiptoColors.violet,
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 2),
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 2,
+                                  ),
                                 ),
                                 child: const Icon(
                                   Icons.camera_alt_rounded,
@@ -426,12 +547,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: 14),
-                      Text(displayName, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                      Text(
+                        displayName,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
                       const SizedBox(height: 3),
-                      Text('@' + handle, style: const TextStyle(color: NiptoColors.muted)),
+                      Text(
+                        '@' + handle,
+                        style: const TextStyle(color: NiptoColors.muted),
+                      ),
                       if (bio.isNotEmpty) ...[
                         const SizedBox(height: 10),
-                        Text(bio, textAlign: TextAlign.center, style: const TextStyle(height: 1.4)),
+                        Text(
+                          bio,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(height: 1.4),
+                        ),
                       ],
                       const SizedBox(height: 20),
                       Row(
@@ -442,7 +576,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             count: data.followers,
                             onTap: () => Navigator.of(context).push(
                               MaterialPageRoute<void>(
-                                builder: (_) => const ConnectionsScreen(direction: 'followers'),
+                                builder: (_) => const ConnectionsScreen(
+                                  direction: 'followers',
+                                ),
                               ),
                             ),
                           ),
@@ -452,7 +588,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             count: data.following,
                             onTap: () => Navigator.of(context).push(
                               MaterialPageRoute<void>(
-                                builder: (_) => const ConnectionsScreen(direction: 'following'),
+                                builder: (_) => const ConnectionsScreen(
+                                  direction: 'following',
+                                ),
                               ),
                             ),
                           ),
@@ -465,7 +603,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         onPressed: () => _editProfile(data),
                         icon: const Icon(Icons.edit_outlined, size: 18),
                         label: const Text('Edit profile'),
-                        style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(46),
+                        ),
                       ),
                       const SizedBox(height: 10),
                       FilledButton.tonalIcon(
@@ -474,11 +614,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ? const SizedBox(
                                 width: 17,
                                 height: 17,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
-                            : const Icon(Icons.add_photo_alternate_outlined, size: 18),
-                        label: Text(_uploadingPost ? 'Uploading photo…' : 'Share a photo'),
-                        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(46)),
+                            : const Icon(
+                                Icons.add_photo_alternate_outlined,
+                                size: 18,
+                              ),
+                        label: Text(
+                          _uploadingPost ? 'Uploading photo…' : 'Share a photo',
+                        ),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(46),
+                        ),
                       ),
                     ],
                   ),
@@ -489,11 +638,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 sliver: SliverToBoxAdapter(
                   child: Row(
                     children: [
-                      Text('Your posts', style: Theme.of(context).textTheme.titleLarge),
+                      Text(
+                        'Your posts',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                       const Spacer(),
                       Text(
                         data.posts.length.toString(),
-                        style: const TextStyle(color: NiptoColors.muted, fontSize: 12),
+                        style: const TextStyle(
+                          color: NiptoColors.muted,
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
@@ -514,18 +669,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   sliver: SliverGrid(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final post = data.posts[index];
-                        return _ProfilePostTile(post: post);
-                      },
-                      childCount: data.posts.length,
-                    ),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      crossAxisSpacing: 7,
-                      mainAxisSpacing: 7,
-                    ),
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final post = data.posts[index];
+                      return _ProfilePostTile(
+                        post: post,
+                        onDelete: () => _deletePost(
+                          post['id'] as String,
+                          post['media_path'] as String,
+                        ),
+                      );
+                    }, childCount: data.posts.length),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 7,
+                          mainAxisSpacing: 7,
+                        ),
                   ),
                 ),
               const SliverToBoxAdapter(child: SizedBox(height: 28)),
@@ -574,7 +733,10 @@ class _Count extends StatelessWidget {
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 2),
-            Text(label, style: const TextStyle(color: NiptoColors.muted, fontSize: 12)),
+            Text(
+              label,
+              style: const TextStyle(color: NiptoColors.muted, fontSize: 12),
+            ),
           ],
         ),
       ),
@@ -582,11 +744,11 @@ class _Count extends StatelessWidget {
   }
 }
 
-
 class _ProfilePostTile extends StatefulWidget {
-  const _ProfilePostTile({required this.post});
+  const _ProfilePostTile({required this.post, required this.onDelete});
 
   final Map<String, dynamic> post;
+  final VoidCallback onDelete;
 
   @override
   State<_ProfilePostTile> createState() => _ProfilePostTileState();
@@ -622,7 +784,11 @@ class _ProfilePostTileState extends State<_ProfilePostTile> {
                 return Container(
                   color: NiptoColors.violetSoft,
                   child: const Center(
-                    child: Icon(Icons.broken_image_outlined, color: NiptoColors.violet, size: 30),
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      color: NiptoColors.violet,
+                      size: 30,
+                    ),
                   ),
                 );
               }
@@ -644,11 +810,27 @@ class _ProfilePostTileState extends State<_ProfilePostTile> {
                 errorBuilder: (_, __, ___) => Container(
                   color: NiptoColors.violetSoft,
                   child: const Center(
-                    child: Icon(Icons.broken_image_outlined, color: NiptoColors.violet),
+                    child: Icon(
+                      Icons.broken_image_outlined,
+                      color: NiptoColors.violet,
+                    ),
                   ),
                 ),
               );
             },
+          ),
+          Positioned(
+            top: 2,
+            right: 2,
+            child: IconButton(
+              tooltip: 'Delete post',
+              icon: const Icon(
+                Icons.delete_outline,
+                color: Colors.white,
+                size: 18,
+              ),
+              onPressed: widget.onDelete,
+            ),
           ),
           if (pending)
             Positioned(
@@ -664,7 +846,11 @@ class _ProfilePostTileState extends State<_ProfilePostTile> {
                 child: const Text(
                   'In review',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),

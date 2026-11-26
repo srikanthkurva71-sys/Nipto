@@ -11,6 +11,10 @@ HARDENING_MIGRATION = (
 OIDC_CLAIMS_MIGRATION = (
     ROOT / "supabase/migrations/20261126122909_nipto_oidc_custom_claims_provisioning.sql"
 )
+PUSH_MIGRATION = ROOT / "supabase/migrations/20261126132328_nipto_push_delivery.sql"
+MESSAGE_RPC_HARDENING = (
+    ROOT / "supabase/migrations/20261126132330_nipto_message_rpc_search_path.sql"
+)
 OIDC_DEPLOYMENT_DOC = ROOT / "docs/NIPTO_OIDC_DEPLOYMENT.md"
 NOTIFICATIONS_SCREEN = APP_ROOT / "lib/screens/notifications_screen.dart"
 LAUNCHER_CONFIG = APP_ROOT / "flutter_launcher_icons.yaml"
@@ -18,6 +22,8 @@ SPLASH_CONFIG = APP_ROOT / "flutter_native_splash.yaml"
 AUTH_SCREEN = APP_ROOT / "lib/screens/auth_screen.dart"
 SESSION_MANAGER = APP_ROOT / "lib/services/nipto_session_manager.dart"
 IDENTITY_FUNCTION = ROOT / "supabase/functions/nipto-identity/index.ts"
+PUSH_FUNCTION = ROOT / "supabase/functions/nipto-push-dispatch/index.ts"
+PUSH_HELPERS = ROOT / "supabase/functions/nipto-push-dispatch/push_helpers.ts"
 
 
 class NiptoProductionReadinessTests(unittest.TestCase):
@@ -25,6 +31,8 @@ class NiptoProductionReadinessTests(unittest.TestCase):
     def setUpClass(cls):
         cls.hardening_sql = HARDENING_MIGRATION.read_text(encoding="utf-8")
         cls.oidc_claims_sql = OIDC_CLAIMS_MIGRATION.read_text(encoding="utf-8")
+        cls.push_sql = PUSH_MIGRATION.read_text(encoding="utf-8")
+        cls.message_rpc_hardening_sql = MESSAGE_RPC_HARDENING.read_text(encoding="utf-8")
         cls.oidc_deployment_doc = OIDC_DEPLOYMENT_DOC.read_text(encoding="utf-8")
         cls.notifications_source = NOTIFICATIONS_SCREEN.read_text(encoding="utf-8")
         cls.lib_sources = {
@@ -35,6 +43,8 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         cls.auth_screen = AUTH_SCREEN.read_text(encoding="utf-8")
         cls.session_manager = SESSION_MANAGER.read_text(encoding="utf-8")
         cls.identity_function = IDENTITY_FUNCTION.read_text(encoding="utf-8")
+        cls.push_function = PUSH_FUNCTION.read_text(encoding="utf-8")
+        cls.push_helpers = PUSH_HELPERS.read_text(encoding="utf-8")
 
     def test_least_privilege_migration_restores_column_scoped_inserts(self):
         protected_columns = {
@@ -132,6 +142,45 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         self.assertIn("metadata['custom_claims']", session_source)
         self.assertIn("custom[customKey]", session_source)
         self.assertIn("custom[standardKey]", session_source)
+
+    def test_message_rpcs_use_empty_search_path(self):
+        self.assertIn("public.edit_own_message(", self.message_rpc_hardening_sql)
+        self.assertIn("public.delete_own_message(", self.message_rpc_hardening_sql)
+        self.assertEqual(self.message_rpc_hardening_sql.count("set search_path = ''"), 2)
+        self.assertNotIn("set search_path = public, pg_temp", self.message_rpc_hardening_sql)
+
+    def test_push_delivery_uses_durable_outbox_and_narrow_rpcs(self):
+        for fragment in (
+            "create table if not exists private.push_delivery_outbox",
+            "notifications_after_insert_push",
+            "call_sessions_after_insert_push",
+            "public.register_device_push_token(",
+            "public.unregister_device_push_token(",
+            "public.nipto_push_claim(",
+            "grant execute on function public.register_device_push_token(text, text) to authenticated",
+            "grant execute on function public.nipto_push_claim(integer) to service_role",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.push_sql)
+
+    def test_push_worker_never_trusts_client_for_dispatch(self):
+        self.assertIn('path.endsWith("/worker/run")', self.push_function)
+        self.assertIn("x-nipto-worker-secret", self.push_function)
+        self.assertIn("FCM_SERVICE_ACCOUNT_JSON", self.push_function)
+        self.assertIn("nipto_push_claim", self.push_function)
+        self.assertNotIn("service_role", "\n".join(self.lib_sources.values()))
+        self.assertNotIn("FCM_SERVICE_ACCOUNT_JSON", "\n".join(self.lib_sources.values()))
+
+    def test_push_payload_contains_only_opaque_identifiers(self):
+        self.assertIn('click_action: "FLUTTER_NOTIFICATION_CLICK"', self.push_helpers)
+        self.assertIn("pushDataForJob", self.push_helpers)
+        self.assertNotIn("sdp", self.push_helpers)
+        self.assertNotIn("candidate", self.push_helpers)
+
+    def test_new_edge_functions_are_configured(self):
+        for function in ("nipto-push-dispatch", "nipto-media", "nipto-privacy"):
+            with self.subTest(function=function):
+                self.assertIn(f"[functions.{function}]", self.config_toml)
 
     def test_official_branding_generators_are_configured(self):
         launcher = LAUNCHER_CONFIG.read_text(encoding="utf-8")

@@ -29,7 +29,8 @@ class _AccountMigrationScreenState extends State<AccountMigrationScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = 'Could not link your Nipto identity. Keep this device signed in and try again.';
+        _error =
+            'Could not link your Nipto identity. Keep this device signed in and try again.';
       });
     } finally {
       if (mounted) setState(() => _busy = false);

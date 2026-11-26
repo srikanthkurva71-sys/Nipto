@@ -39,7 +39,9 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   Future<List<Map<String, dynamic>>> _loadHistory() async {
     final rows = await _client
         .from('user_feedback')
-        .select('id, category, subject, status, response_message, created_at, reviewed_at')
+        .select(
+          'id, category, subject, status, response_message, created_at, reviewed_at',
+        )
         .order('created_at', ascending: false)
         .limit(20);
     return (rows as List).map((row) => Map<String, dynamic>.from(row)).toList();
@@ -68,20 +70,26 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         _history = _loadHistory();
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Thank you. Your feedback has been received.')),
+        const SnackBar(
+          content: Text('Thank you. Your feedback has been received.'),
+        ),
       );
     } on PostgrestException catch (error) {
       if (!mounted) return;
       final message = error.message.contains('Feedback limit reached')
           ? 'You have reached the feedback limit for today. Please try again later.'
           : 'Feedback could not be sent. Check your connection and try again.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Feedback could not be sent. Check your connection and try again.')),
+        const SnackBar(
+          content: Text(
+            'Feedback could not be sent. Check your connection and try again.',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -125,7 +133,11 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
         children: [
           const Text(
             'Help us make Nipto better.',
-            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: NiptoColors.ink),
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: NiptoColors.ink,
+            ),
           ),
           const SizedBox(height: 6),
           const Text(
@@ -141,26 +153,50 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('What is this about?', style: TextStyle(fontWeight: FontWeight.w800)),
+                    const Text(
+                      'What is this about?',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
                       value: _category,
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'experience', child: Text('App experience')),
-                        DropdownMenuItem(value: 'bug', child: Text('Report a problem')),
-                        DropdownMenuItem(value: 'idea', child: Text('Suggest a feature')),
-                        DropdownMenuItem(value: 'support', child: Text('Account or support')),
+                        DropdownMenuItem(
+                          value: 'experience',
+                          child: Text('App experience'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'bug',
+                          child: Text('Report a problem'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'idea',
+                          child: Text('Suggest a feature'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'support',
+                          child: Text('Account or support'),
+                        ),
                       ],
-                      onChanged: _submitting ? null : (value) {
-                        if (value != null) setState(() => _category = value);
-                      },
+                      onChanged: _submitting
+                          ? null
+                          : (value) {
+                              if (value != null)
+                                setState(() => _category = value);
+                            },
                     ),
                     const SizedBox(height: 18),
-                    const Text('Rate your experience (optional)', style: TextStyle(fontWeight: FontWeight.w800)),
+                    const Text(
+                      'Rate your experience (optional)',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
                     const SizedBox(height: 8),
                     Row(
                       children: List.generate(5, (index) {
@@ -168,12 +204,19 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                         final selected = (_rating ?? 0) >= value;
                         return IconButton(
                           tooltip: '$value out of 5',
-                          onPressed: _submitting ? null : () => setState(
-                            () => _rating = _rating == value ? null : value,
-                          ),
+                          onPressed: _submitting
+                              ? null
+                              : () => setState(
+                                  () =>
+                                      _rating = _rating == value ? null : value,
+                                ),
                           icon: Icon(
-                            selected ? Icons.star_rounded : Icons.star_outline_rounded,
-                            color: selected ? NiptoColors.coral : NiptoColors.muted,
+                            selected
+                                ? Icons.star_rounded
+                                : Icons.star_outline_rounded,
+                            color: selected
+                                ? NiptoColors.coral
+                                : NiptoColors.muted,
                             size: 30,
                           ),
                         );
@@ -191,7 +234,8 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                       ),
                       validator: (value) {
                         final text = value?.trim() ?? '';
-                        if (text.length < 3) return 'Enter at least 3 characters.';
+                        if (text.length < 3)
+                          return 'Enter at least 3 characters.';
                         return null;
                       },
                     ),
@@ -204,13 +248,15 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                       textCapitalization: TextCapitalization.sentences,
                       decoration: const InputDecoration(
                         labelText: 'Tell us more',
-                        hintText: 'Describe what happened or what you would like to see…',
+                        hintText:
+                            'Describe what happened or what you would like to see…',
                         alignLabelWithHint: true,
                         border: OutlineInputBorder(),
                       ),
                       validator: (value) {
                         final text = value?.trim() ?? '';
-                        if (text.length < 10) return 'Please provide at least 10 characters.';
+                        if (text.length < 10)
+                          return 'Please provide at least 10 characters.';
                         return null;
                       },
                     ),
@@ -223,7 +269,10 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                             ? const SizedBox(
                                 width: 18,
                                 height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
                               )
                             : const Icon(Icons.send_rounded),
                         label: Text(_submitting ? 'Sending…' : 'Send feedback'),
@@ -235,7 +284,10 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
             ),
           ),
           const SizedBox(height: 24),
-          const Text('Your feedback', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          const Text(
+            'Your feedback',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          ),
           const SizedBox(height: 8),
           FutureBuilder<List<Map<String, dynamic>>>(
             future: _history,
@@ -256,7 +308,10 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
               if (rows.isEmpty) {
                 return const Padding(
                   padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text('Your submitted feedback will appear here.', style: TextStyle(color: NiptoColors.muted)),
+                  child: Text(
+                    'Your submitted feedback will appear here.',
+                    style: TextStyle(color: NiptoColors.muted),
+                  ),
                 );
               }
               return Card(
@@ -266,18 +321,33 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                     final status = row['status'] as String? ?? 'received';
                     final subject = row['subject'] as String? ?? 'Feedback';
                     return ListTile(
-                      leading: const Icon(Icons.chat_bubble_outline_rounded, color: NiptoColors.violet),
-                      title: Text(subject, maxLines: 2, overflow: TextOverflow.ellipsis),
+                      leading: const Icon(
+                        Icons.chat_bubble_outline_rounded,
+                        color: NiptoColors.violet,
+                      ),
+                      title: Text(
+                        subject,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       subtitle: Text(
-                        (row['response_message'] as String?)?.trim().isNotEmpty == true
-                            ? _categoryLabel(category) + '\n' + (row['response_message'] as String)
+                        (row['response_message'] as String?)
+                                    ?.trim()
+                                    .isNotEmpty ==
+                                true
+                            ? _categoryLabel(category) +
+                                  '\n' +
+                                  (row['response_message'] as String)
                             : _categoryLabel(category),
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                       ),
                       trailing: Text(
                         _statusLabel(status),
-                        style: const TextStyle(color: NiptoColors.muted, fontSize: 11),
+                        style: const TextStyle(
+                          color: NiptoColors.muted,
+                          fontSize: 11,
+                        ),
                       ),
                     );
                   }).toList(),
@@ -288,7 +358,11 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
           const SizedBox(height: 16),
           const Text(
             'Please do not include passwords, verification codes or sensitive personal information in feedback.',
-            style: TextStyle(color: NiptoColors.muted, fontSize: 12, height: 1.4),
+            style: TextStyle(
+              color: NiptoColors.muted,
+              fontSize: 12,
+              height: 1.4,
+            ),
           ),
         ],
       ),

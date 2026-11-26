@@ -83,7 +83,9 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
       setState(() => _error = error.message);
     } catch (_) {
       if (!mounted) return;
-      setState(() => _error = 'Your password could not be updated. Please try again.');
+      setState(
+        () => _error = 'Your password could not be updated. Please try again.',
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -114,7 +116,11 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                     borderRadius: BorderRadius.circular(26),
                     border: Border.all(color: NiptoColors.border),
                     boxShadow: const [
-                      BoxShadow(color: Color(0x140F1C50), blurRadius: 28, offset: Offset(0, 12)),
+                      BoxShadow(
+                        color: Color(0x140F1C50),
+                        blurRadius: 28,
+                        offset: Offset(0, 12),
+                      ),
                     ],
                   ),
                   child: Form(
@@ -133,7 +139,10 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                         const Text(
                           'Your trusted Nipto account approved this request. Choose a new password to secure your account.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: NiptoColors.muted, height: 1.5),
+                          style: TextStyle(
+                            color: NiptoColors.muted,
+                            height: 1.5,
+                          ),
                         ),
                         const SizedBox(height: 25),
                         TextFormField(
@@ -145,15 +154,25 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                             labelText: 'New password',
                             prefixIcon: const Icon(Icons.lock_outline_rounded),
                             suffixIcon: IconButton(
-                              tooltip: _hidePassword ? 'Show password' : 'Hide password',
-                              onPressed: () => setState(() => _hidePassword = !_hidePassword),
-                              icon: Icon(_hidePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                              tooltip: _hidePassword
+                                  ? 'Show password'
+                                  : 'Hide password',
+                              onPressed: () => setState(
+                                () => _hidePassword = !_hidePassword,
+                              ),
+                              icon: Icon(
+                                _hidePassword
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                              ),
                             ),
                           ),
                           onChanged: (_) => setState(() {}),
                           validator: (value) {
-                            if ((value ?? '').length < 12) return 'Use at least 12 characters.';
-                            if ((value ?? '').length > 128) return 'Use no more than 128 characters.';
+                            if ((value ?? '').length < 12)
+                              return 'Use at least 12 characters.';
+                            if ((value ?? '').length > 128)
+                              return 'Use no more than 128 characters.';
                             return null;
                           },
                         ),
@@ -162,7 +181,10 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                           alignment: Alignment.centerLeft,
                           child: TextButton.icon(
                             onPressed: _saving ? null : _suggestPassword,
-                            icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                            icon: const Icon(
+                              Icons.auto_awesome_rounded,
+                              size: 18,
+                            ),
                             label: const Text('Suggest a strong password'),
                           ),
                         ),
@@ -181,7 +203,8 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                             prefixIcon: Icon(Icons.verified_user_outlined),
                           ),
                           validator: (value) {
-                            if (value != _password.text) return 'Passwords do not match.';
+                            if (value != _password.text)
+                              return 'Passwords do not match.';
                             return null;
                           },
                         ),
@@ -193,7 +216,13 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                               color: const Color(0xFFFFF1F2),
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Text(_error!, style: const TextStyle(color: NiptoColors.danger, height: 1.4)),
+                            child: Text(
+                              _error!,
+                              style: const TextStyle(
+                                color: NiptoColors.danger,
+                                height: 1.4,
+                              ),
+                            ),
                           ),
                         ],
                         const SizedBox(height: 24),
@@ -203,7 +232,10 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                               ? const SizedBox(
                                   width: 20,
                                   height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
                                 )
                               : const Text('Update password'),
                         ),
@@ -211,7 +243,11 @@ class _PasswordRecoveryScreenState extends State<PasswordRecoveryScreen> {
                         const Text(
                           'Your new password is private. Your recovery contact cannot see it.',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: NiptoColors.muted, fontSize: 12, height: 1.4),
+                          style: TextStyle(
+                            color: NiptoColors.muted,
+                            fontSize: 12,
+                            height: 1.4,
+                          ),
                         ),
                       ],
                     ),
@@ -241,7 +277,11 @@ class _PasswordStrength extends StatelessWidget {
       RegExp(r'[^A-Za-z0-9]').hasMatch(value),
     ];
     final score = checks.where((check) => check).length;
-    final label = score >= 5 ? 'Strong password' : score >= 3 ? 'Good progress' : 'Add length and variety';
+    final label = score >= 5
+        ? 'Strong password'
+        : score >= 3
+        ? 'Good progress'
+        : 'Add length and variety';
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Column(
@@ -255,7 +295,9 @@ class _PasswordStrength extends StatelessWidget {
                   height: 4,
                   margin: EdgeInsets.only(right: index == 4 ? 0 : 5),
                   decoration: BoxDecoration(
-                    color: index < score ? NiptoColors.success : NiptoColors.border,
+                    color: index < score
+                        ? NiptoColors.success
+                        : NiptoColors.border,
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
@@ -263,7 +305,10 @@ class _PasswordStrength extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Text(label, style: const TextStyle(color: NiptoColors.muted, fontSize: 11)),
+          Text(
+            label,
+            style: const TextStyle(color: NiptoColors.muted, fontSize: 11),
+          ),
         ],
       ),
     );

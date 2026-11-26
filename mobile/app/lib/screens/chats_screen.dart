@@ -60,7 +60,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
     final conversations = await _client
         .from('conversations')
-        .select('id, conversation_type, title, direct_user_a, direct_user_b, updated_at')
+        .select(
+          'id, conversation_type, title, direct_user_a, direct_user_b, updated_at',
+        )
         .inFilter('id', ids)
         .order('updated_at', ascending: false)
         .limit(60);
@@ -91,8 +93,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
           .eq('following_id', userId)
           .eq('status', 'accepted')
           .inFilter('follower_id', partnerIds.toList());
-      connectedIds.addAll((followingRows as List).map((row) => row['following_id'] as String));
-      connectedIds.addAll((followerRows as List).map((row) => row['follower_id'] as String));
+      connectedIds.addAll(
+        (followingRows as List).map((row) => row['following_id'] as String),
+      );
+      connectedIds.addAll(
+        (followerRows as List).map((row) => row['follower_id'] as String),
+      );
     }
 
     final visiblePartnerIds = partnerIds.intersection(connectedIds);
@@ -103,7 +109,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
         params: {'p_user_ids': visiblePartnerIds.toList()},
       );
       for (final profile in profiles as List) {
-        profilesById[profile['id'] as String] = Map<String, dynamic>.from(profile);
+        profilesById[profile['id'] as String] = Map<String, dynamic>.from(
+          profile,
+        );
       }
     }
 
@@ -119,7 +127,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
     while (lastByConversation.length < previewConversationIds.length) {
       final page = await _client
           .from('messages')
-          .select('conversation_id, body, message_type, sender_id, created_at, deleted_at, media_path')
+          .select(
+            'conversation_id, body, message_type, sender_id, created_at, deleted_at, media_path',
+          )
           .inFilter('conversation_id', previewConversationIds.toList())
           .order('created_at', ascending: false)
           .range(messageOffset, messageOffset + messagePageSize - 1);
@@ -137,36 +147,39 @@ class _ChatsScreenState extends State<ChatsScreen> {
       if (rows.length < messagePageSize) break;
     }
 
-    return (conversations as List).where((raw) {
-      if (raw['conversation_type'] != 'direct') return true;
-      final a = raw['direct_user_a'] as String?;
-      final b = raw['direct_user_b'] as String?;
-      final partnerId = a == userId ? b : a;
-      return partnerId != null && connectedIds.contains(partnerId);
-    }).map((raw) {
-      final row = Map<String, dynamic>.from(raw);
-      final isDirect = row['conversation_type'] == 'direct';
-      final a = row['direct_user_a'] as String?;
-      final b = row['direct_user_b'] as String?;
-      final partnerId = a == userId ? b : a;
-      final profile = partnerId == null ? null : profilesById[partnerId];
-      return _ChatPreview(
-        id: row['id'] as String,
-        title: isDirect
-            ? (profile?['display_name'] as String? ?? 'Nipto user')
-            : (row['title'] as String? ?? 'Group chat'),
-        subtitle: isDirect
-            ? '@' + (profile?['nipto_id'] as String? ?? 'member')
-            : 'Group conversation',
-        message: _messagePreview(lastByConversation[row['id']]),
-        initials: _initials(
-          isDirect
-              ? (profile?['display_name'] as String? ?? 'N')
-              : (row['title'] as String? ?? 'Nipto'),
-        ),
-        updatedAt: DateTime.tryParse(row['updated_at'] as String? ?? ''),
-      );
-    }).toList();
+    return (conversations as List)
+        .where((raw) {
+          if (raw['conversation_type'] != 'direct') return true;
+          final a = raw['direct_user_a'] as String?;
+          final b = raw['direct_user_b'] as String?;
+          final partnerId = a == userId ? b : a;
+          return partnerId != null && connectedIds.contains(partnerId);
+        })
+        .map((raw) {
+          final row = Map<String, dynamic>.from(raw);
+          final isDirect = row['conversation_type'] == 'direct';
+          final a = row['direct_user_a'] as String?;
+          final b = row['direct_user_b'] as String?;
+          final partnerId = a == userId ? b : a;
+          final profile = partnerId == null ? null : profilesById[partnerId];
+          return _ChatPreview(
+            id: row['id'] as String,
+            title: isDirect
+                ? (profile?['display_name'] as String? ?? 'Nipto user')
+                : (row['title'] as String? ?? 'Group chat'),
+            subtitle: isDirect
+                ? '@' + (profile?['nipto_id'] as String? ?? 'member')
+                : 'Group conversation',
+            message: _messagePreview(lastByConversation[row['id']]),
+            initials: _initials(
+              isDirect
+                  ? (profile?['display_name'] as String? ?? 'N')
+                  : (row['title'] as String? ?? 'Nipto'),
+            ),
+            updatedAt: DateTime.tryParse(row['updated_at'] as String? ?? ''),
+          );
+        })
+        .toList();
   }
 
   String _messagePreview(Map<String, dynamic>? message) {
@@ -186,7 +199,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
     }
   }
 
-  Future<void> _handleSafetyAction(Map<String, dynamic> profile, String action) async {
+  Future<void> _handleSafetyAction(
+    Map<String, dynamic> profile,
+    String action,
+  ) async {
     final targetId = profile['id'] as String;
     final handle = profile['nipto_id'] as String? ?? 'this account';
     final myId = NiptoSessionManager.instance.userId;
@@ -198,10 +214,15 @@ class _ChatsScreenState extends State<ChatsScreen> {
         builder: (dialogContext) => AlertDialog(
           title: const Text('Block this account?'),
           content: Text(
-            '@' + handle + ' will not be able to find your profile or contact you. Your shared conversation will be hidden.',
+            '@' +
+                handle +
+                ' will not be able to find your profile or contact you. Your shared conversation will be hidden.',
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
             FilledButton(
               onPressed: () => Navigator.pop(dialogContext, true),
               child: const Text('Block'),
@@ -215,8 +236,16 @@ class _ChatsScreenState extends State<ChatsScreen> {
           'blocker_id': myId,
           'blocked_id': targetId,
         });
-        await _client.from('follows').delete().eq('follower_id', myId).eq('following_id', targetId);
-        await _client.from('follows').delete().eq('follower_id', targetId).eq('following_id', myId);
+        await _client
+            .from('follows')
+            .delete()
+            .eq('follower_id', myId)
+            .eq('following_id', targetId);
+        await _client
+            .from('follows')
+            .delete()
+            .eq('follower_id', targetId)
+            .eq('following_id', myId);
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('@' + handle + ' has been blocked.')),
@@ -262,7 +291,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Thank you. Your report has been submitted.')),
+        const SnackBar(
+          content: Text('Thank you. Your report has been submitted.'),
+        ),
       );
     } catch (_) {
       if (!mounted) return;
@@ -274,7 +305,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
 
   void _scheduleSearch(String value) {
     _searchDebounce?.cancel();
-    _searchDebounce = Timer(const Duration(milliseconds: 300), () => _search(value));
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 300),
+      () => _search(value),
+    );
   }
 
   Future<void> _search(String value) async {
@@ -328,7 +362,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
           profile['my_follow_state'] = states[profileId];
           profile['their_follow_state'] = inboundStates[profileId];
           profile['chat_connected'] =
-              states[profileId] == 'accepted' || inboundStates[profileId] == 'accepted';
+              states[profileId] == 'accepted' ||
+              inboundStates[profileId] == 'accepted';
         }
       }
       if (!mounted || version != _searchVersion) return;
@@ -337,7 +372,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
       if (!mounted || version != _searchVersion) return;
       setState(() => _searchError = 'Search is unavailable. Please try again.');
     } finally {
-      if (mounted && version == _searchVersion) setState(() => _loadingSearch = false);
+      if (mounted && version == _searchVersion)
+        setState(() => _loadingSearch = false);
     }
   }
 
@@ -363,13 +399,13 @@ class _ChatsScreenState extends State<ChatsScreen> {
       final message = state == 'accepted'
           ? 'Unfollowed @$handle.'
           : state == 'pending'
-              ? 'Follow request cancelled.'
-              : profile['is_private'] == true
-                  ? 'Follow request sent.'
-                  : 'You are now following @$handle.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+          ? 'Follow request cancelled.'
+          : profile['is_private'] == true
+          ? 'Follow request sent.'
+          : 'You are now following @$handle.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
       await _search(_searchController.text);
     } catch (_) {
       if (!mounted) return;
@@ -383,7 +419,11 @@ class _ChatsScreenState extends State<ChatsScreen> {
     if (profile['chat_connected'] != true) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Follow or be followed by this account to start a chat.')),
+        const SnackBar(
+          content: Text(
+            'Follow or be followed by this account to start a chat.',
+          ),
+        ),
       );
       return;
     }
@@ -464,13 +504,15 @@ class _ChatsScreenState extends State<ChatsScreen> {
                     ),
                     IconButton(
                       tooltip: 'New group',
-                      onPressed: () => Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const GroupCreateScreen(),
-                        ),
-                      ).then((_) {
-                        if (mounted) setState(() => _inbox = _loadInbox());
-                      }),
+                      onPressed: () => Navigator.of(context)
+                          .push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const GroupCreateScreen(),
+                            ),
+                          )
+                          .then((_) {
+                            if (mounted) setState(() => _inbox = _loadInbox());
+                          }),
                       icon: const Icon(Icons.group_add_outlined),
                     ),
                     IconButton(
@@ -514,9 +556,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
             if (_searching)
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
-                sliver: SliverToBoxAdapter(
-                  child: _buildSearchResults(),
-                ),
+                sliver: SliverToBoxAdapter(child: _buildSearchResults()),
               )
             else ...[
               SliverToBoxAdapter(child: _buildStatusTray()),
@@ -525,7 +565,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 sliver: SliverToBoxAdapter(
                   child: Row(
                     children: [
-                      Text('Messages', style: Theme.of(context).textTheme.titleLarge),
+                      Text(
+                        'Messages',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
                       const Spacer(),
                       TextButton(
                         onPressed: () => setState(() => _searching = true),
@@ -552,7 +595,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       return SliverToBoxAdapter(
                         child: _EmptyPanel(
                           title: 'Could not load chats',
-                          subtitle: 'Check your connection and pull down to retry.',
+                          subtitle:
+                              'Check your connection and pull down to retry.',
                           icon: Icons.cloud_off_rounded,
                         ),
                       );
@@ -562,27 +606,39 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       return const SliverToBoxAdapter(
                         child: _EmptyPanel(
                           title: 'Your conversations start here',
-                          subtitle: 'Search for any account. Chats are available when either side follows the other.',
+                          subtitle:
+                              'Search for any account. Chats are available when either side follows the other.',
                           icon: Icons.forum_outlined,
                         ),
                       );
                     }
                     return SliverList.separated(
                       itemCount: chats.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: 1, indent: 72),
                       itemBuilder: (context, index) {
                         final chat = chats[index];
                         return ListTile(
-                          contentPadding: const EdgeInsets.symmetric(vertical: 7, horizontal: 2),
+                          contentPadding: const EdgeInsets.symmetric(
+                            vertical: 7,
+                            horizontal: 2,
+                          ),
                           leading: CircleAvatar(
                             radius: 25,
                             backgroundColor: NiptoColors.violetSoft,
                             child: Text(
                               chat.initials,
-                              style: const TextStyle(color: NiptoColors.violet, fontWeight: FontWeight.w800),
+                              style: const TextStyle(
+                                color: NiptoColors.violet,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
-                          title: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                          title: Text(
+                            chat.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           subtitle: Text(
                             chat.message.isEmpty ? chat.subtitle : chat.message,
                             maxLines: 1,
@@ -590,7 +646,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
                           ),
                           trailing: Text(
                             _timeLabel(chat.updatedAt),
-                            style: const TextStyle(color: NiptoColors.muted, fontSize: 11),
+                            style: const TextStyle(
+                              color: NiptoColors.muted,
+                              fontSize: 11,
+                            ),
                           ),
                           onTap: () async {
                             await Navigator.of(context).push(
@@ -599,7 +658,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                   conversationId: chat.id,
                                   title: chat.title,
                                   subtitle: chat.subtitle,
-                                  enableCalls: chat.subtitle != 'Group conversation',
+                                  enableCalls:
+                                      chat.subtitle != 'Group conversation',
                                 ),
                               ),
                             );
@@ -658,25 +718,35 @@ class _ChatsScreenState extends State<ChatsScreen> {
             children: [
               CircleAvatar(
                 backgroundColor: NiptoColors.violetSoft,
-                child: Text(_initials(name), style: const TextStyle(color: NiptoColors.violet)),
+                child: Text(
+                  _initials(name),
+                  style: const TextStyle(color: NiptoColors.violet),
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
                     Text(
-                      '@' + handle +
+                      name,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    Text(
+                      '@' +
+                          handle +
                           (profile['my_follow_state'] == 'accepted' &&
                                   profile['their_follow_state'] == 'accepted'
                               ? ' · Mutual'
                               : profile['their_follow_state'] == 'accepted'
-                                  ? ' · Follows you'
-                                  : profile['my_follow_state'] == 'accepted'
-                                      ? ' · Following'
-                                      : ''),
-                      style: const TextStyle(color: NiptoColors.muted, fontSize: 12),
+                              ? ' · Follows you'
+                              : profile['my_follow_state'] == 'accepted'
+                              ? ' · Following'
+                              : ''),
+                      style: const TextStyle(
+                        color: NiptoColors.muted,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
@@ -685,7 +755,10 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 IconButton(
                   tooltip: 'Message',
                   onPressed: () => _startChat(profile),
-                  icon: const Icon(Icons.chat_bubble_outline_rounded, color: NiptoColors.violet),
+                  icon: const Icon(
+                    Icons.chat_bubble_outline_rounded,
+                    color: NiptoColors.violet,
+                  ),
                 ),
               OutlinedButton(
                 onPressed: () => _follow(profile),
@@ -694,14 +767,14 @@ class _ChatsScreenState extends State<ChatsScreen> {
                           profile['their_follow_state'] == 'accepted'
                       ? 'Mutual'
                       : profile['my_follow_state'] == 'accepted'
-                          ? 'Following'
-                          : profile['my_follow_state'] == 'pending'
-                              ? 'Requested'
-                              : profile['their_follow_state'] == 'accepted'
-                                  ? 'Follow back'
-                                  : profile['is_private'] == true
-                                      ? 'Request'
-                                      : 'Follow',
+                      ? 'Following'
+                      : profile['my_follow_state'] == 'pending'
+                      ? 'Requested'
+                      : profile['their_follow_state'] == 'accepted'
+                      ? 'Follow back'
+                      : profile['is_private'] == true
+                      ? 'Request'
+                      : 'Follow',
                 ),
               ),
               PopupMenuButton<String>(
@@ -723,7 +796,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
     final parts = value.trim().split(RegExp(r'\s+'));
     if (parts.isEmpty || parts.first.isEmpty) return 'N';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+        .toUpperCase();
   }
 }
 
@@ -764,9 +838,17 @@ class _EmptyPanel extends StatelessWidget {
         children: [
           Icon(icon, size: 34, color: NiptoColors.violet),
           const SizedBox(height: 12),
-          Text(title, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+          ),
           const SizedBox(height: 6),
-          Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: NiptoColors.muted, height: 1.4)),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: NiptoColors.muted, height: 1.4),
+          ),
         ],
       ),
     );

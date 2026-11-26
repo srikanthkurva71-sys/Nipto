@@ -55,6 +55,27 @@ jobs:
       - name: Test bounded Nipto OIDC token form parsing
         run: deno test supabase/functions/nipto-identity/form_body_test.ts
 
+      - name: Check formatting of worker Edge Functions
+        run: deno fmt --check supabase/functions/nipto-push-dispatch supabase/functions/nipto-media supabase/functions/nipto-privacy
+
+      - name: Check Nipto push dispatch Edge Function
+        run: deno check supabase/functions/nipto-push-dispatch/index.ts
+
+      - name: Test Nipto push dispatch payload guards
+        run: deno test supabase/functions/nipto-push-dispatch/push_helpers_test.ts
+
+      - name: Check Nipto media validation Edge Function
+        run: deno check supabase/functions/nipto-media/index.ts
+
+      - name: Test Nipto media validation guards
+        run: deno test supabase/functions/nipto-media/validation_test.ts
+
+      - name: Check Nipto privacy Edge Function
+        run: deno check supabase/functions/nipto-privacy/index.ts
+
+      - name: Test Nipto privacy validation
+        run: deno test supabase/functions/nipto-privacy/validation_test.ts
+
       - name: Resolve dependencies
         working-directory: mobile/app
         run: flutter pub get
@@ -109,5 +130,17 @@ jobs:
         with:
           name: nipto-android-debug
           path: mobile/app/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Build debug app bundle
+        working-directory: mobile/app
+        run: flutter build appbundle --debug
+
+      - name: Upload debug AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nipto-android-debug-aab
+          path: mobile/app/build/app/outputs/bundle/debug/app-debug.aab
           if-no-files-found: error
           retention-days: 14

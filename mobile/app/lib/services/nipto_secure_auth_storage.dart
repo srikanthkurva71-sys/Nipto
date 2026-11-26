@@ -13,7 +13,9 @@ class NiptoSecureSessionStorage extends LocalStorage {
     // SharedPreferences storage to Android Keystore-backed secure storage.
     if (await _storage.containsKey(key: _sessionKey)) return;
     final legacyPreferences = await SharedPreferences.getInstance();
-    final legacySession = legacyPreferences.getString(supabasePersistSessionKey);
+    final legacySession = legacyPreferences.getString(
+      supabasePersistSessionKey,
+    );
     if (legacySession == null || legacySession.isEmpty) return;
     await _storage.write(key: _sessionKey, value: legacySession);
     await legacyPreferences.remove(supabasePersistSessionKey);
@@ -31,8 +33,7 @@ class NiptoSecureSessionStorage extends LocalStorage {
       _storage.write(key: _sessionKey, value: persistSessionString);
 
   @override
-  Future<void> removePersistedSession() =>
-      _storage.delete(key: _sessionKey);
+  Future<void> removePersistedSession() => _storage.delete(key: _sessionKey);
 }
 
 /// PKCE verifiers are credentials too; keep them in secure storage as well.

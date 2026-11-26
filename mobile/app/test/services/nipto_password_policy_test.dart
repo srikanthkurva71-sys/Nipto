@@ -33,8 +33,14 @@ void main() {
 
     test('confirmation requires non-empty exact match', () {
       expect(NiptoPasswordPolicy.matches('SecurePassword7!', ''), isFalse);
-      expect(NiptoPasswordPolicy.matches('SecurePassword7!', 'SecurePassword7!'), isTrue);
-      expect(NiptoPasswordPolicy.matches('SecurePassword7!', 'SecurePassword7'), isFalse);
+      expect(
+        NiptoPasswordPolicy.matches('SecurePassword7!', 'SecurePassword7!'),
+        isTrue,
+      );
+      expect(
+        NiptoPasswordPolicy.matches('SecurePassword7!', 'SecurePassword7'),
+        isFalse,
+      );
     });
   });
 }

@@ -11,7 +11,11 @@ class NativeNiptoLoginScreen extends StatefulWidget {
     this.onForgotPassword,
   });
 
-  final Future<void> Function({required String niptoId, required String password}) onSubmit;
+  final Future<void> Function({
+    required String niptoId,
+    required String password,
+  })
+  onSubmit;
   final VoidCallback? onForgotPassword;
 
   @override
@@ -51,7 +55,10 @@ class _NativeNiptoLoginScreenState extends State<NativeNiptoLoginScreen> {
       if (mounted) setState(() => _error = error.message);
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'Sign-in could not be completed. Check your connection and try again.');
+        setState(
+          () => _error =
+              'Sign-in could not be completed. Check your connection and try again.',
+        );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -73,7 +80,10 @@ class _NativeNiptoLoginScreenState extends State<NativeNiptoLoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text('Welcome back', style: Theme.of(context).textTheme.headlineMedium),
+                    Text(
+                      'Welcome back',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
                     const SizedBox(height: 8),
                     const Text('Sign in with your Nipto ID.'),
                     const SizedBox(height: 24),
@@ -89,8 +99,11 @@ class _NativeNiptoLoginScreenState extends State<NativeNiptoLoginScreen> {
                       ),
                       validator: (value) {
                         final id = _normalizeId(value ?? '');
-                        if (id.length < 3 || id.length > 24 ||
-                            !RegExp(r'^[a-z0-9]+(?:_[a-z0-9]+)*$').hasMatch(id)) {
+                        if (id.length < 3 ||
+                            id.length > 24 ||
+                            !RegExp(
+                              r'^[a-z0-9]+(?:_[a-z0-9]+)*$',
+                            ).hasMatch(id)) {
                           return 'Enter a valid Nipto ID.';
                         }
                         return null;
@@ -107,12 +120,21 @@ class _NativeNiptoLoginScreenState extends State<NativeNiptoLoginScreen> {
                         labelText: 'Password',
                         prefixIcon: const Icon(Icons.lock_outline),
                         suffixIcon: IconButton(
-                          tooltip: _showPassword ? 'Hide password' : 'Show password',
-                          onPressed: () => setState(() => _showPassword = !_showPassword),
-                          icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility),
+                          tooltip: _showPassword
+                              ? 'Hide password'
+                              : 'Show password',
+                          onPressed: () =>
+                              setState(() => _showPassword = !_showPassword),
+                          icon: Icon(
+                            _showPassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                          ),
                         ),
                       ),
-                      validator: (value) => (value == null || value.isEmpty) ? 'Enter your password.' : null,
+                      validator: (value) => (value == null || value.isEmpty)
+                          ? 'Enter your password.'
+                          : null,
                     ),
                     Align(
                       alignment: Alignment.centerRight,

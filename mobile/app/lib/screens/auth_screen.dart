@@ -40,7 +40,8 @@ class _AuthScreenState extends State<AuthScreen> {
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _notice = 'Nipto could not open secure sign-in. Check your connection and try again.';
+        _notice =
+            'Nipto could not open secure sign-in. Check your connection and try again.';
         _noticeIsError = true;
       });
     } finally {
@@ -54,9 +55,9 @@ class _AuthScreenState extends State<AuthScreen> {
         builder: (_) => NativeNiptoLoginScreen(
           onSubmit: ({required niptoId, required password}) =>
               NiptoSessionManager.instance.signInWithNiptoId(
-            niptoId: niptoId,
-            password: password,
-          ),
+                niptoId: niptoId,
+                password: password,
+              ),
           onForgotPassword: () {
             Navigator.of(context).pop();
             _openRecovery();
@@ -70,18 +71,18 @@ class _AuthScreenState extends State<AuthScreen> {
     await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => NativeNiptoRegistrationScreen(
-          onSubmit: ({
-            required displayName,
-            required niptoId,
-            required password,
-            required passwordConfirmation,
-          }) =>
-              NiptoSessionManager.instance.registerNiptoAccount(
-            displayName: displayName,
-            niptoId: niptoId,
-            password: password,
-            passwordConfirmation: passwordConfirmation,
-          ),
+          onSubmit:
+              ({
+                required displayName,
+                required niptoId,
+                required password,
+                required passwordConfirmation,
+              }) => NiptoSessionManager.instance.registerNiptoAccount(
+                displayName: displayName,
+                niptoId: niptoId,
+                password: password,
+                passwordConfirmation: passwordConfirmation,
+              ),
         ),
       ),
     );
@@ -89,13 +90,15 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Future<void> _openRecovery() async {
     final completed = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => const PasswordRecoveryRequestScreen(),
-      ),
+      MaterialPageRoute(builder: (_) => const PasswordRecoveryRequestScreen()),
     );
     if (!mounted || completed != true) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Your password was updated. Sign in with your new password.')),
+      const SnackBar(
+        content: Text(
+          'Your password was updated. Sign in with your new password.',
+        ),
+      ),
     );
   }
 
@@ -123,7 +126,11 @@ class _AuthScreenState extends State<AuthScreen> {
                     borderRadius: BorderRadius.circular(30),
                     border: Border.all(color: NiptoColors.border),
                     boxShadow: const [
-                      BoxShadow(color: Color(0x160F1C50), blurRadius: 34, offset: Offset(0, 16)),
+                      BoxShadow(
+                        color: Color(0x160F1C50),
+                        blurRadius: 34,
+                        offset: Offset(0, 16),
+                      ),
                     ],
                   ),
                   child: Column(
@@ -146,7 +153,10 @@ class _AuthScreenState extends State<AuthScreen> {
                       const Text(
                         'Connect with one Nipto ID. Sign in or create your account securely—no email address or phone number required.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: NiptoColors.muted, height: 1.55),
+                        style: TextStyle(
+                          color: NiptoColors.muted,
+                          height: 1.55,
+                        ),
                       ),
                       const SizedBox(height: 30),
                       FilledButton.icon(
@@ -163,17 +173,24 @@ class _AuthScreenState extends State<AuthScreen> {
                           minimumSize: const Size.fromHeight(52),
                           foregroundColor: NiptoColors.violet,
                           side: const BorderSide(color: NiptoColors.violet),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
                         ),
                       ),
                       if (_busy) ...[
                         const SizedBox(height: 20),
-                        const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                        const Center(
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
                         const SizedBox(height: 9),
                         const Text(
                           'Opening browser sign-in fallback…',
                           textAlign: TextAlign.center,
-                          style: TextStyle(color: NiptoColors.muted, fontSize: 12),
+                          style: TextStyle(
+                            color: NiptoColors.muted,
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                       if (_notice != null) ...[
@@ -181,14 +198,18 @@ class _AuthScreenState extends State<AuthScreen> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: _noticeIsError ? const Color(0xFFFFF1F2) : const Color(0xFFEAF8F2),
+                            color: _noticeIsError
+                                ? const Color(0xFFFFF1F2)
+                                : const Color(0xFFEAF8F2),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
                             _notice!,
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: _noticeIsError ? NiptoColors.danger : NiptoColors.success,
+                              color: _noticeIsError
+                                  ? NiptoColors.danger
+                                  : NiptoColors.success,
                               height: 1.4,
                             ),
                           ),
@@ -215,7 +236,11 @@ class _AuthScreenState extends State<AuthScreen> {
                       const Text(
                         'A recovery Nipto account is optional. You can add or change one later in Settings.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: NiptoColors.muted, fontSize: 12, height: 1.5),
+                        style: TextStyle(
+                          color: NiptoColors.muted,
+                          fontSize: 12,
+                          height: 1.5,
+                        ),
                       ),
                       const SizedBox(height: 10),
                       const Text(
@@ -244,10 +269,12 @@ class PasswordRecoveryRequestScreen extends StatefulWidget {
   const PasswordRecoveryRequestScreen({super.key});
 
   @override
-  State<PasswordRecoveryRequestScreen> createState() => _PasswordRecoveryRequestScreenState();
+  State<PasswordRecoveryRequestScreen> createState() =>
+      _PasswordRecoveryRequestScreenState();
 }
 
-class _PasswordRecoveryRequestScreenState extends State<PasswordRecoveryRequestScreen> {
+class _PasswordRecoveryRequestScreenState
+    extends State<PasswordRecoveryRequestScreen> {
   final _formKey = GlobalKey<FormState>();
   final _niptoId = TextEditingController();
   bool _busy = false;
@@ -269,7 +296,9 @@ class _PasswordRecoveryRequestScreenState extends State<PasswordRecoveryRequestS
       _statusMessage = null;
     });
     try {
-      await NiptoSessionManager.instance.startPasswordRecovery(_niptoId.text.trim());
+      await NiptoSessionManager.instance.startPasswordRecovery(
+        _niptoId.text.trim(),
+      );
       if (!mounted) return;
       setState(() {
         _waiting = true;
@@ -279,7 +308,11 @@ class _PasswordRecoveryRequestScreenState extends State<PasswordRecoveryRequestS
     } on NiptoAuthException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } catch (_) {
-      if (mounted) setState(() => _error = 'Could not start recovery. Check your connection and try again.');
+      if (mounted)
+        setState(
+          () => _error =
+              'Could not start recovery. Check your connection and try again.',
+        );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -292,11 +325,14 @@ class _PasswordRecoveryRequestScreenState extends State<PasswordRecoveryRequestS
       _error = null;
     });
     try {
-      final grant = await NiptoSessionManager.instance.checkPasswordRecoveryApproval();
+      final grant = await NiptoSessionManager.instance
+          .checkPasswordRecoveryApproval();
       if (!mounted) return;
       if (grant == null) {
-        setState(() => _statusMessage =
-            'Approval has not arrived yet. Ask your trusted Nipto contact to review the request, then check again.');
+        setState(
+          () => _statusMessage =
+              'Approval has not arrived yet. Ask your trusted Nipto contact to review the request, then check again.',
+        );
         return;
       }
       final completed = await Navigator.of(context).push<bool>(
@@ -312,7 +348,11 @@ class _PasswordRecoveryRequestScreenState extends State<PasswordRecoveryRequestS
     } on NiptoAuthException catch (error) {
       if (mounted) setState(() => _error = error.message);
     } catch (_) {
-      if (mounted) setState(() => _error = 'Could not check the recovery request. Please try again.');
+      if (mounted)
+        setState(
+          () => _error =
+              'Could not check the recovery request. Please try again.',
+        );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -343,7 +383,11 @@ class _PasswordRecoveryRequestScreenState extends State<PasswordRecoveryRequestS
                     borderRadius: BorderRadius.circular(26),
                     border: Border.all(color: NiptoColors.border),
                     boxShadow: const [
-                      BoxShadow(color: Color(0x140F1C50), blurRadius: 28, offset: Offset(0, 12)),
+                      BoxShadow(
+                        color: Color(0x140F1C50),
+                        blurRadius: 28,
+                        offset: Offset(0, 12),
+                      ),
                     ],
                   ),
                   child: Column(
@@ -352,7 +396,9 @@ class _PasswordRecoveryRequestScreenState extends State<PasswordRecoveryRequestS
                       const Center(child: NiptoLogoMark(size: 72)),
                       const SizedBox(height: 22),
                       Text(
-                        _waiting ? 'Waiting for approval' : 'Recover your Nipto account',
+                        _waiting
+                            ? 'Waiting for approval'
+                            : 'Recover your Nipto account',
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.headlineSmall,
                       ),
@@ -362,7 +408,10 @@ class _PasswordRecoveryRequestScreenState extends State<PasswordRecoveryRequestS
                             ? 'Your password can only be reset after an accepted recovery contact approves this request.'
                             : 'Enter the Nipto ID for the account you need to recover. We will check for its trusted recovery contact.',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: NiptoColors.muted, height: 1.5),
+                        style: const TextStyle(
+                          color: NiptoColors.muted,
+                          height: 1.5,
+                        ),
                       ),
                       if (!_waiting) ...[
                         const SizedBox(height: 26),
@@ -380,9 +429,15 @@ class _PasswordRecoveryRequestScreenState extends State<PasswordRecoveryRequestS
                               prefixIcon: Icon(Icons.alternate_email_rounded),
                             ),
                             validator: (value) {
-                              final id = (value ?? '').trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
-                              if (!RegExp(r'^[a-z0-9]+(?:_[a-z0-9]+)*$').hasMatch(id) ||
-                                  id.length < 3 || id.length > 24) {
+                              final id = (value ?? '')
+                                  .trim()
+                                  .replaceFirst(RegExp(r'^@'), '')
+                                  .toLowerCase();
+                              if (!RegExp(
+                                    r'^[a-z0-9]+(?:_[a-z0-9]+)*$',
+                                  ).hasMatch(id) ||
+                                  id.length < 3 ||
+                                  id.length > 24) {
                                 return 'Enter a valid Nipto ID (3–24 characters).';
                               }
                               return null;
@@ -398,7 +453,13 @@ class _PasswordRecoveryRequestScreenState extends State<PasswordRecoveryRequestS
                             color: NiptoColors.violetSoft,
                             borderRadius: BorderRadius.circular(14),
                           ),
-                          child: Text(_statusMessage!, style: const TextStyle(height: 1.5, color: NiptoColors.ink)),
+                          child: Text(
+                            _statusMessage!,
+                            style: const TextStyle(
+                              height: 1.5,
+                              color: NiptoColors.ink,
+                            ),
+                          ),
                         ),
                       ],
                       if (_error != null) ...[
@@ -409,17 +470,28 @@ class _PasswordRecoveryRequestScreenState extends State<PasswordRecoveryRequestS
                             color: const Color(0xFFFFF1F2),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Text(_error!, style: const TextStyle(color: NiptoColors.danger, height: 1.4)),
+                          child: Text(
+                            _error!,
+                            style: const TextStyle(
+                              color: NiptoColors.danger,
+                              height: 1.4,
+                            ),
+                          ),
                         ),
                       ],
                       const SizedBox(height: 24),
                       FilledButton(
-                        onPressed: _busy ? null : (_waiting ? _checkApproval : _startRecovery),
+                        onPressed: _busy
+                            ? null
+                            : (_waiting ? _checkApproval : _startRecovery),
                         child: _busy
                             ? const SizedBox(
                                 height: 20,
                                 width: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
                               )
                             : Text(_waiting ? 'Check approval' : 'Continue'),
                       ),
@@ -429,16 +501,18 @@ class _PasswordRecoveryRequestScreenState extends State<PasswordRecoveryRequestS
                           onPressed: _busy
                               ? null
                               : () => setState(() {
-                                    _waiting = false;
-                                    _error = null;
-                                    _statusMessage = null;
-                                  }),
+                                  _waiting = false;
+                                  _error = null;
+                                  _statusMessage = null;
+                                }),
                           child: const Text('Use a different Nipto ID'),
                         ),
                       ],
                       const SizedBox(height: 10),
                       TextButton(
-                        onPressed: _busy ? null : () => Navigator.of(context).pop(),
+                        onPressed: _busy
+                            ? null
+                            : () => Navigator.of(context).pop(),
                         child: const Text('Back to sign in'),
                       ),
                     ],

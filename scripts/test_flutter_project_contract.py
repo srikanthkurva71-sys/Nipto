@@ -53,6 +53,9 @@ class FlutterProjectContractTests(unittest.TestCase):
             "flutter_secure_storage",
             "shared_preferences",
             "http",
+            "firebase_core",
+            "firebase_messaging",
+            "flutter_local_notifications",
         }
         self.assertLessEqual(expected, declared)
 

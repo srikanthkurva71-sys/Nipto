@@ -78,7 +78,8 @@ class _NativeNiptoRegistrationScreenState
     } catch (_) {
       if (mounted)
         setState(
-          () => _error = 'Registration could not be completed. Please try again.',
+          () =>
+              _error = 'Registration could not be completed. Please try again.',
         );
     } finally {
       if (mounted) setState(() => _busy = false);

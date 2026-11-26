@@ -23,8 +23,10 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
     super.initState();
     _niptoIdController.text = widget.initialNiptoId ?? '';
     _contacts = _loadContacts();
-    _passwordRequests = NiptoSessionManager.instance.listPasswordRecoveryRequests();
-    if (widget.initialNiptoId != null && widget.initialNiptoId!.trim().isNotEmpty) {
+    _passwordRequests = NiptoSessionManager.instance
+        .listPasswordRecoveryRequests();
+    if (widget.initialNiptoId != null &&
+        widget.initialNiptoId!.trim().isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _submitRequest());
     }
   }
@@ -42,7 +44,8 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
   Future<void> _refresh() async {
     setState(() {
       _contacts = _loadContacts();
-      _passwordRequests = NiptoSessionManager.instance.listPasswordRecoveryRequests();
+      _passwordRequests = NiptoSessionManager.instance
+          .listPasswordRecoveryRequests();
     });
     await Future.wait([_contacts, _passwordRequests]);
   }
@@ -82,14 +85,25 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
         approve: approve,
       );
       if (!mounted) return;
-      setState(() => _passwordRequests = NiptoSessionManager.instance.listPasswordRecoveryRequests());
+      setState(
+        () => _passwordRequests = NiptoSessionManager.instance
+            .listPasswordRecoveryRequests(),
+      );
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(approve ? 'Password recovery approved.' : 'Password recovery declined.')),
+        SnackBar(
+          content: Text(
+            approve
+                ? 'Password recovery approved.'
+                : 'Password recovery declined.',
+          ),
+        ),
       );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('That password recovery request could not be updated.')),
+        const SnackBar(
+          content: Text('That password recovery request could not be updated.'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -98,11 +112,19 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
 
   Future<void> _submitRequest() async {
     if (_busy) return;
-    final handle = _niptoIdController.text.trim().toLowerCase().replaceFirst(RegExp(r'^@'), '');
-    if (handle.length < 3 || handle.length > 24 ||
+    final handle = _niptoIdController.text.trim().toLowerCase().replaceFirst(
+      RegExp(r'^@'),
+      '',
+    );
+    if (handle.length < 3 ||
+        handle.length > 24 ||
         !RegExp(r'^[a-z0-9]+(?:_[a-z0-9]+)*$').hasMatch(handle)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Use 3–24 lowercase letters or numbers, with single underscores between parts.')),
+        const SnackBar(
+          content: Text(
+            'Use 3–24 lowercase letters or numbers, with single underscores between parts.',
+          ),
+        ),
       );
       return;
     }
@@ -113,13 +135,17 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
       _niptoIdController.clear();
       setState(() => _contacts = _loadContacts());
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Recovery request sent. The other account must accept it.')),
+        const SnackBar(
+          content: Text(
+            'Recovery request sent. The other account must accept it.',
+          ),
+        ),
       );
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_friendlyError(error))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_friendlyError(error))));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -127,9 +153,12 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
 
   String _friendlyError(Object error) {
     final message = error.toString();
-    if (message.contains('up to three pending')) return 'You can have up to three pending recovery requests.';
-    if (message.contains('Choose another')) return 'Choose a different Nipto account.';
-    if (message.contains('could not be selected')) return 'That Nipto account is unavailable.';
+    if (message.contains('up to three pending'))
+      return 'You can have up to three pending recovery requests.';
+    if (message.contains('Choose another'))
+      return 'Choose a different Nipto account.';
+    if (message.contains('could not be selected'))
+      return 'That Nipto account is unavailable.';
     return 'The request could not be completed. Please try again.';
   }
 
@@ -144,7 +173,9 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('That recovery request could not be updated.')),
+          const SnackBar(
+            content: Text('That recovery request could not be updated.'),
+          ),
         );
       }
     } finally {
@@ -157,10 +188,18 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Remove recovery contact?'),
-        content: const Text('This will end the recovery-contact relationship for this account.'),
+        content: const Text(
+          'This will end the recovery-contact relationship for this account.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Remove')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Remove'),
+          ),
         ],
       ),
     );
@@ -172,7 +211,9 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Recovery contact could not be removed.')),
+          const SnackBar(
+            content: Text('Recovery contact could not be removed.'),
+          ),
         );
       }
     } finally {
@@ -190,7 +231,11 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
         child: ListView(
           padding: const EdgeInsets.all(18),
           children: [
-            const Icon(Icons.shield_outlined, size: 42, color: NiptoColors.violet),
+            const Icon(
+              Icons.shield_outlined,
+              size: 42,
+              color: NiptoColors.violet,
+            ),
             const SizedBox(height: 12),
             Text(
               'Choose someone you trust',
@@ -224,7 +269,9 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
                       width: double.infinity,
                       child: FilledButton(
                         onPressed: _busy ? null : _submitRequest,
-                        child: Text(_busy ? 'Please wait…' : 'Send recovery request'),
+                        child: Text(
+                          _busy ? 'Please wait…' : 'Send recovery request',
+                        ),
                       ),
                     ),
                   ],
@@ -232,12 +279,14 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
               ),
             ),
             const SizedBox(height: 18),
-            Text('PASSWORD RECOVERY REQUESTS',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: NiptoColors.muted,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.2,
-                )),
+            Text(
+              'PASSWORD RECOVERY REQUESTS',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: NiptoColors.muted,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.2,
+              ),
+            ),
             const SizedBox(height: 8),
             FutureBuilder<List<Map<String, dynamic>>>(
               future: _passwordRequests,
@@ -253,10 +302,14 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
                 if (snapshot.hasError) {
                   return Card(
                     child: ListTile(
-                      title: const Text('Password recovery requests could not load'),
+                      title: const Text(
+                        'Password recovery requests could not load',
+                      ),
                       trailing: TextButton(
-                        onPressed: () => setState(() => _passwordRequests =
-                            NiptoSessionManager.instance.listPasswordRecoveryRequests()),
+                        onPressed: () => setState(
+                          () => _passwordRequests = NiptoSessionManager.instance
+                              .listPasswordRecoveryRequests(),
+                        ),
                         child: const Text('Retry'),
                       ),
                     ),
@@ -268,13 +321,17 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
                     child: ListTile(
                       leading: Icon(Icons.lock_outline_rounded),
                       title: Text('No pending password recovery requests'),
-                      subtitle: Text('Requests from accounts that selected you will appear here.'),
+                      subtitle: Text(
+                        'Requests from accounts that selected you will appear here.',
+                      ),
                     ),
                   );
                 }
                 return Column(
                   children: requests.map((request) {
-                    final name = request['owner_display_name'] as String? ?? 'Nipto member';
+                    final name =
+                        request['owner_display_name'] as String? ??
+                        'Nipto member';
                     final handle = request['owner_nipto_id'] as String? ?? '';
                     return Card(
                       child: Padding(
@@ -282,25 +339,43 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('$name  @$handle', style: const TextStyle(fontWeight: FontWeight.w700)),
+                            Text(
+                              '$name  @$handle',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                             const SizedBox(height: 6),
                             const Text(
                               'This person asked you to approve a password reset for their Nipto account. Approve only if you recognize and trust the request.',
-                              style: TextStyle(color: NiptoColors.muted, height: 1.4),
+                              style: TextStyle(
+                                color: NiptoColors.muted,
+                                height: 1.4,
+                              ),
                             ),
                             const SizedBox(height: 12),
                             Row(
                               children: [
                                 Expanded(
                                   child: OutlinedButton(
-                                    onPressed: _busy ? null : () => _respondToPasswordRecovery(request, false),
+                                    onPressed: _busy
+                                        ? null
+                                        : () => _respondToPasswordRecovery(
+                                            request,
+                                            false,
+                                          ),
                                     child: const Text('Decline'),
                                   ),
                                 ),
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: FilledButton(
-                                    onPressed: _busy ? null : () => _respondToPasswordRecovery(request, true),
+                                    onPressed: _busy
+                                        ? null
+                                        : () => _respondToPasswordRecovery(
+                                            request,
+                                            true,
+                                          ),
                                     child: const Text('Approve reset'),
                                   ),
                                 ),
@@ -315,12 +390,14 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
               },
             ),
             const SizedBox(height: 20),
-            Text('RECOVERY CONTACTS & REQUESTS',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: NiptoColors.muted,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.2,
-                )),
+            Text(
+              'RECOVERY CONTACTS & REQUESTS',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: NiptoColors.muted,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.2,
+              ),
+            ),
             const SizedBox(height: 8),
             FutureBuilder<List<Map<String, dynamic>>>(
               future: _contacts,
@@ -336,7 +413,8 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
                     child: ListTile(
                       title: const Text('Recovery contacts could not load'),
                       trailing: TextButton(
-                        onPressed: () => setState(() => _contacts = _loadContacts()),
+                        onPressed: () =>
+                            setState(() => _contacts = _loadContacts()),
                         child: const Text('Retry'),
                       ),
                     ),
@@ -358,7 +436,8 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
                     final status = row['status'] as String? ?? 'pending';
                     final name = incoming
                         ? row['owner_display_name'] as String? ?? 'Nipto member'
-                        : row['recovery_display_name'] as String? ?? 'Nipto member';
+                        : row['recovery_display_name'] as String? ??
+                              'Nipto member';
                     final handle = incoming
                         ? row['owner_nipto_id'] as String? ?? ''
                         : row['recovery_nipto_id'] as String? ?? '';
@@ -370,7 +449,10 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
                       child: ListTile(
                         leading: const CircleAvatar(
                           backgroundColor: NiptoColors.violetSoft,
-                          child: Icon(Icons.person_outline_rounded, color: NiptoColors.violet),
+                          child: Icon(
+                            Icons.person_outline_rounded,
+                            color: NiptoColors.violet,
+                          ),
                         ),
                         title: Text('$name  @$handle'),
                         subtitle: Text(subtitle),
@@ -380,19 +462,28 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
                                 children: [
                                   IconButton(
                                     tooltip: 'Accept request',
-                                    onPressed: _busy ? null : () => _respond(requestId, true),
-                                    icon: const Icon(Icons.check_circle_outline, color: NiptoColors.violet),
+                                    onPressed: _busy
+                                        ? null
+                                        : () => _respond(requestId, true),
+                                    icon: const Icon(
+                                      Icons.check_circle_outline,
+                                      color: NiptoColors.violet,
+                                    ),
                                   ),
                                   IconButton(
                                     tooltip: 'Decline request',
-                                    onPressed: _busy ? null : () => _respond(requestId, false),
+                                    onPressed: _busy
+                                        ? null
+                                        : () => _respond(requestId, false),
                                     icon: const Icon(Icons.close_rounded),
                                   ),
                                 ],
                               )
                             : IconButton(
                                 tooltip: 'Remove recovery contact',
-                                onPressed: _busy ? null : () => _remove(requestId),
+                                onPressed: _busy
+                                    ? null
+                                    : () => _remove(requestId),
                                 icon: const Icon(Icons.delete_outline_rounded),
                               ),
                       ),
@@ -404,7 +495,11 @@ class _RecoveryContactsScreenState extends State<RecoveryContactsScreen> {
             const SizedBox(height: 16),
             const Text(
               'Password recovery requires an explicit approval from your accepted recovery Nipto account. Approval only authorizes a one-time reset; the other person never sees or chooses your new password. If you do not have an accepted recovery account, add one here before you need it.',
-              style: TextStyle(color: NiptoColors.muted, fontSize: 12, height: 1.45),
+              style: TextStyle(
+                color: NiptoColors.muted,
+                fontSize: 12,
+                height: 1.45,
+              ),
             ),
           ],
         ),

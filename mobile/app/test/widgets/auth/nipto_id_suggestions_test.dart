@@ -21,7 +21,10 @@ void main() {
       expect(find.text('@river_27'), findsOneWidget);
       expect(find.text('@river_28'), findsOneWidget);
       final selectedChip = tester.widget<ChoiceChip>(
-        find.ancestor(of: find.text('@river_28'), matching: find.byType(ChoiceChip)),
+        find.ancestor(
+          of: find.text('@river_28'),
+          matching: find.byType(ChoiceChip),
+        ),
       );
       expect(selectedChip.selected, isTrue);
     });
@@ -43,14 +46,13 @@ void main() {
       expect(selected, 'river_28');
     });
 
-    testWidgets('renders nothing when there are no suggestions', (tester) async {
+    testWidgets('renders nothing when there are no suggestions', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: NiptoIdSuggestions(
-              suggestions: const [],
-              onSelected: (_) {},
-            ),
+            body: NiptoIdSuggestions(suggestions: const [], onSelected: (_) {}),
           ),
         ),
       );

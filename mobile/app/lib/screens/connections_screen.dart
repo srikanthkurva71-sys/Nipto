@@ -6,10 +6,7 @@ import '../services/nipto_session_manager.dart';
 import '../theme/nipto_theme.dart';
 
 class ConnectionsScreen extends StatefulWidget {
-  const ConnectionsScreen({
-    super.key,
-    required this.direction,
-  });
+  const ConnectionsScreen({super.key, required this.direction});
 
   final String direction;
 
@@ -52,9 +49,9 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
       });
       if (mounted) {
         final handle = profile['nipto_id'] as String? ?? 'this account';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Unfollowed @$handle.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Unfollowed @$handle.')));
         await _refresh();
       }
     } catch (_) {
@@ -72,16 +69,15 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
     final parts = value.trim().split(RegExp(r'\s+'));
     if (parts.isEmpty || parts.first.isEmpty) return 'N';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1)).toUpperCase();
+    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
+        .toUpperCase();
   }
 
   @override
   Widget build(BuildContext context) {
     final isFollowers = widget.direction == 'followers';
     return Scaffold(
-      appBar: AppBar(
-        title: Text(isFollowers ? 'Followers' : 'Following'),
-      ),
+      appBar: AppBar(title: Text(isFollowers ? 'Followers' : 'Following')),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: FutureBuilder<List<Map<String, dynamic>>>(
@@ -95,7 +91,12 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                 children: [
                   const SizedBox(height: 120),
                   const Center(child: Text('This list could not load.')),
-                  Center(child: TextButton(onPressed: _refresh, child: const Text('Retry'))),
+                  Center(
+                    child: TextButton(
+                      onPressed: _refresh,
+                      child: const Text('Retry'),
+                    ),
+                  ),
                 ],
               );
             }
@@ -105,12 +106,20 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
                 children: [
                   const SizedBox(height: 120),
                   Icon(
-                    isFollowers ? Icons.people_outline_rounded : Icons.person_add_alt_1_rounded,
+                    isFollowers
+                        ? Icons.people_outline_rounded
+                        : Icons.person_add_alt_1_rounded,
                     size: 44,
                     color: NiptoColors.violet,
                   ),
                   const SizedBox(height: 12),
-                  Center(child: Text(isFollowers ? 'No followers yet.' : 'You are not following anyone yet.')),
+                  Center(
+                    child: Text(
+                      isFollowers
+                          ? 'No followers yet.'
+                          : 'You are not following anyone yet.',
+                    ),
+                  ),
                 ],
               );
             }
@@ -120,21 +129,37 @@ class _ConnectionsScreenState extends State<ConnectionsScreen> {
               separatorBuilder: (_, __) => const Divider(height: 1, indent: 60),
               itemBuilder: (context, index) {
                 final profile = people[index];
-                final name = profile['display_name'] as String? ?? 'Nipto member';
+                final name =
+                    profile['display_name'] as String? ?? 'Nipto member';
                 final handle = profile['nipto_id'] as String? ?? '';
                 return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(vertical: 5, horizontal: 2),
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: 5,
+                    horizontal: 2,
+                  ),
                   leading: CircleAvatar(
                     backgroundColor: NiptoColors.violetSoft,
                     child: Text(
                       _initials(name),
-                      style: const TextStyle(color: NiptoColors.violet, fontWeight: FontWeight.w800),
+                      style: const TextStyle(
+                        color: NiptoColors.violet,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
-                  title: Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
-                  subtitle: Text('@$handle', style: const TextStyle(color: NiptoColors.muted)),
+                  title: Text(
+                    name,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: Text(
+                    '@$handle',
+                    style: const TextStyle(color: NiptoColors.muted),
+                  ),
                   trailing: isFollowers
-                      ? const Icon(Icons.person_outline_rounded, color: NiptoColors.muted)
+                      ? const Icon(
+                          Icons.person_outline_rounded,
+                          color: NiptoColors.muted,
+                        )
                       : TextButton(
                           onPressed: _busy ? null : () => _unfollow(profile),
                           child: const Text('Following'),

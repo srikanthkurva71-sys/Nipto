@@ -54,7 +54,11 @@ class NiptoCallService {
         'offerToReceiveVideo': mediaType == 'video',
       });
       await _peer!.setLocalDescription(offer);
-      await _sendSignal({'type': 'offer', 'sdp': offer.sdp, 'sdpType': offer.type});
+      await _sendSignal({
+        'type': 'offer',
+        'sdp': offer.sdp,
+        'sdpType': offer.type,
+      });
       onPhaseChanged(NiptoCallPhase.ringing);
       _ringTimeout = Timer(const Duration(seconds: 45), () {
         if (!_closed && !isConnected) unawaited(end(reason: 'failed'));
@@ -91,12 +95,15 @@ class NiptoCallService {
       onError(_safeMessage(error));
       onPhaseChanged(NiptoCallPhase.failed);
       try {
-        await _client.rpc('end_nipto_call', params: {
-          'p_call_id': callId,
-          'p_reason': error.toString().toLowerCase().contains('permission')
-              ? 'permission_denied'
-              : 'failed',
-        });
+        await _client.rpc(
+          'end_nipto_call',
+          params: {
+            'p_call_id': callId,
+            'p_reason': error.toString().toLowerCase().contains('permission')
+                ? 'permission_denied'
+                : 'failed',
+          },
+        );
       } catch (_) {
         // The call may already have expired or been ended by the caller.
       }
@@ -127,7 +134,8 @@ class NiptoCallService {
     final iceServers = await NiptoSessionManager.instance.getIceServers();
     final hasTurnRelay = iceServers.any((server) {
       final urls = server['urls'];
-      if (urls is String) return urls.startsWith('turn:') || urls.startsWith('turns:');
+      if (urls is String)
+        return urls.startsWith('turn:') || urls.startsWith('turns:');
       if (urls is List) {
         return urls.whereType<String>().any(
           (url) => url.startsWith('turn:') || url.startsWith('turns:'),
@@ -149,12 +157,14 @@ class NiptoCallService {
     _peer = peer;
     _peer!.onIceCandidate = (candidate) {
       if (_closed || candidate.candidate == null) return;
-      unawaited(_sendIceSignal({
-        'type': 'ice',
-        'candidate': candidate.candidate,
-        'sdpMid': candidate.sdpMid,
-        'sdpMLineIndex': candidate.sdpMLineIndex,
-      }));
+      unawaited(
+        _sendIceSignal({
+          'type': 'ice',
+          'candidate': candidate.candidate,
+          'sdpMid': candidate.sdpMid,
+          'sdpMLineIndex': candidate.sdpMLineIndex,
+        }),
+      );
     };
     _peer!.onTrack = (event) {
       if (event.streams.isNotEmpty) onRemoteStream(event.streams.first);
@@ -167,10 +177,13 @@ class NiptoCallService {
         _disconnectTimeout?.cancel();
         onPhaseChanged(NiptoCallPhase.connected);
       } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
-        onError('The call connection failed. Check your network and try again.');
+        onError(
+          'The call connection failed. Check your network and try again.',
+        );
         onPhaseChanged(NiptoCallPhase.failed);
         unawaited(end(reason: 'connection_lost'));
-      } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+      } else if (state ==
+          RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
         onPhaseChanged(NiptoCallPhase.connecting);
         _disconnectTimeout?.cancel();
         _disconnectTimeout = Timer(const Duration(seconds: 10), () {
@@ -207,14 +220,17 @@ class NiptoCallService {
     }
   }
 
-  bool get isConnected => _peer?.connectionState ==
+  bool get isConnected =>
+      _peer?.connectionState ==
       RTCPeerConnectionState.RTCPeerConnectionStateConnected;
 
   void _armConnectTimeout() {
     _connectTimeout?.cancel();
     _connectTimeout = Timer(const Duration(seconds: 30), () {
       if (!_closed && !isConnected) {
-        onError('The call could not connect. Check your network and try again.');
+        onError(
+          'The call could not connect. Check your network and try again.',
+        );
         onPhaseChanged(NiptoCallPhase.failed);
         unawaited(end(reason: 'connection_lost'));
       }
@@ -222,10 +238,12 @@ class NiptoCallService {
   }
 
   void _handleSignal(Map<String, dynamic> message) {
-    _signalQueue = _signalQueue.then((_) => _processSignal(message)).catchError((_) {
-      onError('A call signaling message could not be processed.');
-      onPhaseChanged(NiptoCallPhase.failed);
-    });
+    _signalQueue = _signalQueue.then((_) => _processSignal(message)).catchError(
+      (_) {
+        onError('A call signaling message could not be processed.');
+        onPhaseChanged(NiptoCallPhase.failed);
+      },
+    );
   }
 
   Future<void> _processSignal(Map<String, dynamic> message) async {
@@ -237,7 +255,8 @@ class NiptoCallService {
       if (type == 'ready' && isCaller) {
         if (!(_remoteReady?.isCompleted ?? true)) _remoteReady!.complete();
       } else if (type == 'offer' && !isCaller) {
-        if (!NiptoCallSignalValidator.isDescriptionPayload(payload, 'offer')) return;
+        if (!NiptoCallSignalValidator.isDescriptionPayload(payload, 'offer'))
+          return;
         final sdp = payload['sdp'] as String;
         await _peer!.setRemoteDescription(RTCSessionDescription(sdp, 'offer'));
         _remoteDescriptionSet = true;
@@ -248,11 +267,16 @@ class NiptoCallService {
           'offerToReceiveVideo': mediaType == 'video',
         });
         await _peer!.setLocalDescription(answer);
-        await _sendSignal({'type': 'answer', 'sdp': answer.sdp, 'sdpType': answer.type});
+        await _sendSignal({
+          'type': 'answer',
+          'sdp': answer.sdp,
+          'sdpType': answer.type,
+        });
         _armConnectTimeout();
         onPhaseChanged(NiptoCallPhase.connecting);
       } else if (type == 'answer' && isCaller) {
-        if (!NiptoCallSignalValidator.isDescriptionPayload(payload, 'answer')) return;
+        if (!NiptoCallSignalValidator.isDescriptionPayload(payload, 'answer'))
+          return;
         final sdp = payload['sdp'] as String;
         await _peer!.setRemoteDescription(RTCSessionDescription(sdp, 'answer'));
         _remoteDescriptionSet = true;
@@ -264,7 +288,10 @@ class NiptoCallService {
         if (!NiptoCallSignalValidator.isIceCandidatePayload(payload)) return;
         final candidate = payload['candidate'] as String;
         if (!_remoteDescriptionSet &&
-            !NiptoCallSignalValidator.canQueueIceCandidate(_pendingCandidates.length)) return;
+            !NiptoCallSignalValidator.canQueueIceCandidate(
+              _pendingCandidates.length,
+            ))
+          return;
         final index = payload['sdpMLineIndex'];
         final ice = RTCIceCandidate(
           candidate,
@@ -308,13 +335,15 @@ class NiptoCallService {
   }
 
   Future<void> setMicrophoneEnabled(bool enabled) async {
-    for (final track in _localStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {
+    for (final track
+        in _localStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {
       track.enabled = enabled;
     }
   }
 
   Future<void> setCameraEnabled(bool enabled) async {
-    for (final track in _localStream?.getVideoTracks() ?? <MediaStreamTrack>[]) {
+    for (final track
+        in _localStream?.getVideoTracks() ?? <MediaStreamTrack>[]) {
       track.enabled = enabled;
     }
   }
@@ -339,10 +368,10 @@ class NiptoCallService {
       // Backend call control must still run if realtime signaling is unavailable.
     }
     try {
-      await _client.rpc('end_nipto_call', params: {
-        'p_call_id': callId,
-        'p_reason': reason,
-      });
+      await _client.rpc(
+        'end_nipto_call',
+        params: {'p_call_id': callId, 'p_reason': reason},
+      );
     } catch (_) {
       // The session may already be terminal or the network may be unavailable.
     } finally {

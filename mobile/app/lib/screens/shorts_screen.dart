@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/nipto_media_service.dart';
 import '../services/nipto_session_manager.dart';
 import 'package:video_player/video_player.dart';
 
@@ -20,6 +21,7 @@ class ShortsScreen extends StatefulWidget {
 class _ShortsScreenState extends State<ShortsScreen> {
   late Future<List<Map<String, dynamic>>> _clips;
   final _picker = ImagePicker();
+  final _media = NiptoMediaService();
   bool _uploading = false;
   int _activeIndex = 0;
 
@@ -55,6 +57,30 @@ class _ShortsScreenState extends State<ShortsScreen> {
           .from('shorts')
           .createSignedUrl(clip['video_path'] as String, 3600);
       clip['signed_url'] = url;
+
+      // The ledger is the only source of validation/preview state. A missing
+      // row or thumbnail stays honest: no generated preview is implied.
+      clip['media_state'] = NiptoMediaState.unknown.wireName;
+      try {
+        final asset = await _media.status(
+          'shorts',
+          clip['video_path'] as String,
+        );
+        clip['media_state'] = asset.state.wireName;
+        final thumbnail =
+            asset.thumbnailPath ?? clip['thumbnail_path'] as String?;
+        if (thumbnail != null && thumbnail.isNotEmpty) {
+          try {
+            clip['thumbnail_url'] = await _client.storage
+                .from('shorts')
+                .createSignedUrl(thumbnail, 3600);
+          } catch (_) {
+            // The video remains playable if a preview cannot be signed.
+          }
+        }
+      } catch (_) {
+        // Older Shorts may have no ledger row; keep the unknown pending label.
+      }
       clips.add(clip);
     }
     return clips;
@@ -177,6 +203,13 @@ class _ShortsScreenState extends State<ShortsScreen> {
         'duration_seconds': duration,
         'visibility': visibility,
       });
+      try {
+        // Best effort: the Short is already stored privately; an unavailable
+        // validator must not remove it or fabricate a ready state.
+        await _media.enqueue('shorts', path);
+      } catch (_) {
+        // The row can be re-enqueued or reclaimed by retention cleanup.
+      }
 
       if (!mounted) return;
       setState(() => _clips = _loadClips());
@@ -259,6 +292,58 @@ class _ShortsScreenState extends State<ShortsScreen> {
     }
   }
 
+  Future<void> _deleteShort(Map<String, dynamic> clip) async {
+    final userId = NiptoSessionManager.instance.userId;
+    if (userId == null || clip['creator_id'] != userId) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete this Short?'),
+        content: const Text('Your Short will be removed from the feed.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: NiptoColors.danger),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await _client
+          .from('shorts')
+          .delete()
+          .eq('id', clip['id'] as String)
+          .eq('creator_id', userId);
+      final paths = <String>[
+        clip['video_path'] as String,
+        if (clip['thumbnail_path'] is String) clip['thumbnail_path'] as String,
+      ];
+      try {
+        await _client.storage.from('shorts').remove(paths);
+      } catch (_) {
+        // Best effort; any remaining object stays private until cleanup.
+      }
+      if (!mounted) return;
+      setState(() => _clips = _loadClips());
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Short deleted.')));
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Short could not be deleted. Please try again.'),
+        ),
+      );
+    }
+  }
+
   Future<void> _showComments(Map<String, dynamic> clip) async {
     await showModalBottomSheet<void>(
       context: context,
@@ -307,6 +392,7 @@ class _ShortsScreenState extends State<ShortsScreen> {
                 isActive: _activeIndex == index,
                 onComment: () => _showComments(clips[index]),
                 onReport: () => _reportShort(clips[index]),
+                onDelete: () => _deleteShort(clips[index]),
               ),
             ),
             Positioned(
@@ -366,12 +452,14 @@ class _ShortTile extends StatefulWidget {
     required this.isActive,
     required this.onComment,
     required this.onReport,
+    required this.onDelete,
   });
 
   final Map<String, dynamic> clip;
   final bool isActive;
   final VoidCallback onComment;
   final VoidCallback onReport;
+  final VoidCallback onDelete;
 
   @override
   State<_ShortTile> createState() => _ShortTileState();
@@ -500,6 +588,14 @@ class _ShortTileState extends State<_ShortTile> with WidgetsBindingObserver {
     final caption = widget.clip['caption'] as String? ?? '';
     final creator = widget.clip['creator_name'] as String? ?? 'Nipto creator';
     final handle = widget.clip['creator_nipto_id'] as String? ?? '';
+    final thumbnailUrl = widget.clip['thumbnail_url'] as String?;
+    final mediaState = NiptoMediaState.parse(widget.clip['media_state']);
+    final mediaLabel = NiptoMediaStatus(
+      state: mediaState,
+      exists: true,
+    ).pendingLabel;
+    final isOwn =
+        NiptoSessionManager.instance.userId == widget.clip['creator_id'];
 
     return Stack(
       fit: StackFit.expand,
@@ -523,14 +619,52 @@ class _ShortTileState extends State<_ShortTile> with WidgetsBindingObserver {
             ),
           )
         else
-          Center(
-            child: _failed
-                ? const Icon(
-                    Icons.play_disabled_rounded,
-                    color: Colors.white54,
-                    size: 48,
-                  )
-                : const CircularProgressIndicator(color: Colors.white),
+          Stack(
+            fit: StackFit.expand,
+            children: [
+              if (thumbnailUrl != null)
+                Positioned.fill(
+                  child: Image.network(
+                    thumbnailUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  ),
+                ),
+              Center(
+                child: _failed
+                    ? const Icon(
+                        Icons.play_disabled_rounded,
+                        color: Colors.white54,
+                        size: 48,
+                      )
+                    : const CircularProgressIndicator(color: Colors.white),
+              ),
+              Positioned(
+                bottom: 6,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.black54,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      mediaLabel,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         Positioned(
           left: 18,
@@ -596,6 +730,14 @@ class _ShortTileState extends State<_ShortTile> with WidgetsBindingObserver {
                     label: 'Report',
                     onTap: widget.onReport,
                   ),
+                  const SizedBox(height: 17),
+                  if (isOwn) ...[
+                    _ActionIcon(
+                      icon: Icons.delete_outline,
+                      label: 'Delete',
+                      onTap: widget.onDelete,
+                    ),
+                  ],
                   const SizedBox(height: 17),
                   _ActionIcon(
                     icon: Icons.share_outlined,
