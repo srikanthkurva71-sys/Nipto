@@ -42,7 +42,10 @@ RPC and consumes ID-only push events.
 
 ## Supabase secrets
 
-Set these with the Supabase CLI or dashboard, not in Flutter and not in Git:
+Use `python scripts/setup_nipto_credentials.py worker-secret` followed by
+`python scripts/setup_nipto_credentials.py push` to keep the values in ignored
+local files and out of shell history. See `docs/CREDENTIAL_SETUP.md` for the full
+flow. The equivalent CLI command is:
 
 ~~~powershell
 supabase secrets set --project-ref advmjribduqzyuwktkod `

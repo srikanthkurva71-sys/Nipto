@@ -111,6 +111,8 @@ GitHub Actions generates the Android platform project, then runs Dart formatting
 
 Deployed workers and their setup are documented in:
 
+- [Credential setup](docs/CREDENTIAL_SETUP.md) — local-only helper for
+  `CRON_SECRET`, Firebase Android config, FCM service-account JSON, and TURN secrets.
 - [Push delivery](docs/PUSH_DELIVERY.md) — Firebase Android app, build-time
   client identifiers, service-account JSON, `CRON_SECRET`, dispatcher invocation
   and device verification checklist.
