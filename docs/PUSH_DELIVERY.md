@@ -108,8 +108,10 @@ do not embed the worker secret in client code or in a public cron definition.
 - FCM `404`, `410`, or `UNREGISTERED` removes that device token from
   `public.device_tokens`; other tokens for the same account remain.
 - A foreground push appears through Nipto's local notification channel
-  `nipto_default`, and a terminated-app tap routes to Notifications or the
-  message conversation without exposing message bodies in the payload.
+  `nipto_default`. A background/terminated tap waits for session restoration,
+  then routes to the incoming-call screen, the message conversation with
+  authorized header metadata, or the notification inbox. No payload exposes
+  message bodies, names, or other private content.
 - No payload contains SDP, ICE candidates, message bodies, display names,
   passwords, tokens, or other secrets.
 
