@@ -11,7 +11,9 @@ This is the Flutter package root for Nipto. Android is the only product target; 
 - `lib/screens/` — authentication, home, chats, conversations, profile, status, Shorts, calls and settings screens.
 - `lib/services/` — Supabase session, secure storage, call and validation services.
 - `lib/theme/` — Nipto theme.
-- `lib/widgets/` — reusable Nipto widgets.
+- `lib/widgets/` — reusable Nipto widgets, including the official logo mark.
+- `assets/branding/` — the supplied Nipto logo PNG used by in-app branding.
+- `flutter_launcher_icons.yaml` / `flutter_native_splash.yaml` — generation configs for Android launcher and splash artwork.
 - `test/` — unit and widget tests.
 - Supabase URL and publishable key — safe client defaults are built into `lib/main.dart`; optional Dart defines can override them for another environment.
 - `pubspec.yaml` — direct package dependencies.

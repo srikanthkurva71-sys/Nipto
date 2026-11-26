@@ -2,8 +2,35 @@ import 'package:flutter/material.dart';
 
 import '../theme/nipto_theme.dart';
 
+/// Displays the official Nipto logo supplied with the project.
+///
+/// The vector mark is retained as a fallback so a missing asset can never
+/// leave a blank branding slot in a release build.
 class NiptoLogoMark extends StatelessWidget {
   const NiptoLogoMark({super.key, this.size = 72});
+
+  static const assetPath = 'assets/branding/nipto_logo.png';
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Nipto',
+      child: Image.asset(
+        assetPath,
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) =>
+            _FallbackNiptoLogoMark(size: size),
+      ),
+    );
+  }
+}
+
+class _FallbackNiptoLogoMark extends StatelessWidget {
+  const _FallbackNiptoLogoMark({required this.size});
 
   final double size;
 

@@ -35,31 +35,8 @@ jobs:
       - name: Test Android manifest configuration
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
 
-      - name: Configure Nipto OAuth callback deep link
-        run: python3 scripts/configure_android_manifest.py
-
-      - name: Configure WebRTC media permissions
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path("mobile/app/android/app/src/main/AndroidManifest.xml")
-          manifest = path.read_text()
-          permissions = [
-              '    <uses-feature android:name="android.hardware.camera" android:required="false" />',
-              '    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />',
-              '    <uses-permission android:name="android.permission.INTERNET" />',
-              '    <uses-permission android:name="android.permission.RECORD_AUDIO" />',
-              '    <uses-permission android:name="android.permission.CAMERA" />',
-              '    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />',
-              '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />',
-              '    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />',
-          ]
-          for permission in permissions:
-              name = permission.split('android:name="', 1)[1].split('"', 1)[0]
-              if name not in manifest:
-                  manifest = manifest.replace("<application", permission + "\n    <application", 1)
-          path.write_text(manifest)
-          PY
+      - name: Configure Nipto Android platform
+        run: python3 scripts/configure_android_platform.py
 
       - name: Set up Deno
         uses: denoland/setup-deno@v2
@@ -78,42 +55,15 @@ jobs:
       - name: Test bounded Nipto OIDC token form parsing
         run: deno test supabase/functions/nipto-identity/form_body_test.ts
 
-      - name: Configure Android plugin repositories
-        run: |
-          python3 -c "from pathlib import Path; p=Path('mobile/app/android/settings.gradle.kts'); s=p.read_text(); s=s.replace('repositories {', 'repositories {\\n        google()\\n        mavenCentral()', 1); p.write_text(s)"
-
-      - name: Pin Android Gradle Plugin lint fix
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path("mobile/app/android/settings.gradle.kts")
-          lines = path.read_text(encoding="utf-8").splitlines()
-          matches = [i for i, line in enumerate(lines) if 'id("com.android.application")' in line]
-          if len(matches) != 1:
-              raise SystemExit("Could not identify exactly one Android Gradle Plugin declaration")
-          index = matches[0]
-          before, marker, after = lines[index].partition('version "')
-          if not marker or '"' not in after:
-              raise SystemExit("Could not parse the generated Android Gradle Plugin version")
-          _, quote, suffix = after.partition('"')
-          lines[index] = before + marker + "9.3.2" + quote + suffix
-          path.write_text(chr(10).join(lines) + chr(10), encoding="utf-8")
-          print("Pinned Android Gradle Plugin to 9.3.2 for the JDK 17 lint fix.")
-          PY
-
-      - name: Configure Android SDK levels
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path("mobile/app/android/app/build.gradle.kts")
-          text = path.read_text()
-          text = text.replace("minSdk = flutter.minSdkVersion", "minSdk = 24")
-          path.write_text(text)
-          PY
-
       - name: Resolve dependencies
         working-directory: mobile/app
         run: flutter pub get
+
+      - name: Generate Nipto launcher icons and native splash
+        working-directory: mobile/app
+        run: |
+          dart run flutter_launcher_icons
+          dart run flutter_native_splash:create
 
       - name: Remove generated sample test
         run: rm -f mobile/app/test/widget_test.dart

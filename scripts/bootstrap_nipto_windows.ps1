@@ -40,6 +40,14 @@ if ($javaVersion -notmatch 'version "17\.') {
     Write-Warning ("Nipto's documented Android toolchain uses Java 17. Detected Java output: " + $javaVersion)
 }
 
+$AndroidSdk = $env:ANDROID_HOME
+if ([string]::IsNullOrWhiteSpace($AndroidSdk)) {
+    $AndroidSdk = $env:ANDROID_SDK_ROOT
+}
+if ([string]::IsNullOrWhiteSpace($AndroidSdk)) {
+    throw "ANDROID_HOME or ANDROID_SDK_ROOT must point to the installed Android SDK."
+}
+
 Invoke-Checked "flutter" @("--version")
 Write-Host ""
 Write-Host "> flutter doctor --verbose" -ForegroundColor Cyan
@@ -56,31 +64,33 @@ Invoke-Checked "flutter" @(
 )
 
 Invoke-Checked "python" @(
-    (Join-Path $RepositoryRoot "scripts/configure_android_manifest.py")
+    (Join-Path $RepositoryRoot "scripts/configure_android_platform.py")
 )
 
-$GradleFile = Join-Path $AppRoot "android/app/build.gradle.kts"
-if (-not (Test-Path $GradleFile)) {
-    throw ("Generated Android Gradle Kotlin file not found: " + $GradleFile)
-}
-$gradleText = Get-Content $GradleFile -Raw
-if ($gradleText -match 'minSdk\s*=\s*flutter\.minSdkVersion') {
-    $gradleText = $gradleText -replace 'minSdk\s*=\s*flutter\.minSdkVersion', 'minSdk = 24'
-    [System.IO.File]::WriteAllText($GradleFile, $gradleText, [System.Text.UTF8Encoding]::new($false))
-} elseif ($gradleText -notmatch 'minSdk\s*=\s*24') {
-    throw ("Could not safely set minSdk to API 24 in " + $GradleFile)
+$NdkRoot = Join-Path $AndroidSdk "ndk\28.2.13676358"
+if (-not (Test-Path (Join-Path $NdkRoot "ndk-build.cmd"))) {
+    $SdkManager = Join-Path $AndroidSdk "cmdline-tools\latest\bin\sdkmanager.bat"
+    if (-not (Test-Path $SdkManager)) {
+        throw ("Android sdkmanager not found at " + $SdkManager)
+    }
+    Write-Host ""
+    Write-Host "> $SdkManager --licenses" -ForegroundColor Cyan
+    1..30 | ForEach-Object { "y" } | & $SdkManager --licenses | Out-Null
+    Invoke-Checked $SdkManager @("--install", "ndk;28.2.13676358")
 }
 
 Push-Location $AppRoot
 try {
     Invoke-Checked "flutter" @("pub", "get")
+    Invoke-Checked "dart" @("run", "flutter_launcher_icons")
+    Invoke-Checked "dart" @("run", "flutter_native_splash:create")
     Invoke-Checked "dart" @("format", "lib", "test")
-    Invoke-Checked "flutter" @("analyze")
+    Invoke-Checked "flutter" @("analyze", "--no-fatal-infos")
     if (-not $SkipTests) {
         Invoke-Checked "flutter" @("test")
     }
     Write-Host ""
-    Write-Host "Nipto setup completed. Run 'flutter run' for the default device, 'flutter run -d chrome' for the web development preview, or 'flutter build apk' for Android." -ForegroundColor Green
+    Write-Host "Nipto setup completed. Run 'flutter run' for the default device, 'flutter run -d chrome' for the web development preview, or 'flutter build apk --debug' for Android." -ForegroundColor Green
 } finally {
     Pop-Location
 }

@@ -1,8 +1,5 @@
 
 project_id = "advmjribduqzyuwktkod"
 
-[functions.nipto-login]
-verify_jwt = false
-
 [functions.nipto-identity]
 verify_jwt = false

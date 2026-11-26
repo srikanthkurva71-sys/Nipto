@@ -43,9 +43,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (userId == null || notificationId == null) return;
     try {
       // Scope acknowledgement to the signed-in recipient as well as the row ID.
-      await _client.from('notifications').update({
-        'read_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', notificationId).eq('user_id', userId);
+      // notifications is keyed by recipient_id; there is no user_id column.
+      await _client
+          .from('notifications')
+          .update({'read_at': DateTime.now().toUtc().toIso8601String()})
+          .eq('id', notificationId)
+          .eq('recipient_id', userId);
       if (mounted) {
         // Refresh the shared Chats badge after the notification is acknowledged.
         await _refresh();
@@ -82,13 +85,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       await _markRead(item);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(accept ? 'Follow request accepted.' : 'Follow request declined.')),
+        SnackBar(
+          content: Text(
+            accept ? 'Follow request accepted.' : 'Follow request declined.',
+          ),
+        ),
       );
       await _refresh();
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('The follow request could not be updated.')),
+        const SnackBar(
+          content: Text('The follow request could not be updated.'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busyIds.remove(id));
@@ -112,13 +121,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       await _markRead(item);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(accept ? 'You joined the group.' : 'Group invitation declined.')),
+        SnackBar(
+          content: Text(
+            accept ? 'You joined the group.' : 'Group invitation declined.',
+          ),
+        ),
       );
       await _refresh();
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('The group invitation could not be updated.')),
+        const SnackBar(
+          content: Text('The group invitation could not be updated.'),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busyIds.remove(id));
@@ -138,9 +153,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         payload['kind'] == 'password_recovery_request') {
       if (!mounted) return;
       await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => const RecoveryContactsScreen(),
-        ),
+        MaterialPageRoute<void>(builder: (_) => const RecoveryContactsScreen()),
       );
       if (mounted) setState(() => _notifications = _load());
       return;
@@ -255,11 +268,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               return ListView(
                 children: [
                   const SizedBox(height: 120),
-                  const Icon(Icons.cloud_off_rounded, size: 42, color: NiptoColors.muted),
+                  const Icon(
+                    Icons.cloud_off_rounded,
+                    size: 42,
+                    color: NiptoColors.muted,
+                  ),
                   const SizedBox(height: 12),
                   const Center(child: Text('Notifications could not load.')),
                   Center(
-                    child: TextButton(onPressed: _refresh, child: const Text('Try again')),
+                    child: TextButton(
+                      onPressed: _refresh,
+                      child: const Text('Try again'),
+                    ),
                   ),
                 ],
               );
@@ -270,14 +290,27 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               return ListView(
                 children: [
                   const SizedBox(height: 130),
-                  const Icon(Icons.notifications_none_rounded, size: 48, color: NiptoColors.violet),
+                  const Icon(
+                    Icons.notifications_none_rounded,
+                    size: 48,
+                    color: NiptoColors.violet,
+                  ),
                   const SizedBox(height: 12),
                   const Center(
-                    child: Text('You’re all caught up.', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                    child: Text(
+                      'You’re all caught up.',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 6),
                   const Center(
-                    child: Text('New messages and activity will appear here.', style: TextStyle(color: NiptoColors.muted)),
+                    child: Text(
+                      'New messages and activity will appear here.',
+                      style: TextStyle(color: NiptoColors.muted),
+                    ),
                   ),
                 ],
               );
@@ -295,23 +328,29 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 final payload = item['payload'] is Map
                     ? Map<String, dynamic>.from(item['payload'] as Map)
                     : <String, dynamic>{};
-                final isFollowRequest = item['notification_type'] == 'follow_request';
+                final isFollowRequest =
+                    item['notification_type'] == 'follow_request';
                 final isGroupInvite = payload['kind'] == 'group_invite';
                 final isActionable = isFollowRequest || isGroupInvite;
                 final busy = _busyIds.contains(id);
 
                 return ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 8,
+                  ),
                   leading: CircleAvatar(
-                    backgroundColor: isRead ? NiptoColors.canvas : NiptoColors.violetSoft,
+                    backgroundColor: isRead
+                        ? NiptoColors.canvas
+                        : NiptoColors.violetSoft,
                     child: Icon(
                       isFollowRequest
                           ? Icons.person_add_alt_1_rounded
                           : isGroupInvite
-                              ? Icons.groups_rounded
-                              : item['notification_type'] == 'message'
-                                  ? Icons.chat_bubble_rounded
-                                  : Icons.notifications_rounded,
+                          ? Icons.groups_rounded
+                          : item['notification_type'] == 'message'
+                          ? Icons.chat_bubble_rounded
+                          : Icons.notifications_rounded,
                       color: NiptoColors.violet,
                     ),
                   ),
@@ -332,16 +371,30 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 onPressed: busy
                                     ? null
                                     : () => isFollowRequest
-                                        ? _respondToFollowRequest(item, accept: true)
-                                        : _respondToGroupInvite(item, accept: true),
-                                child: Text(isFollowRequest ? 'Accept' : 'Join'),
+                                          ? _respondToFollowRequest(
+                                              item,
+                                              accept: true,
+                                            )
+                                          : _respondToGroupInvite(
+                                              item,
+                                              accept: true,
+                                            ),
+                                child: Text(
+                                  isFollowRequest ? 'Accept' : 'Join',
+                                ),
                               ),
                               OutlinedButton(
                                 onPressed: busy
                                     ? null
                                     : () => isFollowRequest
-                                        ? _respondToFollowRequest(item, accept: false)
-                                        : _respondToGroupInvite(item, accept: false),
+                                          ? _respondToFollowRequest(
+                                              item,
+                                              accept: false,
+                                            )
+                                          : _respondToGroupInvite(
+                                              item,
+                                              accept: false,
+                                            ),
                                 child: const Text('Decline'),
                               ),
                             ],
@@ -350,7 +403,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       : null,
                   trailing: Text(
                     _timeLabel(item['created_at'] as String?),
-                    style: const TextStyle(color: NiptoColors.muted, fontSize: 11),
+                    style: const TextStyle(
+                      color: NiptoColors.muted,
+                      fontSize: 11,
+                    ),
                   ),
                   onTap: () => _openNotification(item),
                 );

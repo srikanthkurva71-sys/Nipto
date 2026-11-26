@@ -34,7 +34,9 @@ class _ShortsScreenState extends State<ShortsScreen> {
   Future<List<Map<String, dynamic>>> _loadClips() async {
     final rows = await _client
         .from('shorts')
-        .select('id, creator_id, video_path, thumbnail_path, caption, duration_seconds')
+        .select(
+          'id, creator_id, video_path, thumbnail_path, caption, duration_seconds',
+        )
         .eq('moderation_state', 'approved')
         .order('created_at', ascending: false)
         .limit(30);
@@ -69,7 +71,9 @@ class _ShortsScreenState extends State<ShortsScreen> {
     final extension = file.name.split('.').last.toLowerCase();
     if (extension != 'mp4') {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('For now, Shorts uploads must be MP4 videos.')),
+        const SnackBar(
+          content: Text('For now, Shorts uploads must be MP4 videos.'),
+        ),
       );
       return;
     }
@@ -101,9 +105,14 @@ class _ShortsScreenState extends State<ShortsScreen> {
               const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 value: visibility,
-                decoration: const InputDecoration(labelText: 'Who can see this Short'),
+                decoration: const InputDecoration(
+                  labelText: 'Who can see this Short',
+                ),
                 items: const [
-                  DropdownMenuItem(value: 'followers', child: Text('Followers')),
+                  DropdownMenuItem(
+                    value: 'followers',
+                    child: Text('Followers'),
+                  ),
                   DropdownMenuItem(value: 'public', child: Text('Everyone')),
                 ],
                 onChanged: (value) {
@@ -118,7 +127,8 @@ class _ShortsScreenState extends State<ShortsScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, captionController.text.trim()),
+              onPressed: () =>
+                  Navigator.pop(dialogContext, captionController.text.trim()),
               child: const Text('Continue'),
             ),
           ],
@@ -143,13 +153,22 @@ class _ShortsScreenState extends State<ShortsScreen> {
       }
 
       final userId = NiptoSessionManager.instance.userId!;
-      final path = userId + '/' + DateTime.now().microsecondsSinceEpoch.toString() + '.mp4';
+      final path =
+          userId +
+          '/' +
+          DateTime.now().microsecondsSinceEpoch.toString() +
+          '.mp4';
       uploadedPath = path;
-      await _client.storage.from('shorts').upload(
-        path,
-        File(file.path),
-        fileOptions: const FileOptions(contentType: 'video/mp4', upsert: false),
-      );
+      await _client.storage
+          .from('shorts')
+          .upload(
+            path,
+            File(file.path),
+            fileOptions: const FileOptions(
+              contentType: 'video/mp4',
+              upsert: false,
+            ),
+          );
       uploaded = true;
       await _client.from('shorts').insert({
         'creator_id': userId,
@@ -160,14 +179,17 @@ class _ShortsScreenState extends State<ShortsScreen> {
       });
 
       if (!mounted) return;
+      setState(() => _clips = _loadClips());
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Short submitted. It will appear after review.')),
+        const SnackBar(
+          content: Text('Short submitted. It will appear after review.'),
+        ),
       );
     } on FormatException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
     } catch (_) {
       if (uploaded && uploadedPath != null) {
         try {
@@ -221,12 +243,18 @@ class _ShortsScreenState extends State<ShortsScreen> {
       });
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Thank you. Your report has been submitted.')),
+        const SnackBar(
+          content: Text('Thank you. Your report has been submitted.'),
+        ),
       );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Your report could not be submitted. Please try again.')),
+        const SnackBar(
+          content: Text(
+            'Your report could not be submitted. Please try again.',
+          ),
+        ),
       );
     }
   }
@@ -261,7 +289,8 @@ class _ShortsScreenState extends State<ShortsScreen> {
           return _ShortsEmpty(
             icon: Icons.play_circle_outline_rounded,
             title: 'A new kind of feed',
-            subtitle: 'Approved short videos from Nipto creators will appear here.',
+            subtitle:
+                'Approved short videos from Nipto creators will appear here.',
             actionLabel: 'Share a Short',
             onRetry: _uploadShort,
           );
@@ -289,7 +318,11 @@ class _ShortsScreenState extends State<ShortsScreen> {
                   children: const [
                     Text(
                       'Shorts',
-                      style: TextStyle(color: Colors.white, fontSize: 23, fontWeight: FontWeight.w800),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 23,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ],
                 ),
@@ -310,7 +343,10 @@ class _ShortsScreenState extends State<ShortsScreen> {
                       ? const SizedBox(
                           width: 19,
                           height: 19,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                       : const Icon(Icons.add_rounded),
                 ),
@@ -489,7 +525,11 @@ class _ShortTileState extends State<_ShortTile> with WidgetsBindingObserver {
         else
           Center(
             child: _failed
-                ? const Icon(Icons.play_disabled_rounded, color: Colors.white54, size: 48)
+                ? const Icon(
+                    Icons.play_disabled_rounded,
+                    color: Colors.white54,
+                    size: 48,
+                  )
                 : const CircularProgressIndicator(color: Colors.white),
           ),
         Positioned(
@@ -503,15 +543,32 @@ class _ShortTileState extends State<_ShortTile> with WidgetsBindingObserver {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(creator, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 15)),
+                    Text(
+                      creator,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                      ),
+                    ),
                     if (handle.isNotEmpty)
-                      Text('@' + handle, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                      Text(
+                        '@' + handle,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                        ),
+                      ),
                     const SizedBox(height: 8),
                     Text(
                       caption.isEmpty ? 'A little moment, shared.' : caption,
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
@@ -520,7 +577,9 @@ class _ShortTileState extends State<_ShortTile> with WidgetsBindingObserver {
               Column(
                 children: [
                   _ActionIcon(
-                    icon: _liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                    icon: _liked
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
                     label: _likeCount == 0 ? 'Like' : _likeCount.toString(),
                     color: _liked ? NiptoColors.coral : Colors.white,
                     onTap: _likeBusy ? null : _toggleLike,
@@ -542,7 +601,9 @@ class _ShortTileState extends State<_ShortTile> with WidgetsBindingObserver {
                     icon: Icons.share_outlined,
                     label: 'Copy ID',
                     onTap: () async {
-                      await Clipboard.setData(ClipboardData(text: widget.clip['id'] as String));
+                      await Clipboard.setData(
+                        ClipboardData(text: widget.clip['id'] as String),
+                      );
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Short ID copied.')),
@@ -601,8 +662,11 @@ class _ShortCommentsSheetState extends State<_ShortCommentsSheet> {
     try {
       final editingId = _editingCommentId;
       if (editingId != null) {
-        await _client.from('short_comments').update({'body': body})
-            .eq('id', editingId).eq('author_id', userId);
+        await _client
+            .from('short_comments')
+            .update({'body': body})
+            .eq('id', editingId)
+            .eq('author_id', userId);
       } else {
         await _client.from('short_comments').insert({
           'short_id': widget.shortId,
@@ -640,8 +704,14 @@ class _ShortCommentsSheetState extends State<_ShortCommentsSheet> {
         title: const Text('Delete comment?'),
         content: const Text('This comment will be removed from this Short.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Delete')),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
@@ -649,13 +719,16 @@ class _ShortCommentsSheetState extends State<_ShortCommentsSheet> {
     final userId = NiptoSessionManager.instance.userId;
     if (userId == null) return;
     try {
-      await _client.from('short_comments').delete()
-          .eq('id', id).eq('author_id', userId);
+      await _client
+          .from('short_comments')
+          .delete()
+          .eq('id', id)
+          .eq('author_id', userId);
       if (!mounted) return;
       setState(() => _comments = _loadComments());
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Comment deleted.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Comment deleted.')));
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -675,25 +748,54 @@ class _ShortCommentsSheetState extends State<_ShortCommentsSheet> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.fromLTRB(18, 8, 18, MediaQuery.viewInsetsOf(context).bottom + 12),
+        padding: EdgeInsets.fromLTRB(
+          18,
+          8,
+          18,
+          MediaQuery.viewInsetsOf(context).bottom + 12,
+        ),
         child: SizedBox(
           height: MediaQuery.sizeOf(context).height * 0.62,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Comments', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+              const Text(
+                'Comments',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              ),
               const SizedBox(height: 12),
               Expanded(
                 child: FutureBuilder<List<Map<String, dynamic>>>(
                   future: _comments,
                   builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              'Comments could not be loaded.',
+                              style: TextStyle(color: NiptoColors.muted),
+                            ),
+                            TextButton(
+                              onPressed: () =>
+                                  setState(() => _comments = _loadComments()),
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
                     if (!snapshot.hasData) {
                       return const Center(child: CircularProgressIndicator());
                     }
                     final comments = snapshot.data!;
                     if (comments.isEmpty) {
                       return const Center(
-                        child: Text('Be the first to comment.', style: TextStyle(color: NiptoColors.muted)),
+                        child: Text(
+                          'Be the first to comment.',
+                          style: TextStyle(color: NiptoColors.muted),
+                        ),
                       );
                     }
                     return ListView.separated(
@@ -701,26 +803,40 @@ class _ShortCommentsSheetState extends State<_ShortCommentsSheet> {
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (context, index) {
                         final comment = comments[index];
-                        final mine = comment['author_id'] == NiptoSessionManager.instance.userId;
+                        final mine =
+                            comment['author_id'] ==
+                            NiptoSessionManager.instance.userId;
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
                           leading: const CircleAvatar(
                             backgroundColor: NiptoColors.violetSoft,
-                            child: Icon(Icons.person_outline_rounded, color: NiptoColors.violet),
+                            child: Icon(
+                              Icons.person_outline_rounded,
+                              color: NiptoColors.violet,
+                            ),
                           ),
                           title: Text(mine ? 'You' : 'Nipto member'),
                           subtitle: Text(comment['body'] as String),
-                          trailing: mine ? PopupMenuButton<String>(
-                            tooltip: 'Comment options',
-                            onSelected: (action) {
-                              if (action == 'edit') _editComment(comment);
-                              if (action == 'delete') _deleteComment(comment['id'] as String);
-                            },
-                            itemBuilder: (_) => const [
-                              PopupMenuItem(value: 'edit', child: Text('Edit comment')),
-                              PopupMenuItem(value: 'delete', child: Text('Delete comment')),
-                            ],
-                          ) : null,
+                          trailing: mine
+                              ? PopupMenuButton<String>(
+                                  tooltip: 'Comment options',
+                                  onSelected: (action) {
+                                    if (action == 'edit') _editComment(comment);
+                                    if (action == 'delete')
+                                      _deleteComment(comment['id'] as String);
+                                  },
+                                  itemBuilder: (_) => const [
+                                    PopupMenuItem(
+                                      value: 'edit',
+                                      child: Text('Edit comment'),
+                                    ),
+                                    PopupMenuItem(
+                                      value: 'delete',
+                                      child: Text('Delete comment'),
+                                    ),
+                                  ],
+                                )
+                              : null,
                         );
                       },
                     );
@@ -735,7 +851,9 @@ class _ShortCommentsSheetState extends State<_ShortCommentsSheet> {
                       maxLength: 2000,
                       maxLines: 2,
                       decoration: InputDecoration(
-                        hintText: _editingCommentId == null ? 'Write a comment…' : 'Edit your comment…',
+                        hintText: _editingCommentId == null
+                            ? 'Write a comment…'
+                            : 'Edit your comment…',
                         counterText: '',
                       ),
                     ),
@@ -744,7 +862,11 @@ class _ShortCommentsSheetState extends State<_ShortCommentsSheet> {
                   IconButton.filled(
                     onPressed: _sending ? null : _send,
                     icon: _sending
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
                         : const Icon(Icons.arrow_upward_rounded),
                   ),
                 ],
@@ -781,7 +903,10 @@ class _ActionIcon extends StatelessWidget {
           children: [
             Icon(icon, color: color, size: 29),
             const SizedBox(height: 4),
-            Text(label, style: const TextStyle(color: Colors.white, fontSize: 10)),
+            Text(
+              label,
+              style: const TextStyle(color: Colors.white, fontSize: 10),
+            ),
           ],
         ),
       ),
@@ -815,12 +940,26 @@ class _ShortsEmpty extends StatelessWidget {
           children: [
             Icon(icon, size: 52, color: NiptoColors.coral),
             const SizedBox(height: 18),
-            Text(title, style: const TextStyle(color: Colors.white, fontSize: 21, fontWeight: FontWeight.w800)),
+            Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 21,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const SizedBox(height: 9),
-            Text(subtitle, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, height: 1.4)),
+            Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.white70, height: 1.4),
+            ),
             if (onRetry != null) ...[
               const SizedBox(height: 18),
-              OutlinedButton(onPressed: onRetry, child: Text(actionLabel ?? 'Try again')),
+              OutlinedButton(
+                onPressed: onRetry,
+                child: Text(actionLabel ?? 'Try again'),
+              ),
             ],
           ],
         ),

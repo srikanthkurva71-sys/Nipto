@@ -169,15 +169,15 @@ class NiptoAuthMigrationTests(unittest.TestCase):
 
 
     def test_comment_editing_is_author_scoped_and_body_only(self):
-        migration = (ROOT / "supabase/migrations/20261117170000_nipto_comment_editing.sql").read_text()
+        migration = (ROOT / "supabase/migrations/20261117170000_nipto_comment_editing.sql").read_text(encoding="utf-8")
         self.assertIn("post_comments_update_own_body", migration)
         self.assertIn("short_comments_update_own_body", migration)
         self.assertIn("author_id = (select auth.uid())", migration)
         self.assertIn("grant update (body) on public.post_comments to authenticated", migration)
         self.assertIn("grant update (body) on public.short_comments to authenticated", migration)
         self.assertIn("short_comments_updated_at", migration)
-        home = (APP_ROOT / "lib/screens/home_feed_screen.dart").read_text()
-        shorts = (APP_ROOT / "lib/screens/shorts_screen.dart").read_text()
+        home = (APP_ROOT / "lib/screens/home_feed_screen.dart").read_text(encoding="utf-8")
+        shorts = (APP_ROOT / "lib/screens/shorts_screen.dart").read_text(encoding="utf-8")
         self.assertIn("_editComment", home)
         self.assertIn("_deleteComment", home)
         self.assertIn("_editComment", shorts)
@@ -186,7 +186,7 @@ class NiptoAuthMigrationTests(unittest.TestCase):
 
 
     def test_connected_chat_rules_allow_search_but_gate_direct_message_access(self):
-        migration = (ROOT / "supabase/migrations/20261118100000_nipto_connected_chat_access.sql").read_text()
+        migration = (ROOT / "supabase/migrations/20261118100000_nipto_connected_chat_access.sql").read_text(encoding="utf-8")
         self.assertIn("has_accepted_follow(v_me, p_other_user)", migration)
         self.assertIn("has_accepted_follow(p_other_user, v_me)", migration)
         self.assertIn("is_blocked_between(v_me, p_other_user)", migration)
@@ -206,7 +206,7 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         self.assertIn("profiles_display_name_search_idx", migration)
         self.assertIn("lower(p.display_name) like (lower(trim(p_query)) || '%')", migration)
         self.assertIn("revoke all on function public.search_profiles(text, integer) from public, anon", migration)
-        chats = (APP_ROOT / "lib/screens/chats_screen.dart").read_text()
+        chats = (APP_ROOT / "lib/screens/chats_screen.dart").read_text(encoding="utf-8")
         self.assertIn("connectedIds.addAll", chats)
         self.assertIn("visiblePartnerIds = partnerIds.intersection(connectedIds)", chats)
         self.assertIn("their_follow_state", chats)
@@ -220,7 +220,7 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         self.assertIn("Search people by ID or name", chats)
 
     def test_message_mutations_are_author_scoped_and_membership_checked(self):
-        migration = (ROOT / "supabase/migrations/20261117180000_nipto_message_edit_delete.sql").read_text()
+        migration = (ROOT / "supabase/migrations/20261117180000_nipto_message_edit_delete.sql").read_text(encoding="utf-8")
         self.assertIn("m.sender_id = v_user_id", migration)
         self.assertIn("cm.membership_state = 'accepted'", migration)
         self.assertIn("m.message_type = 'text'", migration)
@@ -230,7 +230,7 @@ class NiptoAuthMigrationTests(unittest.TestCase):
         self.assertIn("revoke all on function public.edit_own_message(uuid, text) from public, anon", migration)
         self.assertIn("grant execute on function public.edit_own_message(uuid, text) to authenticated", migration)
         self.assertIn("grant execute on function public.delete_own_message(uuid) to authenticated", migration)
-        conversation = (APP_ROOT / "lib/screens/conversation_screen.dart").read_text()
+        conversation = (APP_ROOT / "lib/screens/conversation_screen.dart").read_text(encoding="utf-8")
         self.assertIn("_showMessageActions", conversation)
         self.assertIn("edit_own_message", conversation)
         self.assertIn("delete_own_message", conversation)

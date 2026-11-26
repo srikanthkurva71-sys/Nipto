@@ -85,6 +85,16 @@ class FlutterProjectContractTests(unittest.TestCase):
         self.assertEqual(configuration["cwd"], "${workspaceFolder}/mobile/app")
         self.assertNotIn("args", configuration)
 
+    def test_official_logo_asset_is_bundled_and_used_by_the_app(self):
+        logo = APP / "assets" / "branding" / "nipto_logo.png"
+        self.assertTrue(logo.is_file(), "The supplied Nipto logo PNG must be committed.")
+        self.assertIn(
+            "assets/branding/nipto_logo.png",
+            PUBSPEC.read_text(encoding="utf-8"),
+        )
+        widget = (APP / "lib" / "widgets" / "nipto_logo_mark.dart").read_text(encoding="utf-8")
+        self.assertIn("assets/branding/nipto_logo.png", widget)
+
     def test_android_project_is_generated_not_committed_as_machine_specific_state(self):
         ignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
         self.assertIn("mobile/app/android/local.properties", ignore)

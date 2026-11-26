@@ -45,7 +45,8 @@ Nipto/
 ├── .vscode/                 # Flutter Android launch and tasks
 ├── docs/                    # product, security and delivery documentation
 ├── mobile/app/              # the one Flutter Android application root
-│   ├── android/             # generated Android native host\n│   ├── web/                 # generated Chrome development host only
+│   ├── android/             # generated Android native host
+│   ├── web/                 # generated Chrome development host only
 │   ├── config/              # optional client-safe overrides
 │   ├── lib/
 │   │   ├── main.dart
@@ -88,7 +89,7 @@ Nipto v1 is an Android app, not a web product. Use an Android emulator or physic
 
 ## Supabase state
 
-The connected Supabase project has the social schema and the Nipto native-auth database migrations applied. The live Edge Function inventory includes `nipto-login` and `nipto-identity` (active). The `custom:nipto` OIDC provider has been created and enabled in Supabase Auth. The issuer discovery document and JWKS endpoints have both returned HTTP 200 in manual checks. These checks establish endpoint availability, not a completed authorization-code/PKCE or Flutter session test.
+The connected Supabase project has the social schema and the Nipto native-auth database migrations applied. The retired `nipto-login` endpoint has been removed from this repository and must be undeployed during release; `nipto-identity` is the active Edge Function. The `custom:nipto` OIDC provider has been created and enabled in Supabase Auth. The issuer discovery document and JWKS endpoints have both returned HTTP 200 in manual checks. These checks establish endpoint availability, not a completed authorization-code/PKCE or Flutter session test.
 
 **Authentication status:** The Nipto identity Edge Function is deployed, its required OIDC client/signing secrets have been configured server-side, and the Supabase `custom:nipto` OIDC provider is enabled. Discovery and JWKS return HTTP 200. The intended identity model is Nipto ID + password only, with no email or phone required. A recovery Nipto account is optional and is linked only after sign-in in Settings, with approval from the other account owner. Registration, authorization-code/PKCE exchange, Supabase user provisioning, refresh, recovery and Flutter callback restoration still require end-to-end validation. See `docs/NIPTO_NATIVE_AUTH_DESIGN.md` and `docs/NIPTO_OIDC_DEPLOYMENT.md`. Do not present Nipto sign-in as operational until a real end-to-end login succeeds.
 
@@ -111,8 +112,8 @@ GitHub Actions generates the Android platform project, then runs Dart formatting
 - Implement video scanning/transcoding, thumbnails and resilient upload processing.
 - Build the role-gated staff console for an appropriately staffed adult operations team; the staff backend, audit log, review RPCs and user notifications are already provisioned.
 - Complete account deletion, data export and retention workflows.
-- Add automated multi-user RLS/storage tests, accessibility checks, performance tests and independent security review.
-- Add the original logo PNG as repository assets and generate the real Android launcher/splash artwork; the current login mark is a vector approximation.
+- Apply and verify `20261126160836_nipto_least_privilege_hardening.sql` against the connected project, then add automated multi-user RLS/storage tests, accessibility checks, performance tests and independent security review.
+- Verify generated launcher and splash artwork on physical devices and different Android launchers; the official logo PNG is bundled and used by in-app branding, launcher icons and native splash.
 - Configure release signing, Play Console compliance and a production AAB.
 
 Do not describe Nipto as production-ready until these gates have passed.

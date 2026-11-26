@@ -87,7 +87,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
     }
   }
 
-  Future<void> _loadOlderMessages(List<Map<String, dynamic>> latestMessages) async {
+  Future<void> _loadOlderMessages(
+    List<Map<String, dynamic>> latestMessages,
+  ) async {
     if (_loadingOlder || !_hasMoreOlder) return;
 
     final cursor = _olderMessages.isNotEmpty
@@ -102,8 +104,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
     final id = cursor['id'] as String?;
     if (createdAt == null || id == null) return;
 
-    final previousPixels =
-        _scrollController.hasClients ? _scrollController.position.pixels : 0.0;
+    final previousPixels = _scrollController.hasClients
+        ? _scrollController.position.pixels
+        : 0.0;
     final previousMaxExtent = _scrollController.hasClients
         ? _scrollController.position.maxScrollExtent
         : 0.0;
@@ -117,15 +120,18 @@ class _ConversationScreenState extends State<ConversationScreen> {
           .from('messages')
           .select()
           .eq('conversation_id', widget.conversationId)
-          .or('created_at.lt.$createdAt,and(created_at.eq.$createdAt,id.lt.$id)')
+          .or(
+            'created_at.lt.$createdAt,and(created_at.eq.$createdAt,id.lt.$id)',
+          )
           .order('created_at', ascending: false)
           .order('id', ascending: false)
           .limit(_messagePageSize);
 
       final page = List<Map<String, dynamic>>.from(rows)
         ..sort((a, b) {
-          final byDate = (a['created_at'] as String)
-              .compareTo(b['created_at'] as String);
+          final byDate = (a['created_at'] as String).compareTo(
+            b['created_at'] as String,
+          );
           return byDate != 0
               ? byDate
               : (a['id'] as String).compareTo(b['id'] as String);
@@ -148,8 +154,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
         final addedExtent =
             _scrollController.position.maxScrollExtent - previousMaxExtent;
         _scrollController.jumpTo(
-          (previousPixels + addedExtent)
-              .clamp(0.0, _scrollController.position.maxScrollExtent),
+          (previousPixels + addedExtent).clamp(
+            0.0,
+            _scrollController.position.maxScrollExtent,
+          ),
         );
       });
     } catch (_) {
@@ -157,7 +165,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
       setState(() => _loadingOlder = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Older messages could not be loaded. Please try again.'),
+          content: Text(
+            'Older messages could not be loaded. Please try again.',
+          ),
         ),
       );
     }
@@ -211,7 +221,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open your photo library. Please try again.')),
+          const SnackBar(
+            content: Text(
+              'Could not open your photo library. Please try again.',
+            ),
+          ),
         );
       }
       return;
@@ -241,17 +255,25 @@ class _ConversationScreenState extends State<ConversationScreen> {
       return;
     }
 
-    final path = widget.conversationId + '/' + userId + '/' +
-        DateTime.now().microsecondsSinceEpoch.toString() + '.' + extension;
+    final path =
+        widget.conversationId +
+        '/' +
+        userId +
+        '/' +
+        DateTime.now().microsecondsSinceEpoch.toString() +
+        '.' +
+        extension;
 
     setState(() => _sending = true);
     var uploaded = false;
     try {
-      await _client.storage.from('chat-media').upload(
-        path,
-        File(file.path),
-        fileOptions: FileOptions(contentType: contentType, upsert: false),
-      );
+      await _client.storage
+          .from('chat-media')
+          .upload(
+            path,
+            File(file.path),
+            fileOptions: FileOptions(contentType: contentType, upsert: false),
+          );
       uploaded = true;
 
       await _client.from('messages').insert({
@@ -270,7 +292,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Photo could not be sent. Check your connection and try again.')),
+        const SnackBar(
+          content: Text(
+            'Photo could not be sent. Check your connection and try again.',
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -301,7 +327,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 onTap: () => Navigator.pop(sheetContext, 'edit'),
               ),
             ListTile(
-              leading: const Icon(Icons.delete_outline, color: NiptoColors.danger),
+              leading: const Icon(
+                Icons.delete_outline,
+                color: NiptoColors.danger,
+              ),
               title: const Text('Delete message'),
               onTap: () => Navigator.pop(sheetContext, 'delete'),
             ),
@@ -333,10 +362,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
               child: const Text('Cancel'),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(
-                dialogContext,
-                controller.text.trim(),
-              ),
+              onPressed: () =>
+                  Navigator.pop(dialogContext, controller.text.trim()),
               child: const Text('Save'),
             ),
           ],
@@ -357,7 +384,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
       } catch (_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Message could not be edited. Please try again.')),
+          const SnackBar(
+            content: Text('Message could not be edited. Please try again.'),
+          ),
         );
       }
       return;
@@ -413,7 +442,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
       } catch (_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Message could not be deleted. Please try again.')),
+          const SnackBar(
+            content: Text('Message could not be deleted. Please try again.'),
+          ),
         );
       }
     }
@@ -448,11 +479,11 @@ class _ConversationScreenState extends State<ConversationScreen> {
       final message = error.toString().toLowerCase().contains('already active')
           ? 'A call is already active in this conversation.'
           : error.toString().toLowerCase().contains('permission')
-              ? 'Call permission is unavailable.'
-              : 'Could not start this call. Check the conversation and try again.';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+          ? 'Call permission is unavailable.'
+          : 'Could not start this call. Check the conversation and try again.';
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -468,8 +499,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
               radius: 18,
               backgroundColor: NiptoColors.violetSoft,
               child: Text(
-                widget.title.isNotEmpty ? widget.title.substring(0, 1).toUpperCase() : 'N',
-                style: const TextStyle(color: NiptoColors.violet, fontWeight: FontWeight.w800),
+                widget.title.isNotEmpty
+                    ? widget.title.substring(0, 1).toUpperCase()
+                    : 'N',
+                style: const TextStyle(
+                  color: NiptoColors.violet,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
             const SizedBox(width: 11),
@@ -477,8 +513,20 @@ class _ConversationScreenState extends State<ConversationScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(widget.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-                  Text(widget.subtitle, style: const TextStyle(fontSize: 11, color: NiptoColors.muted)),
+                  Text(
+                    widget.title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    widget.subtitle,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: NiptoColors.muted,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -497,11 +545,6 @@ class _ConversationScreenState extends State<ConversationScreen> {
               icon: const Icon(Icons.videocam_outlined),
             ),
           ],
-          IconButton(
-            tooltip: 'Conversation options',
-            onPressed: () {},
-            icon: const Icon(Icons.more_horiz_rounded),
-          ),
         ],
       ),
       body: Column(
@@ -512,7 +555,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return const Center(
-                    child: Text('Messages could not be loaded.', style: TextStyle(color: NiptoColors.muted)),
+                    child: Text(
+                      'Messages could not be loaded.',
+                      style: TextStyle(color: NiptoColors.muted),
+                    ),
                   );
                 }
                 if (!snapshot.hasData) {
@@ -532,8 +578,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 };
                 final messages = combinedById.values.toList()
                   ..sort((a, b) {
-                    final byDate = (a['created_at'] as String)
-                        .compareTo(b['created_at'] as String);
+                    final byDate = (a['created_at'] as String).compareTo(
+                      b['created_at'] as String,
+                    );
                     return byDate != 0
                         ? byDate
                         : (a['id'] as String).compareTo(b['id'] as String);
@@ -545,7 +592,8 @@ class _ConversationScreenState extends State<ConversationScreen> {
                 if (newestMessageId != null &&
                     _lastObservedNewestMessageId != newestMessageId) {
                   _lastObservedNewestMessageId = newestMessageId;
-                  final shouldStayAtBottom = !_scrollController.hasClients ||
+                  final shouldStayAtBottom =
+                      !_scrollController.hasClients ||
                       _scrollController.position.maxScrollExtent -
                               _scrollController.position.pixels <=
                           120;
@@ -565,11 +613,24 @@ class _ConversationScreenState extends State<ConversationScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: const [
-                        Icon(Icons.waving_hand_rounded, size: 34, color: NiptoColors.violet),
+                        Icon(
+                          Icons.waving_hand_rounded,
+                          size: 34,
+                          color: NiptoColors.violet,
+                        ),
                         SizedBox(height: 10),
-                        Text('Say hello', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
+                        Text(
+                          'Say hello',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 18,
+                          ),
+                        ),
                         SizedBox(height: 5),
-                        Text('Your conversation starts here.', style: TextStyle(color: NiptoColors.muted)),
+                        Text(
+                          'Your conversation starts here.',
+                          style: TextStyle(color: NiptoColors.muted),
+                        ),
                       ],
                     ),
                   );
@@ -592,7 +653,9 @@ class _ConversationScreenState extends State<ConversationScreen> {
                                 ? const SizedBox(
                                     width: 16,
                                     height: 16,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   )
                                 : const Icon(Icons.history_rounded),
                             label: Text(
@@ -604,12 +667,13 @@ class _ConversationScreenState extends State<ConversationScreen> {
                         ),
                       );
                     }
-                    final messageIndex =
-                        index - (_hasMoreOlder ? 1 : 0);
+                    final messageIndex = index - (_hasMoreOlder ? 1 : 0);
                     final message = messages[messageIndex];
                     final mine = message['sender_id'] == currentUserId;
                     final deleted = message['deleted_at'] != null;
-                    final isImage = !deleted && message['message_type'] == 'image' &&
+                    final isImage =
+                        !deleted &&
+                        message['message_type'] == 'image' &&
                         message['media_path'] is String;
                     final body = deleted
                         ? 'Message deleted'
@@ -620,34 +684,47 @@ class _ConversationScreenState extends State<ConversationScreen> {
                           ? () => _showMessageActions(message)
                           : null,
                       child: Align(
-                        alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+                        alignment: mine
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
                         child: Container(
-                        constraints: BoxConstraints(
-                          maxWidth: MediaQuery.sizeOf(context).width * 0.78,
-                        ),
-                        margin: const EdgeInsets.only(bottom: 9),
-                        padding: isImage
-                            ? const EdgeInsets.all(5)
-                            : const EdgeInsets.symmetric(horizontal: 15, vertical: 11),
-                        decoration: BoxDecoration(
-                          color: mine ? NiptoColors.violet : Colors.white,
-                          borderRadius: BorderRadius.only(
-                            topLeft: const Radius.circular(18),
-                            topRight: const Radius.circular(18),
-                            bottomLeft: Radius.circular(mine ? 18 : 5),
-                            bottomRight: Radius.circular(mine ? 5 : 18),
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.sizeOf(context).width * 0.78,
                           ),
-                          border: mine ? null : Border.all(color: NiptoColors.border),
-                        ),
-                        child: isImage
-                            ? _ChatImage(path: message['media_path'] as String)
-                            : Text(
-                                body,
-                                style: TextStyle(
-                                  color: mine ? Colors.white : NiptoColors.ink,
-                                  fontStyle: deleted ? FontStyle.italic : FontStyle.normal,
+                          margin: const EdgeInsets.only(bottom: 9),
+                          padding: isImage
+                              ? const EdgeInsets.all(5)
+                              : const EdgeInsets.symmetric(
+                                  horizontal: 15,
+                                  vertical: 11,
                                 ),
-                              ),
+                          decoration: BoxDecoration(
+                            color: mine ? NiptoColors.violet : Colors.white,
+                            borderRadius: BorderRadius.only(
+                              topLeft: const Radius.circular(18),
+                              topRight: const Radius.circular(18),
+                              bottomLeft: Radius.circular(mine ? 18 : 5),
+                              bottomRight: Radius.circular(mine ? 5 : 18),
+                            ),
+                            border: mine
+                                ? null
+                                : Border.all(color: NiptoColors.border),
+                          ),
+                          child: isImage
+                              ? _ChatImage(
+                                  path: message['media_path'] as String,
+                                )
+                              : Text(
+                                  body,
+                                  style: TextStyle(
+                                    color: mine
+                                        ? Colors.white
+                                        : NiptoColors.ink,
+                                    fontStyle: deleted
+                                        ? FontStyle.italic
+                                        : FontStyle.normal,
+                                  ),
+                                ),
                         ),
                       ),
                     );
@@ -665,7 +742,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
                   IconButton(
                     tooltip: 'Attach photo',
                     onPressed: _sending ? null : _attachImage,
-                    icon: const Icon(Icons.image_outlined, color: NiptoColors.violet),
+                    icon: const Icon(
+                      Icons.image_outlined,
+                      color: NiptoColors.violet,
+                    ),
                   ),
                   Expanded(
                     child: TextField(
@@ -677,7 +757,10 @@ class _ConversationScreenState extends State<ConversationScreen> {
                       onSubmitted: (_) => _send(),
                       decoration: const InputDecoration(
                         hintText: 'Write a message…',
-                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                       ),
                     ),
                   ),
@@ -692,9 +775,15 @@ class _ConversationScreenState extends State<ConversationScreen> {
                           ? const SizedBox(
                               width: 18,
                               height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
                             )
-                          : const Icon(Icons.arrow_upward_rounded, color: Colors.white),
+                          : const Icon(
+                              Icons.arrow_upward_rounded,
+                              color: Colors.white,
+                            ),
                     ),
                   ),
                 ],
@@ -744,7 +833,10 @@ class _ChatImageState extends State<_ChatImage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.broken_image_outlined, color: NiptoColors.muted),
+                  const Icon(
+                    Icons.broken_image_outlined,
+                    color: NiptoColors.muted,
+                  ),
                   TextButton.icon(
                     onPressed: () => setState(() => _signedUrl = _load()),
                     icon: const Icon(Icons.refresh, size: 16),

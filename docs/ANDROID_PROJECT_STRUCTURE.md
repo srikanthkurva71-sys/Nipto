@@ -28,6 +28,9 @@ Nipto/
 │       │   ├── services/         # Supabase, session, storage and WebRTC
 │       │   ├── theme/            # Nipto theme
 │       │   └── widgets/          # reusable Nipto widgets
+│       ├── assets/               # official Nipto branding assets
+│       ├── flutter_launcher_icons.yaml
+│       ├── flutter_native_splash.yaml
 │       ├── test/                 # Dart tests
 │       ├── analysis_options.yaml
 │       ├── pubspec.yaml          # package manifest
@@ -48,7 +51,8 @@ There are no iOS, macOS, Windows or Linux targets. The Android host and local Ch
 - `lib/screens/`: user-facing screens and navigation destinations.
 - `lib/services/`: data access and platform services. Enforce authorization in Supabase RLS and trusted server functions, not only in widgets.
 - `lib/theme/`: colors, typography and component theme.
-- `lib/widgets/`: genuinely reusable UI components.
+- `lib/widgets/`: genuinely reusable UI components, including the official logo mark.
+- `assets/branding/`: the supplied Nipto logo PNG used by app branding.
 - `test/`: unit and widget tests.
 - `pubspec.yaml`: authoritative direct package declarations.
 
@@ -89,7 +93,7 @@ From PowerShell at the repository root:
 .\\scripts\\bootstrap_nipto_windows.ps1
 ```
 
-The script checks Flutter and Java, creates the Android host and local Chrome preview host under `mobile/app`, applies the Nipto OAuth callback, sets Android minimum SDK to API 24, resolves declared packages, formats Dart, runs static analysis and executes tests.
+The script checks Flutter and Java, creates the Android host and local Chrome preview host under `mobile/app`, installs the NDK required by WebRTC when missing, applies the Nipto OAuth callback and media permissions, pins the tested Gradle plugin, sets Android minimum SDK to API 24, generates launcher and splash artwork from the supplied logo, resolves declared packages, formats Dart, runs static analysis and executes tests.
 
 After bootstrap, launch on an attached Android phone or emulator:
 
@@ -99,7 +103,13 @@ flutter devices
 flutter run
 ```
 
-Run the development UI preview in Chrome (not a supported release target):\n\n```powershell\nflutter run -d chrome\n```\n\nBuild an APK with the project's default Supabase configuration:
+Run the development UI preview in Chrome (not a supported release target):
+
+```powershell
+flutter run -d chrome
+```
+
+Build an APK with the project's default Supabase configuration:
 
 ```powershell
 flutter build apk

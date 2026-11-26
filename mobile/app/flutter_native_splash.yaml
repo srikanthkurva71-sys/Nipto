@@ -1,0 +1,11 @@
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: assets/branding/nipto_logo.png
+  android: true
+  ios: false
+  web: false
+  android_min_sdk: 24
+  android_12:
+    color: "#FFFFFF"
+    image: assets/branding/nipto_logo.png
+    icon_background_color: "#FFFFFF"

@@ -20,8 +20,10 @@ class NativeNiptoRegistrationScreen extends StatefulWidget {
     required String niptoId,
     required String password,
     String? recoveryNiptoId,
-  }) onSubmit;
-  final Future<Map<String, dynamic>> Function(String niptoId)? checkNiptoIdAvailability;
+  })
+  onSubmit;
+  final Future<Map<String, dynamic>> Function(String niptoId)?
+  checkNiptoIdAvailability;
 
   @override
   State<NativeNiptoRegistrationScreen> createState() =>
@@ -56,7 +58,9 @@ class _NativeNiptoRegistrationScreenState
   Future<void> _submit() async {
     if (_busy || !_formKey.currentState!.validate()) return;
     if (_idAvailable != true) {
-      setState(() => _error = 'Wait for Nipto ID availability to be confirmed.');
+      setState(
+        () => _error = 'Wait for Nipto ID availability to be confirmed.',
+      );
       return;
     }
     setState(() {
@@ -73,7 +77,11 @@ class _NativeNiptoRegistrationScreenState
             : _normalizedId(_recoveryIdController.text),
       );
     } catch (_) {
-      if (mounted) setState(() => _error = 'Registration could not be completed. Please try again.');
+      if (mounted)
+        setState(
+          () =>
+              _error = 'Registration could not be completed. Please try again.',
+        );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -94,9 +102,14 @@ class _NativeNiptoRegistrationScreenState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text('Create your identity', style: Theme.of(context).textTheme.headlineMedium),
+                    Text(
+                      'Create your identity',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
                     const SizedBox(height: 8),
-                    const Text('Choose a display name and unique Nipto ID. You can add a recovery account later in Settings.'),
+                    const Text(
+                      'Choose a display name and unique Nipto ID. You can add a recovery account later in Settings.',
+                    ),
                     const SizedBox(height: 22),
                     TextFormField(
                       controller: _nameController,
@@ -121,7 +134,8 @@ class _NativeNiptoRegistrationScreenState
                         if (mounted) {
                           setState(() {
                             _idAvailable = available;
-                            if (available == null || available == true) _error = null;
+                            if (available == null || available == true)
+                              _error = null;
                           });
                         }
                       },
@@ -146,32 +160,11 @@ class _NativeNiptoRegistrationScreenState
                       validator: (value) {
                         final id = _normalizedId(value ?? '');
                         if (id.isEmpty) return null;
-                        if (!RegExp(r'^[a-z0-9]+(?:_[a-z0-9]+)*                      const SizedBox(height: 16),
-                      Text(_error!, style: const TextStyle(color: Colors.red)),
-                    ],
-                    const SizedBox(height: 24),
-                    FilledButton(
-                      onPressed: _busy ? null : _submit,
-                      child: _busy
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Create Nipto account'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-).hasMatch(id) ||
-                            id.length < 3 || id.length > 24) {
+                        if (!RegExp(
+                              r'^[a-z0-9]+(?:_[a-z0-9]+)*$',
+                            ).hasMatch(id) ||
+                            id.length < 3 ||
+                            id.length > 24) {
                           return 'Enter a valid recovery Nipto ID.';
                         }
                         if (id == _normalizedId(_idController.text)) {
