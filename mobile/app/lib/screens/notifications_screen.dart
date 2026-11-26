@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/nipto_conversation_header.dart';
 import '../services/nipto_session_manager.dart';
 
 import '../theme/nipto_theme.dart';
@@ -161,14 +162,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (kind == 'message') {
       final conversationId = payload['conversation_id'] as String?;
       if (conversationId == null || !mounted) return;
-      final name = item['actor_display_name'] as String? ?? 'Nipto member';
-      final handle = item['actor_nipto_id'] as String? ?? '';
+      // Use the same authorized header projection as notification taps so an
+      // in-app message notification cannot enable calls in a group thread.
+      final header = await const NiptoConversationHeaderResolver().resolve(
+        conversationId,
+      );
+      if (!mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => ConversationScreen(
             conversationId: conversationId,
-            title: name,
-            subtitle: handle.isEmpty ? 'Nipto member' : '@$handle',
+            title: header.title,
+            subtitle: header.subtitle,
+            enableCalls: !header.isGroup,
           ),
         ),
       );
