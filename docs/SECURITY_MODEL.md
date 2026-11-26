@@ -76,9 +76,9 @@ Private buckets: avatars, chat-media, statuses, posts and shorts. Storage object
 - Validate the full new-user trigger, OIDC registration/login, legacy-account migration, account linking, RLS, Storage, Realtime and RPC behavior in staging.
 - Validate Argon2id parameters under Edge Function CPU/memory limits and run load tests for concurrent sign-ins and recovery.
 - Complete E2E tests for cross-user RLS isolation, private accounts, blocks, group invites, message membership, recovery approval/reset, session refresh/revocation and storage access.
-- Provision production TURN infrastructure and verify independent mobile networks; add push delivery and app-wide incoming-call handling.
+- Provision production TURN infrastructure and verify independent mobile networks; verify push delivery and app-wide incoming-call handling on physical devices.
 - Add media scanning/transcoding, thumbnails, resilient upload processing and human moderation operations.
-- Add account deletion, data export and retention workflows.
+- Verify account deletion, data export and retention workflows end to end; the request routes, private export bucket and fulfillment worker are already deployed.
 - Review every authenticated SECURITY DEFINER RPC against its caller authorization checks; function-by-function review is required before production rollout.
 - Complete physical two-device WebRTC tests, network-transition tests, accessibility/performance checks and independent security review before production launch.
 - Configure release signing, Play Console compliance and a production AAB only after the above gates pass.

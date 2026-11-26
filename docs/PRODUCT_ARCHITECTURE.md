@@ -83,12 +83,12 @@ Nipto owns the user-facing identity and password verification. Supabase Auth is 
 
 ## 4. Backend services
 
-- **Supabase Auth:** credential verification, email confirmation, sessions and password reset.
+- **Supabase Auth:** session broker for the Nipto-owned `custom:nipto` OIDC provider; no email, phone or external identity provider in the native credential contract.
 - **PostgreSQL:** profiles, follows, blocks, conversations, messages, statuses, posts, Shorts, likes, comments, notifications and reports.
 - **RLS:** per-user and per-conversation authorization; the client cannot bypass it.
 - **Realtime:** message, membership and notification changes.
 - **Storage:** private buckets for avatars, chat media, statuses, posts and Shorts.
-- **Edge Functions:** Nipto ID login, moderation orchestration, notification dispatch and media-processing callbacks as those modules are implemented.
+- **Edge Functions:** Nipto custom OIDC identity, FCM push dispatch, media validation and privacy fulfillment. Each function is deployed and its configuration is recorded in `supabase/config.toml`.
 
 ## 5. Database entities
 

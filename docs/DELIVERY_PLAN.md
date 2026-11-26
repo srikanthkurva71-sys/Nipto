@@ -66,9 +66,9 @@
 - [x] Validate the role-gated staff console through formatting, static analysis, unit/widget tests and Android debug APK CI; production staff-session acceptance testing remains an operational gate.
 - [x] Test staff RPCs fail closed for identities without staff roles; moderator/admin acceptance testing remains an operational gate.
 - [x] In-app notifications for trusted recovery-contact requests and approvals, with navigation to the recovery-contact manager.
-- [ ] Push delivery and notification deep links (also required for incoming-call wake-up).
+- [x] Push delivery plumbing and notification deep links, including incoming-call tap routing. Firebase credentials, worker secret and physical-device verification remain operational gates.
 - [x] Role-gated staff review UI for feedback, abuse reports and pending content; backend authorization and audit logging are deployed.
-- Privacy export/deletion workflows.
+- [x] Privacy export/deletion request workflows with a secret-protected fulfillment worker. End-to-end export/deletion runs with real accounts remain an operational gate.
 - Offline, accessibility, performance and device testing, including two-device WebRTC network-transition tests.
 - App signing, Play Console policy review and release APK/AAB.
 

@@ -124,7 +124,9 @@ class _GroupCreateScreenState extends State<GroupCreateScreen> {
           builder: (_) => ConversationScreen(
             conversationId: result as String,
             title: title,
-            subtitle: 'Group · invitations sent',
+            subtitle: 'Group conversation',
+            // Group calls require an SFU and are intentionally out of scope.
+            enableCalls: false,
           ),
         ),
       );

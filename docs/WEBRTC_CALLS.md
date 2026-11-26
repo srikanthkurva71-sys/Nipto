@@ -19,7 +19,7 @@ Nipto will support real-time voice and video calls from direct conversations. Th
 
 1. Caller starts a call from an accepted direct conversation.
 2. Backend validates caller membership, callee membership, active account state, block state and call rate limits.
-3. Backend creates a short-lived ringing call session. The authenticated app shell polls the incoming-call RPC while foregrounded; push wake-up is not implemented yet.
+3. Backend creates a short-lived ringing call session. The authenticated app shell polls the incoming-call RPC while foregrounded; FCM wake-up and notification tap routing are implemented but physical-device verification is an operational gate.
 4. Callee accepts or declines. Only the invited callee can accept; either participant can end. Declines are sent over the private channel when available.
 5. Both clients join a private call signaling channel; the callee-ready handshake prevents the caller from sending an SDP offer before the callee has joined. They then exchange offer/answer and trickled ICE candidates.
 6. Clients establish the peer connection, request camera/microphone permission only after a user action, and display explicit mute/camera/hang-up controls.
@@ -60,7 +60,9 @@ Nipto will support real-time voice and video calls from direct conversations. Th
 
 ## Release gates
 
-- Provision a Linux host and DNS name for Nipto's self-hosted coturn deployment in `deploy/turn/`; configure TLS certificates, firewall ports 3478/5349 and the UDP relay range 49160–49200.\n- Set matching `TURN_SHARED_SECRET`, `TURN_URLS` and `TURN_STUN_URL` in Supabase Edge Function Secrets. Never commit the secret.\n- Verify TURN allocation and relay from at least two independent mobile networks before enabling calling for production users.
+- Provision a Linux host and DNS name for Nipto's self-hosted coturn deployment in `deploy/turn/`; configure TLS certificates, firewall ports 3478/5349 and the UDP relay range 49160–49200.
+- Set matching `TURN_SHARED_SECRET`, `TURN_URLS` and `TURN_STUN_URL` in Supabase Edge Function Secrets. Never commit the secret.
+- Verify TURN allocation and relay from at least two independent mobile networks before enabling calling for production users.
 - Configure private Realtime channel authorization and test cross-user isolation.
 - Add secure server-side call creation/accept/end operations and call rate limits.
 - Complete two-physical-device tests on Wi-Fi, mobile data, restrictive NAT and background/foreground transitions.

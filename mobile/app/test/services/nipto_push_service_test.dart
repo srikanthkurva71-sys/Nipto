@@ -102,6 +102,7 @@ NiptoPushService buildService({
   bool permissionGranted = true,
   String? token = 'fcm-token-abcdefghijklmnop',
   Future<bool> Function(FirebaseOptions options)? firebaseInitializer,
+  NiptoAuthChangesProvider? authChangesProvider,
 }) {
   return NiptoPushService(
     config: config,
@@ -113,7 +114,8 @@ NiptoPushService buildService({
     notifier: notifier ?? FakeNotifier(),
     platformOverride: 'android',
     signedInProvider: () => signedIn,
-    authChangesProvider: () => const Stream<bool>.empty(),
+    authChangesProvider:
+        authChangesProvider ?? () => const Stream<bool>.empty(),
   );
 }
 
@@ -270,5 +272,90 @@ void main() {
         expect(notifier.shown.single.foregroundBody, 'Video call');
       },
     );
+  });
+
+  group('NiptoPushService lifecycle', () {
+    test(
+      'token refresh unregisters the old token and registers the new one',
+      () async {
+        final messaging = FakeMessaging();
+        final rpc = RecordingRpc();
+        final service = buildService(messaging: messaging, rpc: rpc);
+        addTearDown(service.dispose);
+        addTearDown(messaging.dispose);
+        await service.initialize();
+
+        messaging.emitToken('fcm-token-refreshed-abcdef');
+        await pumpEventQueue(times: 8);
+
+        expect(
+          rpc.calls.map((call) => call['function']).toList(),
+          equals([
+            NiptoPushRpc.registerFunction,
+            NiptoPushRpc.unregisterFunction,
+            NiptoPushRpc.registerFunction,
+          ]),
+        );
+        expect(
+          rpc.calls[1]['params'],
+          equals(<String, dynamic>{'p_token': 'fcm-token-abcdefghijklmnop'}),
+        );
+        expect(
+          rpc.calls[2]['params'],
+          equals(<String, dynamic>{
+            'p_token': 'fcm-token-refreshed-abcdef',
+            'p_platform': 'android',
+          }),
+        );
+        expect(service.hasRegisteredToken, isTrue);
+      },
+    );
+
+    test('auth changes register on sign-in and forget on sign-out', () async {
+      final authChanges = StreamController<bool>.broadcast();
+      final rpc = RecordingRpc();
+      final service = buildService(
+        rpc: rpc,
+        signedIn: false,
+        authChangesProvider: () => authChanges.stream,
+      );
+      addTearDown(service.dispose);
+      addTearDown(authChanges.close);
+      await service.initialize();
+      expect(rpc.calls, isEmpty);
+
+      authChanges.add(true);
+      await pumpEventQueue(times: 6);
+      expect(rpc.calls, hasLength(1));
+      expect(rpc.calls.single['function'], NiptoPushRpc.registerFunction);
+
+      authChanges.add(false);
+      await pumpEventQueue(times: 4);
+      // Sign-out unregistration is awaited by the session manager before the
+      // auth event fires, so the service only forgets the token here.
+      expect(rpc.calls, hasLength(1));
+      expect(service.hasRegisteredToken, isFalse);
+    });
+
+    test('cold-start taps are buffered until the router subscribes', () async {
+      final messaging = FakeMessaging()
+        ..initialMessage = <String, dynamic>{
+          'delivery_type': 'notification',
+          'notification_type': 'message',
+          'entity_id': '77777777-7777-4777-8777-777777777777',
+        };
+      final service = buildService(messaging: messaging);
+      addTearDown(service.dispose);
+      addTearDown(messaging.dispose);
+      await service.initialize();
+
+      final event = await service.events.first;
+      expect(event.isTap, isTrue);
+      expect(event.origin, NiptoPushEventOrigin.notificationTap);
+      expect(
+        event.targetConversationId,
+        '77777777-7777-4777-8777-777777777777',
+      );
+    });
   });
 }
