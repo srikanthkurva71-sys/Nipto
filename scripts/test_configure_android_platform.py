@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -120,7 +121,7 @@ android {
         self.google_services.write_text(
             """{
   "project_info": {"project_number": "1234567890", "project_id": "nipto-test"},
-  "client": [{"client_info": {}, "mobilesdk_app_id": "1:1234567890:android:abc"}]
+  "client": [{"client_info": {"mobilesdk_app_id": "1:1234567890:android:abc"}}]
 }
 """,
             encoding="utf-8",
@@ -144,6 +145,25 @@ android {
         self.assertEqual(configure_android_platform.main(), 0)
         self.assertNotIn("com.google.gms.google-services", self.settings.read_text(encoding="utf-8"))
         self.assertNotIn("com.google.gms.google-services", self.build.read_text(encoding="utf-8"))
+
+    def test_google_services_plugin_rejects_wrong_client_id_level(self):
+        payload = {
+            "project_info": {
+                "project_number": "1234567890",
+                "project_id": "nipto-test",
+            },
+            "client": [{"client_info": {}, "mobilesdk_app_id": "wrong-level-id"}],
+        }
+        self.google_services.write_text(json.dumps(payload), encoding="utf-8")
+        self.assertEqual(configure_android_platform.main(), 0)
+        self.assertNotIn(
+            "com.google.gms.google-services",
+            self.settings.read_text(encoding="utf-8"),
+        )
+        self.assertNotIn(
+            "com.google.gms.google-services",
+            self.build.read_text(encoding="utf-8"),
+        )
 
     def test_desugaring_is_added_once_to_existing_gradle_blocks(self):
         self.build.write_text(

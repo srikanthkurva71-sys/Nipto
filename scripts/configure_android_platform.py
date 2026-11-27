@@ -107,8 +107,9 @@ def has_google_services() -> bool:
         return False
     return any(
         isinstance(client, dict)
-        and isinstance(client.get("mobilesdk_app_id"), str)
-        and bool(client["mobilesdk_app_id"].strip())
+        and isinstance(client.get("client_info"), dict)
+        and isinstance(client["client_info"].get("mobilesdk_app_id"), str)
+        and bool(client["client_info"]["mobilesdk_app_id"].strip())
         for client in clients
     )
 

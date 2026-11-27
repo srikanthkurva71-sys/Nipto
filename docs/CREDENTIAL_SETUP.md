@@ -99,6 +99,12 @@ into `.env.supabase.local`, and uploads it as `FCM_SERVICE_ACCOUNT_JSON`. The
 push Edge Function mints short-lived OAuth tokens from it; no service-account
 key reaches Flutter.
 
+If a service-account key is ever pasted into chat, a ticket, or a log, treat it
+as compromised. Revoke that key in the Firebase console and generate a new one.
+The local helper can upload a fresh key from a file, but it cannot create or
+revoke Google Cloud keys when the Firebase Admin SDK service account lacks IAM
+API permissions.
+
 ## 4. Build with push enabled
 
 Client Firebase identifiers are public, but Nipto only enables Firebase when
