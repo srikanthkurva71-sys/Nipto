@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../services/nipto_session_manager.dart';
 import '../widgets/nipto_id_availability_field.dart';
 import '../widgets/nipto_password_fields.dart';
 
@@ -19,7 +20,7 @@ class NativeNiptoRegistrationScreen extends StatefulWidget {
     required String displayName,
     required String niptoId,
     required String password,
-    String? recoveryNiptoId,
+    required String passwordConfirmation,
   })
   onSubmit;
   final Future<Map<String, dynamic>> Function(String niptoId)?
@@ -37,7 +38,6 @@ class _NativeNiptoRegistrationScreenState
   final _idController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmationController = TextEditingController();
-  final _recoveryIdController = TextEditingController();
   bool _busy = false;
   bool? _idAvailable;
   String? _error;
@@ -48,7 +48,6 @@ class _NativeNiptoRegistrationScreenState
     _idController.dispose();
     _passwordController.dispose();
     _confirmationController.dispose();
-    _recoveryIdController.dispose();
     super.dispose();
   }
 
@@ -72,15 +71,14 @@ class _NativeNiptoRegistrationScreenState
         displayName: _nameController.text.trim(),
         niptoId: _normalizedId(_idController.text),
         password: _passwordController.text,
-        recoveryNiptoId: _normalizedId(_recoveryIdController.text).isEmpty
-            ? null
-            : _normalizedId(_recoveryIdController.text),
+        passwordConfirmation: _confirmationController.text,
       );
+    } on NiptoAuthException catch (error) {
+      if (mounted) setState(() => _error = error.message);
     } catch (_) {
       if (mounted)
         setState(
-          () =>
-              _error = 'Registration could not be completed. Please try again.',
+          () => _error = 'Registration could not be completed. Please try again.',
         );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -145,38 +143,6 @@ class _NativeNiptoRegistrationScreenState
                     NiptoPasswordFields(
                       passwordController: _passwordController,
                       confirmationController: _confirmationController,
-                    ),
-                    const SizedBox(height: 18),
-                    TextFormField(
-                      controller: _recoveryIdController,
-                      autocorrect: false,
-                      textCapitalization: TextCapitalization.none,
-                      decoration: const InputDecoration(
-                        labelText: 'Recovery Nipto ID (optional)',
-                        hintText: 'trusted_person',
-                        prefixText: '@',
-                        prefixIcon: Icon(Icons.shield_outlined),
-                      ),
-                      validator: (value) {
-                        final id = _normalizedId(value ?? '');
-                        if (id.isEmpty) return null;
-                        if (!RegExp(
-                              r'^[a-z0-9]+(?:_[a-z0-9]+)*$',
-                            ).hasMatch(id) ||
-                            id.length < 3 ||
-                            id.length > 24) {
-                          return 'Enter a valid recovery Nipto ID.';
-                        }
-                        if (id == _normalizedId(_idController.text)) {
-                          return 'Recovery ID must be different from your own ID.';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Optional. The recovery account owner must approve the connection.',
-                      style: TextStyle(fontSize: 12, color: Colors.black54),
                     ),
                     const SizedBox(height: 18),
                     if (_error != null) ...[

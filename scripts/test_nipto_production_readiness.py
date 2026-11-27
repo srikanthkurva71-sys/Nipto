@@ -6,23 +6,35 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 APP_ROOT = ROOT / "mobile/app"
 HARDENING_MIGRATION = (
-    ROOT / "supabase/migrations/20261126160836_nipto_least_privilege_hardening.sql"
+    ROOT / "supabase/migrations/20261126115641_nipto_least_privilege_hardening.sql"
 )
+OIDC_CLAIMS_MIGRATION = (
+    ROOT / "supabase/migrations/20261126122909_nipto_oidc_custom_claims_provisioning.sql"
+)
+OIDC_DEPLOYMENT_DOC = ROOT / "docs/NIPTO_OIDC_DEPLOYMENT.md"
 NOTIFICATIONS_SCREEN = APP_ROOT / "lib/screens/notifications_screen.dart"
 LAUNCHER_CONFIG = APP_ROOT / "flutter_launcher_icons.yaml"
 SPLASH_CONFIG = APP_ROOT / "flutter_native_splash.yaml"
+AUTH_SCREEN = APP_ROOT / "lib/screens/auth_screen.dart"
+SESSION_MANAGER = APP_ROOT / "lib/services/nipto_session_manager.dart"
+IDENTITY_FUNCTION = ROOT / "supabase/functions/nipto-identity/index.ts"
 
 
 class NiptoProductionReadinessTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.hardening_sql = HARDENING_MIGRATION.read_text(encoding="utf-8")
+        cls.oidc_claims_sql = OIDC_CLAIMS_MIGRATION.read_text(encoding="utf-8")
+        cls.oidc_deployment_doc = OIDC_DEPLOYMENT_DOC.read_text(encoding="utf-8")
         cls.notifications_source = NOTIFICATIONS_SCREEN.read_text(encoding="utf-8")
         cls.lib_sources = {
             path: path.read_text(encoding="utf-8")
             for path in (APP_ROOT / "lib").rglob("*.dart")
         }
         cls.config_toml = (ROOT / "supabase/config.toml").read_text(encoding="utf-8")
+        cls.auth_screen = AUTH_SCREEN.read_text(encoding="utf-8")
+        cls.session_manager = SESSION_MANAGER.read_text(encoding="utf-8")
+        cls.identity_function = IDENTITY_FUNCTION.read_text(encoding="utf-8")
 
     def test_least_privilege_migration_restores_column_scoped_inserts(self):
         protected_columns = {
@@ -70,6 +82,56 @@ class NiptoProductionReadinessTests(unittest.TestCase):
     def test_retired_unauthenticated_function_is_not_configured_or_deployed(self):
         self.assertNotIn("[functions.nipto-login]", self.config_toml)
         self.assertFalse((ROOT / "supabase/functions/nipto-login").exists())
+
+    def test_auth_screen_opens_native_credential_forms(self):
+        self.assertIn("NativeNiptoLoginScreen", self.auth_screen)
+        self.assertIn("NativeNiptoRegistrationScreen", self.auth_screen)
+        self.assertIn("_openSignIn", self.auth_screen)
+        self.assertIn("_openRegistration", self.auth_screen)
+        self.assertIn("Sign in with Nipto ID", self.auth_screen)
+        self.assertIn("onPressed: _busy ? null : _openSignIn", self.auth_screen)
+        self.assertIn("onPressed: _busy ? null : _openRegistration", self.auth_screen)
+        self.assertIn("signInWithNiptoId", self.auth_screen)
+        self.assertIn("registerNiptoAccount", self.auth_screen)
+        self.assertIn("Use browser sign-in instead", self.auth_screen)
+
+    def test_native_credentials_finish_real_supabase_pkce_session(self):
+        self.assertIn("getOAuthSignInUrl", self.session_manager)
+        self.assertIn("..followRedirects = false", self.session_manager)
+        self.assertIn("authorize/native", self.session_manager)
+        self.assertIn("getSessionFromUrl(callback)", self.session_manager)
+        self.assertNotIn("signInWithPassword", self.session_manager)
+        self.assertNotIn("signUp(email", self.session_manager)
+
+    def test_identity_function_supports_native_oidc_bridge(self):
+        self.assertIn('path.endsWith("/authorize/native")', self.identity_function)
+        self.assertIn("exchangeSupabaseAuthorizationCode", self.identity_function)
+        self.assertIn('redirect: "manual"', self.identity_function)
+        self.assertIn("nipto_oidc_create_transaction", self.identity_function)
+        self.assertIn("nipto_oidc_consume_transaction", self.identity_function)
+        self.assertIn("resolveOidcIdentity", self.identity_function)
+
+    def test_custom_oidc_claims_are_provisioned_into_profiles(self):
+        self.assertIn(
+            "new.raw_user_meta_data->'custom_claims'", self.oidc_claims_sql
+        )
+        self.assertIn("v_claims->>'nipto_id'", self.oidc_claims_sql)
+        self.assertIn("v_claims->>'display_name'", self.oidc_claims_sql)
+        self.assertIn("array['nipto_id','display_name']", self.oidc_claims_sql)
+        self.assertIn(
+            "where identifier = 'custom:nipto'", self.oidc_claims_sql
+        )
+
+    def test_deployment_runbook_records_required_claim_allowlist(self):
+        self.assertIn('`custom_claims_allowlist`: `["nipto_id", "display_name"]`', self.oidc_deployment_doc)
+        self.assertIn("email_optional=true", self.oidc_deployment_doc)
+        self.assertIn("Verified deployment snapshot — 2026-11-26", self.oidc_deployment_doc)
+
+    def test_client_reads_supabase_custom_claims(self):
+        session_source = SESSION_MANAGER.read_text(encoding="utf-8")
+        self.assertIn("metadata['custom_claims']", session_source)
+        self.assertIn("custom[customKey]", session_source)
+        self.assertIn("custom[standardKey]", session_source)
 
     def test_official_branding_generators_are_configured(self):
         launcher = LAUNCHER_CONFIG.read_text(encoding="utf-8")

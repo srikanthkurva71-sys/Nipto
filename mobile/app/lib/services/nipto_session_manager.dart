@@ -70,14 +70,28 @@ class NiptoSessionManager {
 
   NiptoSession _fromSession(Session session) {
     final user = session.user;
-    final metadata = user.userMetadata ?? const <String, dynamic>{};
     final claims = _jwtPayload(session.accessToken);
     return NiptoSession(
       userId: user.id,
-      niptoId: (metadata['nipto_id'] ?? metadata['preferred_username'] ?? '').toString(),
-      displayName: (metadata['display_name'] ?? metadata['name'] ?? '').toString(),
+      niptoId: _niptoMetadataValue(user.userMetadata, 'nipto_id', 'preferred_username'),
+      displayName: _niptoMetadataValue(user.userMetadata, 'display_name', 'name'),
       sessionId: (claims['session_id'] ?? '').toString(),
     );
+  }
+
+  /// Supabase stores allowlisted custom OIDC claims under `custom_claims`.
+  /// Older sessions and standard profile claims remain supported as fallbacks.
+  static String _niptoMetadataValue(
+    Map<String, dynamic>? metadata,
+    String customKey,
+    String standardKey,
+  ) {
+    if (metadata == null) return '';
+    final customClaims = metadata['custom_claims'];
+    final custom = customClaims is Map ? customClaims : const <dynamic, dynamic>{};
+    return (metadata[customKey] ?? custom[customKey] ??
+            metadata[standardKey] ?? custom[standardKey] ?? '')
+        .toString();
   }
 
   Map<String, dynamic> _jwtPayload(String token) {
@@ -122,9 +136,9 @@ class NiptoSessionManager {
       if (_client.auth.currentUser?.id != user.id) return;
       final pendingId = await _storage.read(key: _pendingLinkNiptoIdKey);
       if (_client.auth.currentUser?.id != user.id) return;
-      final metadata = user.userMetadata ?? const <String, dynamic>{};
-      final niptoId = (pendingId ?? metadata['nipto_id'] ?? metadata['preferred_username'] ?? '')
-          .toString().trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
+      final niptoId = (pendingId ?? _niptoMetadataValue(
+            user.userMetadata, 'nipto_id', 'preferred_username',
+          )).trim().replaceFirst(RegExp(r'^@'), '').toLowerCase();
       if (niptoId.isEmpty) return;
       await _post('account/link', {'nipto_id': niptoId}, authenticated: true);
       if (_client.auth.currentUser?.id != user.id) return;
@@ -161,6 +175,131 @@ class NiptoSessionManager {
 
   Future<void> signIn() => _startOidc(screen: 'login');
   Future<void> register() => _startOidc(screen: 'register');
+
+  /// Native credential sign-in. This starts a real Supabase OIDC authorization
+  /// request, submits the credentials to Nipto's native bridge, and finishes
+  /// the authorization-code/PKCE exchange through Supabase Auth.
+  Future<void> signInWithNiptoId({
+    required String niptoId,
+    required String password,
+  }) =>
+      _nativeAuthenticate(
+        action: 'login',
+        niptoId: niptoId,
+        password: password,
+      );
+
+  /// Native registration with the same OIDC/PKCE session bridge used by sign-in.
+  Future<void> registerNiptoAccount({
+    required String displayName,
+    required String niptoId,
+    required String password,
+    required String passwordConfirmation,
+  }) =>
+      _nativeAuthenticate(
+        action: 'register',
+        displayName: displayName,
+        niptoId: niptoId,
+        password: password,
+        passwordConfirmation: passwordConfirmation,
+      );
+
+  Future<void> _nativeAuthenticate({
+    required String action,
+    required String niptoId,
+    required String password,
+    String? displayName,
+    String? passwordConfirmation,
+  }) async {
+    final key = _publishableKey;
+    if (key == null) throw const NiptoAuthException('Nipto is not initialized.');
+    final redirectTo = kIsWeb ? Uri.base.origin : 'nipto://auth-callback';
+
+    final preflightClient = http.Client();
+    try {
+      // Generate and securely persist the client PKCE verifier through the
+      // Supabase SDK, then let Supabase create the provider state and the
+      // provider-facing PKCE challenge.
+      final oauth = await _client.auth.getOAuthSignInUrl(
+        provider: OAuthProvider('custom:nipto'),
+        redirectTo: redirectTo,
+        queryParams: {'screen': action},
+      );
+      final preflightRequest = http.Request('GET', Uri.parse(oauth.url))
+        ..headers.addAll({'apikey': key, 'Accept': 'application/json'})
+        ..followRedirects = false;
+      final preflight = await preflightClient
+          .send(preflightRequest)
+          .timeout(const Duration(seconds: 15));
+      await preflight.stream.drain<void>();
+      final location = preflight.headers['location'];
+      final isRedirect = preflight.statusCode >= 300 && preflight.statusCode < 400;
+      if (!isRedirect || location == null || location.isEmpty) {
+        throw const NiptoAuthException(
+          'Nipto could not start secure sign-in. Please try again.',
+        );
+      }
+      final providerRequest = Uri.parse(location);
+      final params = providerRequest.queryParameters;
+      final state = params['state'] ?? '';
+      final challenge = params['code_challenge'] ?? '';
+      final method = params['code_challenge_method'] ?? '';
+      if (state.isEmpty || state.length > 512 || challenge.isEmpty ||
+          method.toUpperCase() != 'S256' || params['response_type'] != 'code') {
+        throw const NiptoAuthException(
+          'Nipto received an invalid sign-in request. Please try again.',
+        );
+      }
+
+      final result = await _post('authorize/native', <String, dynamic>{
+        'action': action,
+        'screen': params['screen'] ?? action,
+        'client_id': params['client_id'] ?? '',
+        'redirect_uri': params['redirect_uri'] ?? '',
+        'response_type': params['response_type'] ?? '',
+        'scope': params['scope'] ?? '',
+        'state': state,
+        if (params['nonce'] != null) 'nonce': params['nonce']!,
+        'code_challenge': challenge,
+        'code_challenge_method': 'S256',
+        'nipto_id': niptoId,
+        'password': password,
+        if (displayName != null) 'display_name': displayName,
+        if (passwordConfirmation != null)
+          'password_confirmation': passwordConfirmation,
+      });
+      final code = result['code'] as String?;
+      final returnedState = result['state'] as String?;
+      if (code == null || code.isEmpty || returnedState != state) {
+        throw const NiptoAuthException(
+          'Nipto could not complete secure sign-in. Please try again.',
+        );
+      }
+
+      final callback = Uri.parse(
+        '$redirectTo?code=${Uri.encodeQueryComponent(code)}'
+        '&state=${Uri.encodeQueryComponent(state)}',
+      );
+      await _client.auth.getSessionFromUrl(callback);
+    } on AuthException catch (error) {
+      throw NiptoAuthException(
+        error.message,
+        statusCode: error.statusCode == null
+            ? null
+            : int.tryParse(error.statusCode!),
+      );
+    } on TimeoutException {
+      throw const NiptoAuthException(
+        'The Nipto service took too long to respond. Please try again.',
+      );
+    } on http.ClientException {
+      throw const NiptoAuthException(
+        'Could not connect to Nipto. Check your internet connection.',
+      );
+    } finally {
+      preflightClient.close();
+    }
+  }
 
   Future<void> _startOidc({required String screen}) async {
     try {

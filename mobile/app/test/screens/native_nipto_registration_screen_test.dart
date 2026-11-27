@@ -26,19 +26,13 @@ void main() {
                   required displayName,
                   required niptoId,
                   required password,
-                  recoveryNiptoId,
+                  required passwordConfirmation,
                 }) async {},
           ),
         ),
       );
 
-      expect(findField('Recovery Nipto ID (optional)'), findsOneWidget);
-      expect(
-        find.text(
-          'Optional. The recovery account owner must approve the connection.',
-        ),
-        findsOneWidget,
-      );
+      expect(findField('Recovery Nipto ID (optional)'), findsNothing);
       expect(
         find.text(
           'Choose a display name and unique Nipto ID. You can add a recovery account later in Settings.',
@@ -59,7 +53,7 @@ void main() {
                 required displayName,
                 required niptoId,
                 required password,
-                recoveryNiptoId,
+                required passwordConfirmation,
               }) async {
                 submitCount++;
               },
@@ -86,7 +80,7 @@ void main() {
                   required displayName,
                   required niptoId,
                   required password,
-                  recoveryNiptoId,
+                  required passwordConfirmation,
                 }) async {
                   submitCount++;
                 },
@@ -123,7 +117,7 @@ void main() {
                   required displayName,
                   required niptoId,
                   required password,
-                  recoveryNiptoId,
+                  required passwordConfirmation,
                 }) async {
                   submitCount++;
                   await completion.future;

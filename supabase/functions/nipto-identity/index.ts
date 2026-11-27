@@ -631,6 +631,196 @@ async function authorizeGet(request: Request): Promise<Response> {
     switchUrl: screen === "link" ? "" : buildSwitchUrl(url, screen === "register" ? "login" : "register"),
   }));
 }
+async function resolveOidcIdentity(
+  request: Request,
+  input: {
+    action: "login" | "register";
+    niptoId: string;
+    password: string;
+    displayName: string;
+    passwordConfirmation: string;
+    rateLimitFallback: string;
+  },
+): Promise<string> {
+  if (input.action === "register"
+    && !passwordsMatch(input.password, input.passwordConfirmation)) {
+    throw new ApiError("Passwords do not match. Please confirm your password.", 400);
+  }
+  if (!isValidPassword(input.password) || !isValidNiptoId(input.niptoId)) {
+    throw new ApiError("Check your Nipto ID and password.", 400);
+  }
+  await enforceRateLimit(request, "oidc:" + (input.niptoId || input.rateLimitFallback));
+
+  if (input.action === "register") {
+    if (input.displayName.length < 1 || input.displayName.length > 50) {
+      throw new ApiError("Enter a display name between 1 and 50 characters.", 400);
+    }
+    const availability = firstRow(
+      await rpc("nipto_oidc_check_id", { p_nipto_id: input.niptoId }),
+    );
+    if (!availability || availability.available !== true) {
+      throw new ApiError(
+        "That Nipto ID already exists or cannot be used. Choose one of the suggested IDs.",
+        409,
+      );
+    }
+    const created = await rpc("nipto_oidc_register", {
+      p_nipto_id: input.niptoId,
+      p_display_name: input.displayName,
+      p_password_hash: await hashPassword(input.password),
+    });
+    if (typeof created !== "string") {
+      throw new ApiError("That Nipto ID is unavailable.", 409);
+    }
+    return created;
+  }
+
+  const record = firstRow(
+    await rpc("nipto_oidc_login_record", { p_nipto_id: input.niptoId }),
+  );
+  if (!record || typeof record.password_hash !== "string") {
+    await hashPassword(input.password);
+    throw new ApiError("The Nipto ID or password is incorrect.", 401);
+  }
+  const valid = await verifyPassword(input.password, record.password_hash);
+  if (!valid || record.status !== "active") {
+    throw new ApiError("The Nipto ID or password is incorrect.", 401);
+  }
+  return String(record.identity_id);
+}
+
+async function createOidcAuthorizationCode(
+  transactionId: string,
+  tx: Json,
+  identityId: string,
+  csrfHash: string,
+): Promise<string> {
+  const consumed = await rpc("nipto_oidc_consume_transaction", {
+    p_id: transactionId,
+    p_csrf_hash: csrfHash,
+  });
+  if (consumed !== true) throw new ApiError("This sign-in request expired. Try again.", 410);
+
+  const code = randomToken(32);
+  await rpc("nipto_oidc_create_code", {
+    p_code_hash: await sha256Hex(code),
+    p_identity_id: identityId,
+    p_client_id: String(tx.client_id),
+    p_redirect_uri: String(tx.redirect_uri),
+    p_nonce: tx.nonce === null || tx.nonce === undefined ? null : String(tx.nonce),
+    p_code_challenge: String(tx.code_challenge),
+  });
+  return code;
+}
+
+async function exchangeSupabaseAuthorizationCode(
+  code: string,
+  state: string,
+  callbackUri: string,
+): Promise<string> {
+  const destination = new URL(callbackUri);
+  destination.searchParams.set("code", code);
+  destination.searchParams.set("state", state);
+
+  let response: Response;
+  try {
+    response = await fetch(destination, {
+      method: "GET",
+      redirect: "manual",
+      headers: { apikey: publishableKey(), Accept: "application/json" },
+    });
+  } catch {
+    throw new ApiError("Nipto could not reach secure sign-in. Please try again.", 502);
+  }
+
+  if (response.status >= 300 && response.status < 400) {
+    const location = response.headers.get("location");
+    if (location) {
+      try {
+        const appCallback = new URL(location);
+        const fromQuery = appCallback.searchParams.get("code");
+        const fromFragment = new URLSearchParams(appCallback.hash.replace(/^#/, "")).get("code");
+        const authCode = fromQuery ?? fromFragment;
+        if (authCode && authCode.length > 0 && authCode.length <= 4096) return authCode;
+      } catch { /* Fall through to the generic failure. */ }
+    }
+  }
+  throw new ApiError("Nipto could not finish secure sign-in. Please try again.", 502);
+}
+
+async function authorizeNative(request: Request): Promise<Response> {
+  const input = await requestBody(request);
+  const action = String(input.action ?? "");
+  const screen = String(input.screen ?? action);
+  const niptoId = String(input.nipto_id ?? "").trim().replace(/^@/, "").toLowerCase();
+  const password = String(input.password ?? "");
+  const displayName = String(input.display_name ?? "").trim();
+  const passwordConfirmation = String(input.password_confirmation ?? "");
+  const client = String(input.client_id ?? "");
+  const redirectUri = String(input.redirect_uri ?? "");
+  const responseType = String(input.response_type ?? "");
+  const scope = String(input.scope ?? "");
+  const state = String(input.state ?? "");
+  const nonceValue = input.nonce;
+  const nonce = nonceValue === null || nonceValue === undefined ? null : String(nonceValue);
+  const challenge = String(input.code_challenge ?? "");
+  const method = String(input.code_challenge_method ?? "");
+
+  if (action !== "login" && action !== "register") {
+    throw new ApiError("Invalid Nipto sign-in action.", 400);
+  }
+  if (screen !== action) {
+    throw new ApiError("This sign-in request does not match the requested screen.", 400);
+  }
+  if (client !== oidcClientId() || redirectUri !== oidcRedirectUri()
+    || responseType !== "code" || !isAllowedOidcScope(scope) || !state
+    || state.length > 512
+    || (nonce !== null && (nonce.length === 0 || nonce.length > 512))
+    || method.toUpperCase() !== "S256"
+    || !/^[A-Za-z0-9_-]{43,128}$/.test(challenge)) {
+    throw new ApiError("Invalid Nipto authorization request.", 400);
+  }
+  if (niptoId.length > 24 || password.length > 128 || passwordConfirmation.length > 128
+    || displayName.length > 50) {
+    throw new ApiError("One or more fields exceed the allowed length.", 400);
+  }
+
+  await enforceRateLimit(request, "oidc-native:" + client);
+  const csrf = randomToken(32);
+  const transactionId = await rpc("nipto_oidc_create_transaction", {
+    p_client_id: client,
+    p_redirect_uri: redirectUri,
+    p_scope: scope,
+    p_state: state,
+    p_nonce: nonce,
+    p_code_challenge: challenge,
+    p_csrf_hash: await sha256Hex(csrf),
+    p_migration_ticket_hash: null,
+  });
+  const tx = firstRow(await rpc("nipto_oidc_get_transaction", {
+    p_id: String(transactionId),
+    p_csrf_hash: await sha256Hex(csrf),
+  }));
+  if (!tx) throw new ApiError("This sign-in request expired. Return to Nipto and try again.", 410);
+
+  const identityId = await resolveOidcIdentity(request, {
+    action,
+    niptoId,
+    password,
+    displayName,
+    passwordConfirmation,
+    rateLimitFallback: String(transactionId),
+  });
+  const oidcCode = await createOidcAuthorizationCode(
+    String(transactionId),
+    tx,
+    identityId,
+    await sha256Hex(csrf),
+  );
+  const authCode = await exchangeSupabaseAuthorizationCode(oidcCode, state, redirectUri);
+  return json({ code: authCode, state });
+}
+
 async function authorizePost(request: Request): Promise<Response> {
   const contentType = request.headers.get("content-type") ?? "";
   if (!/^application\/x-www-form-urlencoded(?:;|$)/i.test(contentType)
@@ -684,16 +874,15 @@ async function authorizePost(request: Request): Promise<Response> {
   ), screen === "register" ? "login" : "register");
 
   try {
-    if ((action === "register" || action === "link") && !passwordsMatch(password, passwordConfirmation)) {
-      throw new ApiError("Passwords do not match. Please confirm your password.", 400);
-    }
-    if (!isValidPassword(password) || (action !== "link" && !isValidNiptoId(niptoId))) {
-      throw new ApiError("Check your Nipto ID and password.", 400);
-    }
-    await enforceRateLimit(request, "oidc:" + (niptoId || transactionId));
     let identityId: string;
-
     if (action === "link") {
+      if (!passwordsMatch(password, passwordConfirmation)) {
+        throw new ApiError("Passwords do not match. Please confirm your password.", 400);
+      }
+      if (!isValidPassword(password)) {
+        throw new ApiError("Check your Nipto password.", 400);
+      }
+      await enforceRateLimit(request, "oidc:" + transactionId);
       const ticketHash = String(tx.migration_ticket_hash ?? "");
       if (!/^[a-f0-9]{64}$/.test(ticketHash)) {
         throw new ApiError("This account-link request expired. Return to Nipto and try again.", 410);
@@ -702,61 +891,33 @@ async function authorizePost(request: Request): Promise<Response> {
         p_ticket_hash: ticketHash,
       }));
       if (!migration) throw new ApiError("This account-link request expired. Return to Nipto and try again.", 410);
-      const passwordHash = await hashPassword(password);
       const created = await rpc("nipto_oidc_register_legacy", {
         p_user_id: migration.user_id,
         p_nipto_id: migration.nipto_id,
         p_display_name: migration.display_name,
-        p_password_hash: passwordHash,
+        p_password_hash: await hashPassword(password),
       });
       if (typeof created !== "string") throw new ApiError("Nipto account could not be linked.", 409);
       identityId = created;
-    } else if (action === "register") {
-      if (displayName.length < 1 || displayName.length > 50) {
-        throw new ApiError("Enter a display name between 1 and 50 characters.", 400);
-      }
-      const availability = firstRow(await rpc("nipto_oidc_check_id", { p_nipto_id: niptoId }));
-      if (!availability || availability.available !== true) {
-        throw new ApiError("That Nipto ID already exists or cannot be used. Choose one of the suggested IDs.", 409);
-      }
-      const passwordHash = await hashPassword(password);
-        const created = await rpc("nipto_oidc_register", {
-          p_nipto_id: niptoId,
-          p_display_name: displayName,
-          p_password_hash: passwordHash,
-        });
-      if (typeof created !== "string") throw new ApiError("That Nipto ID is unavailable.", 409);
-      identityId = created;
     } else {
-      const record = firstRow(await rpc("nipto_oidc_login_record", { p_nipto_id: niptoId }));
-      if (!record || typeof record.password_hash !== "string") {
-        await hashPassword(password);
-        throw new ApiError("The Nipto ID or password is incorrect.", 401);
-      }
-      const valid = await verifyPassword(password, record.password_hash);
-      if (!valid || record.status !== "active") {
-        throw new ApiError("The Nipto ID or password is incorrect.", 401);
-      }
-      identityId = String(record.identity_id);
+      identityId = await resolveOidcIdentity(request, {
+        action,
+        niptoId,
+        password,
+        displayName,
+        passwordConfirmation,
+        rateLimitFallback: transactionId,
+      });
     }
 
-    const consumed = await rpc("nipto_oidc_consume_transaction", {
-      p_id: transactionId,
-      p_csrf_hash: await sha256Hex(csrfToken),
-    });
-    if (consumed !== true) throw new ApiError("This sign-in request expired. Try again.", 410);
-
-    const code = randomToken(32);
-    await rpc("nipto_oidc_create_code", {
-      p_code_hash: await sha256Hex(code),
-      p_identity_id: identityId,
-      p_client_id: String(tx.client_id),
-      p_redirect_uri: String(tx.redirect_uri),
-      p_nonce: tx.nonce === null || tx.nonce === undefined ? null : String(tx.nonce),
-      p_code_challenge: String(tx.code_challenge),
-    });
+    const oidcCode = await createOidcAuthorizationCode(
+      transactionId,
+      tx,
+      identityId,
+      await sha256Hex(csrfToken),
+    );
     const destination = new URL(String(tx.redirect_uri));
-    destination.searchParams.set("code", code);
+    destination.searchParams.set("code", oidcCode);
     destination.searchParams.set("state", String(tx.state));
     return redirect(destination.toString());
   } catch (error) {
@@ -889,6 +1050,7 @@ async function handleRoute(request: Request): Promise<Response> {
   if (path.endsWith("/jwks") && method === "GET") return json({ keys: publicJwkSet() });
   if (path.endsWith("/authorize") && method === "GET") return await authorizeGet(request);
   if (path.endsWith("/authorize") && method === "POST") return await authorizePost(request);
+  if (path.endsWith("/authorize/native") && method === "POST") return await authorizeNative(request);
   if (path.endsWith("/token") && method === "POST") return await tokenEndpoint(request);
   if (path.endsWith("/userinfo") && method === "GET") return await userInfo(request);
 

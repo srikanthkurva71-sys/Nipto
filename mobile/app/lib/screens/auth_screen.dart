@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../services/nipto_session_manager.dart';
 import '../theme/nipto_theme.dart';
 import '../widgets/nipto_logo_mark.dart';
+import 'native_nipto_login_screen.dart';
+import 'native_nipto_registration_screen.dart';
 import 'password_recovery_screen.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -44,6 +46,45 @@ class _AuthScreenState extends State<AuthScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<void> _openSignIn() async {
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => NativeNiptoLoginScreen(
+          onSubmit: ({required niptoId, required password}) =>
+              NiptoSessionManager.instance.signInWithNiptoId(
+            niptoId: niptoId,
+            password: password,
+          ),
+          onForgotPassword: () {
+            Navigator.of(context).pop();
+            _openRecovery();
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openRegistration() async {
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => NativeNiptoRegistrationScreen(
+          onSubmit: ({
+            required displayName,
+            required niptoId,
+            required password,
+            required passwordConfirmation,
+          }) =>
+              NiptoSessionManager.instance.registerNiptoAccount(
+            displayName: displayName,
+            niptoId: niptoId,
+            password: password,
+            passwordConfirmation: passwordConfirmation,
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _openRecovery() async {
@@ -109,13 +150,13 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                       const SizedBox(height: 30),
                       FilledButton.icon(
-                        onPressed: _busy ? null : () => _startAuthentication(register: false),
+                        onPressed: _busy ? null : _openSignIn,
                         icon: const Icon(Icons.login_rounded),
-                        label: const Text('Sign in with Nipto'),
+                        label: const Text('Sign in with Nipto ID'),
                       ),
                       const SizedBox(height: 12),
                       OutlinedButton.icon(
-                        onPressed: _busy ? null : () => _startAuthentication(register: true),
+                        onPressed: _busy ? null : _openRegistration,
                         icon: const Icon(Icons.person_add_alt_1_rounded),
                         label: const Text('Create Nipto account'),
                         style: OutlinedButton.styleFrom(
@@ -130,7 +171,7 @@ class _AuthScreenState extends State<AuthScreen> {
                         const Center(child: CircularProgressIndicator(strokeWidth: 2)),
                         const SizedBox(height: 9),
                         const Text(
-                          'Opening secure Nipto sign-in…',
+                          'Opening browser sign-in fallback…',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: NiptoColors.muted, fontSize: 12),
                         ),
@@ -158,6 +199,15 @@ class _AuthScreenState extends State<AuthScreen> {
                         onPressed: _busy ? null : _openRecovery,
                         icon: const Icon(Icons.lock_reset_rounded),
                         label: const Text('Forgot password?'),
+                      ),
+                      TextButton(
+                        onPressed: _busy
+                            ? null
+                            : () => _startAuthentication(register: false),
+                        child: const Text(
+                          'Use browser sign-in instead',
+                          style: TextStyle(fontSize: 12),
+                        ),
                       ),
                       const SizedBox(height: 14),
                       const Divider(),

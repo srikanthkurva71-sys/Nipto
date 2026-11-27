@@ -1,6 +1,6 @@
 # Nipto OIDC deployment checklist
 
-This runbook describes deployment and validation of the Nipto-owned ID/password issuer. The issuer and Supabase custom provider are now deployed/configured; the end-to-end authentication checks below remain release gates.
+This runbook describes deployment and validation of the Nipto-owned ID/password issuer. The issuer and Supabase custom provider are deployed/configured, and a real protocol-level registration → PKCE → Supabase session flow has succeeded. Flutter device and full account-recovery checks remain release gates.
 
 ## Current architecture
 
@@ -30,19 +30,44 @@ Optional:
 
 Generate the client credentials and ES256 key pair with `deno run scripts/generate_nipto_oidc_keys.ts`. The script prints `NIPTO_OIDC_CLIENT_ID`, `NIPTO_OIDC_CLIENT_SECRET`, `NIPTO_OIDC_KID`, `NIPTO_OIDC_PRIVATE_JWK`, and `NIPTO_OIDC_PUBLIC_KEYS`. Keep the complete output in a password manager. Put the private JWK and client secret only in Supabase Edge Function secrets; put the same client ID and client secret into the Auth provider form. Never commit the generated output.
 
+## Custom provider claim configuration
+
+Supabase Auth strips unrecognized ID-token claims unless they are explicitly allowlisted. The `custom:nipto` provider must be configured with:
+
+- `email_optional`: `true`
+- `scopes`: `openid profile`
+- `custom_claims_allowlist`: `["nipto_id", "display_name"]`
+- attribute mapping: `{}`
+- issuer and discovery URL from the OIDC issuer above
+
+The Nipto ID token includes `preferred_username` and `name` as standard profile claims plus `nipto_id` and `display_name` as custom claims. Supabase stores allowlisted custom claims under `raw_user_meta_data->'custom_claims'`. Migration `20261126122909_nipto_oidc_custom_claims_provisioning.sql` updates the `auth.users` trigger to read the Nipto ID and display name from that object (with top-level fallbacks). The Flutter session manager reads the same nested object when deriving the current Nipto identity. Without both settings, a valid no-email signup reaches Supabase Auth but fails user provisioning with `A valid Nipto ID is required`.
+
+The provider config can be set with the Auth admin API using a server-side service-role key:
+
+```sh
+curl -X PUT 'https://<project>.supabase.co/auth/v1/admin/custom-providers/custom:nipto' \
+  -H 'Authorization: Bearer <service-role-key>' \
+  -H 'apikey: <service-role-key>' \
+  -H 'Content-Type: application/json' \
+  -d '{"custom_claims_allowlist":["nipto_id","display_name"],"attribute_mapping":{},"email_optional":true}'
+```
+
+Never place the service-role key in Flutter, CI logs, Git, or client-side scripts.
+
 ## Deployment order
 
 1. Confirm all migrations are applied and the native Nipto account tables/RPCs exist.
 2. Configure the required Edge Function secrets.
-3. Deploy `supabase/functions/nipto-identity/index.ts` together with `validation.ts`.
-4. **Verified:** the discovery document and JWKS endpoints both returned HTTP 200. The JWKS publishes an ES256 P-256 signing key. This does not validate authorization-code/PKCE exchange or token acceptance.
-5. **Configured:** Supabase Dashboard → Authentication → Sign In / Providers → Custom Providers lists `Nipto` with identifier `custom:nipto`, type `oidc`, status Enabled. The provider uses auto-discovery, issuer `https://advmjribduqzyuwktkod.supabase.co/functions/v1/nipto-identity`, scopes `openid profile`, and allows users without email. Client credentials were generated locally and uploaded as Edge Function secrets; the matching values were entered in the provider form. Supabase Auth callback: `https://advmjribduqzyuwktkod.supabase.co/auth/v1/callback`. Ensure `nipto://auth-callback` is allowed in Authentication → URL Configuration.
-6. **Still required:** test registration, sign-in, authorization-code/PKCE exchange, no-email user provisioning, sign-out, refresh, duplicate-ID suggestions, password rejection, account recovery, session revocation, and legacy-account migration. Verify Flutter deep-link restoration after app restart on Android.
-7. Run two-device smoke tests and independent security review before release.
+3. Deploy `supabase/functions/nipto-identity/index.ts` with `validation.ts` and `form_body.ts`.
+4. **Verified:** the discovery document and JWKS endpoints both returned HTTP 200. The JWKS publishes an ES256 P-256 signing key.
+5. **Configured:** Supabase Dashboard → Authentication → Sign In / Providers → Custom Providers lists `Nipto` with identifier `custom:nipto`, type `oidc`, status Enabled. The provider uses auto-discovery, issuer `https://advmjribduqzyuwktkod.supabase.co/functions/v1/nipto-identity`, scopes `openid profile`, allows users without email, and allowlists the `nipto_id` and `display_name` claims. Client credentials were generated locally and uploaded as Edge Function secrets; the matching values were entered in the provider form. Supabase Auth callback: `https://advmjribduqzyuwktkod.supabase.co/auth/v1/callback`. Ensure `nipto://auth-callback` is allowed in Authentication → URL Configuration.
+6. **Verified at protocol level:** a real registration through `/authorize/native` produced a Supabase auth code, exchanged it for a Supabase access/refresh token pair with the client PKCE verifier, and `/auth/v1/user` returned a `custom:nipto` identity with an empty email. The test account and auth user were removed after verification.
+7. **Still required on device:** test the native Flutter forms, sign-out, refresh, duplicate-ID suggestions, password rejection, account recovery, session revocation, and legacy-account migration. Verify Flutter deep-link restoration after app restart on Android.
+8. Run two-device smoke tests and independent security review before release.
 
 ## Release gate
 
-Do not call Nipto authentication production-ready until a real Flutter client can create a Nipto ID/password account, sign in through `custom:nipto`, retain/refresh its Supabase session, and complete recovery without an email requirement.
+The protocol-level flow is verified. Do not call Nipto authentication production-ready until a real Flutter client can create a Nipto ID/password account through the in-app forms, sign in through `custom:nipto`, retain/refresh its Supabase session, restore the session after restart, and complete recovery without an email requirement on a physical Android device.
 
 Never place service-role credentials, OIDC client secrets, or private signing keys in Flutter assets, `dev.json`, CI logs, or Git history.
 
@@ -54,4 +79,15 @@ Never place service-role credentials, OIDC client secrets, or private signing ke
 - Discovery endpoint: HTTP 200.
 - JWKS endpoint: HTTP 200; ES256 / P-256 key published.
 - Client ID and client secret: configured as server-side Edge Function secrets and entered in the Supabase provider form. Secret values are intentionally not recorded here.
-- **Not yet verified:** complete authorization-code/PKCE exchange, token signature/audience/nonce validation by Supabase, user provisioning without email, Flutter callback restoration, refresh/logout, recovery and two-device flows.
+- **Not yet verified at that time:** complete authorization-code/PKCE exchange, token signature/audience/nonce validation by Supabase, user provisioning without email, Flutter callback restoration, refresh/logout, recovery and two-device flows.
+
+## Verified deployment snapshot — 2026-11-26
+
+- `nipto-identity` Edge Function: active version 8, entrypoint `index.ts`, files `index.ts`, `validation.ts`, `form_body.ts`, JWT verification disabled for its public protocol routes and protected routes with their own checks. It is the only deployed Edge Function; the retired `nipto-login` function was undeployed and its local source/config removed.
+- `custom:nipto`: OIDC provider enabled, `email_optional=true`, scopes `openid profile`, PKCE enabled, `custom_claims_allowlist=["nipto_id","display_name"]`.
+- Native authorization endpoint `POST /authorize/native`: validated action/screen, client, redirect URI, state, nonce, S256 challenge, credential fields, and rate limits before creating the OIDC transaction and code.
+- Full protocol probe: `GET /auth/v1/authorize` → native credential submission → Supabase callback → PKCE token exchange → authenticated `/auth/v1/user` succeeded. The returned identity had `provider=custom:nipto`, `email=""`, and `user_metadata.custom_claims.nipto_id` populated.
+- The probe account and Supabase auth user were deleted after verification; no test identity remains in the project.
+- `auth.users` trigger now reads Nipto claims from `raw_user_meta_data->'custom_claims'` via migration `20261126122909_nipto_oidc_custom_claims_provisioning.sql`.
+- Migration history is reconciled with the remote project: local filenames use the recorded versions `20261126115641` and `20261126122909`. The remote hardening row retains the descriptive name `20261126160836_nipto_least_privilege_hardening`; its SQL is idempotent.
+- **Still unverified:** Flutter deep-link callback restoration, refresh/logout lifecycle on device, in-app recovery, legacy migration, two-device calling, push delivery, media, and release signing.

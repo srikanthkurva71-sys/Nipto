@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../services/nipto_session_manager.dart';
+
 /// Native Nipto sign-in form scaffold. The submit callback must complete the
 /// supported OIDC/Supabase session exchange, not merely verify a password.
 class NativeNiptoLoginScreen extends StatefulWidget {
@@ -45,9 +47,11 @@ class _NativeNiptoLoginScreenState extends State<NativeNiptoLoginScreen> {
         niptoId: _normalizeId(_idController.text),
         password: _passwordController.text,
       );
+    } on NiptoAuthException catch (error) {
+      if (mounted) setState(() => _error = error.message);
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'Sign-in failed. Check your Nipto ID and password, then try again.');
+        setState(() => _error = 'Sign-in could not be completed. Check your connection and try again.');
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -98,6 +102,7 @@ class _NativeNiptoLoginScreenState extends State<NativeNiptoLoginScreen> {
                       obscureText: !_showPassword,
                       autocorrect: false,
                       enableSuggestions: false,
+                      maxLength: 128,
                       decoration: InputDecoration(
                         labelText: 'Password',
                         prefixIcon: const Icon(Icons.lock_outline),

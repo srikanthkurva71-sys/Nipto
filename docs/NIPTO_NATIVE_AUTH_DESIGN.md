@@ -15,15 +15,11 @@
 - Approval authorizes a narrowly scoped, one-time password reset. The recovery account never learns or chooses the owner's new password.
 - A user without an accepted recovery Nipto account cannot use this recovery path. The app must say this clearly before the user relies on it.
 
-## 2. Existing implementation: migration required
+## 2. Implementation status
 
-The current implementation is not compliant with this decision:
-- Registration calls Supabase Auth `signUp(email, password)`.
-- Sign-in resolves Nipto ID to `auth.users.email`, then calls Supabase Auth's password-token endpoint.
-- Password recovery calls `resetPasswordForEmail`.
-- `public.profiles.id` references `auth.users.id`; many feature policies use `auth.uid()` and application tables reference `profiles.id`.
+The original email-based implementation was replaced. Registration and sign-in are native in-app forms that collect only Nipto ID, display name (registration), and password/password confirmation (registration). They call `POST /functions/v1/nipto-identity/authorize/native`, which validates credentials server-side, creates a real OIDC authorization transaction and code, invokes the Supabase Auth callback, and returns the Supabase auth code to Flutter for PKCE exchange. The primary auth buttons no longer open a browser credential page; browser OIDC sign-in remains only as an explicit fallback.
 
-Removing the visible email field without replacing these dependencies would break registration, sign-in, RLS, Realtime, and existing account ownership. Do not ship that partial change.
+`public.profiles.id` still references `auth.users.id`, and feature policies/RLS still use `auth.uid()`. This is intentional: Supabase Auth remains the session broker and keeps stable user UUIDs, storage, Realtime and existing ownership intact. The custom provider is configured with `email_optional=true` and allowlisted Nipto custom claims so the `auth.users` trigger can provision a profile without email. The user never supplies or sees an email address.
 
 ## 3. Target identity and session architecture
 
@@ -31,7 +27,7 @@ Removing the visible email field without replacing these dependencies would brea
 
 Keep the hosted Supabase project and its Auth session model so existing `auth.uid()`, RLS, Storage, Realtime and profile foreign keys continue to work. Build Nipto's own OpenID Connect (OIDC) identity provider as a Supabase Edge Function and register it in Authentication → Sign In / Providers → Custom OAuth/OIDC Providers using identifier `custom:nipto`, with **email_optional=true** and scopes that do not request email.
 
-This is Nipto's own identity service, not Google, Apple, Facebook, a phone provider, or another external identity provider. Nipto stores and verifies the Nipto ID/password credentials. Supabase Auth acts only as the session broker: the Flutter app opens the Nipto-hosted OIDC authorization page through `signInWithOAuth(OAuthProvider('custom:nipto'))`; after Nipto authenticates the user, Supabase Auth creates or resumes the platform session. The provider must not return an email claim, and Supabase must accept the provider without an email address.
+This is Nipto's own identity service, not Google, Apple, Facebook, a phone provider, or another external identity provider. Nipto stores and verifies the Nipto ID/password credentials. Supabase Auth acts only as the session broker: the Flutter app obtains the provider authorize URL with `getOAuthSignInUrl()`, submits credentials to the native JSON endpoint, and exchanges the returned Supabase auth code through `getSessionFromUrl()`. Browser OIDC sign-in via `signInWithOAuth(OAuthProvider('custom:nipto'))` remains a fallback. The provider must not return an email claim, and Supabase must accept the provider without an email address.
 
 The Supabase access token used by PostgREST, Storage and Realtime is issued by Supabase Auth and retains the stable Supabase user UUID. The Nipto OIDC ID token's `sub` is the stable Nipto credential identity UUID; Supabase Auth maps that external identity to its own `auth.users.id`. The Supabase user UUID remains the profile and social-data owner. Nipto's OIDC ID token is only used by Supabase Auth to establish that session. This is intentionally different from configuring Nipto as a Supabase Third-Party Auth JWT issuer.
 
@@ -45,7 +41,7 @@ Implement these endpoints under a stable HTTPS issuer URL:
 - `/userinfo` — returns minimal Nipto profile claims after validating the access token.
 - Nipto-specific account, password-change, device-session, migration and recovery routes are protected by strict request validation, verified Supabase user identity where required, and rate limits. Supabase Auth—not the Nipto issuer—owns the app's refresh-token lifecycle.
 
-The Flutter app starts the Custom OAuth/OIDC authorization flow using Supabase Flutter. The Nipto-hosted authorization page collects Nipto ID and password, and the Nipto OIDC token endpoint returns a signed ID token to Supabase Auth. Supabase Auth then issues its normal access and refresh tokens to the app. No email scope or email claim is requested or required.
+The Flutter app starts the Custom OAuth/OIDC authorization flow using Supabase Flutter. For the primary buttons, the in-app credential form posts directly to `/authorize/native`; that endpoint validates the request, creates the OIDC transaction and code, calls the Supabase callback, and hands the app a real Supabase auth code for PKCE exchange. The browser fallback uses the Nipto-hosted authorization page. In both paths the Nipto OIDC token endpoint returns a signed ID token to Supabase Auth, which then issues its normal access and refresh tokens to the app. No email scope or email claim is requested or required.
 
 OIDC tokens must include:
 - `iss`: exact configured Nipto issuer URL.
