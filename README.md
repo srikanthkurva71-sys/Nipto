@@ -120,19 +120,24 @@ Deployed workers and their setup are documented in:
   inspection, staff review, service-role cleanup, privacy export/deletion worker,
   retention windows and verification checklist.
 
-`CRON_SECRET` protects both the push dispatcher and the privacy worker. Run the
-schedulers only from trusted server-side environments; no worker secret, service
-account or service-role key is ever embedded in Flutter or committed to Git.
+`CRON_SECRET` protects both the push dispatcher and the privacy worker. It is
+stored only in Supabase secrets, the ignored local credential file and the
+`NIPTO_CRON_SECRET` GitHub Actions secret. The `Worker scheduler` workflow
+invokes both workers every five minutes through `scripts/invoke_nipto_workers.py`;
+scheduled GitHub Actions run only from the default branch. No worker secret,
+service account or service-role key is ever embedded in Flutter or committed to
+Git.
 
 ## Remaining production gates
 
 - Verify the latest commit's full CI run and test critical flows on physical Android devices.
 - Verify the new `flutter_secure_storage` adapters for Supabase sessions and PKCE verifiers on supported Android versions, including OAuth callback restoration after app restart.
 - Verify the native Flutter forms end to end on Android: registration, login, authorization-code/PKCE exchange, no-email user provisioning, refresh, logout, account migration and recovery. Verify deep-link restoration after app restart before production cutover. The equivalent protocol-level checks already passed; see `docs/NIPTO_OIDC_DEPLOYMENT.md` for the exact sequence.
-- Firebase/Android credentials and `CRON_SECRET` are configured. Rotate the
-  service-account key that was exposed in chat, then schedule the push and
-  privacy workers and verify real FCM delivery, tap routing, deep-link
-  restoration and refresh/logout lifecycle on a physical Android device.
+- Firebase/Android credentials, `CRON_SECRET` and the scheduled worker workflow
+  are configured. Rotate the service-account key that was exposed in chat, move
+  the worker scheduler to the default branch, and verify real FCM delivery, tap
+  routing, deep-link restoration and refresh/logout lifecycle on a physical
+  Android device.
 - Connect a real media scanner/processor or continue human review only; verify
   magic-byte rejection, thumbnails when present, staff overrides and cleanup
   scheduling. No synthetic verdict is acceptable.

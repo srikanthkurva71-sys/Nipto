@@ -85,9 +85,11 @@ curl -X POST \
 
 The worker claims due requests, creates/purges exports, anonymizes and deletes
 accounts, and purges expired export objects. A missing `CRON_SECRET` returns
-`503`; a wrong secret returns `401`. Store the secret only in Supabase secrets
-and in the trusted scheduler's environment. The same `CRON_SECRET` can protect
-the push dispatcher; no secret belongs in Flutter, Git, or a public cron URL.
+`503`; a wrong secret returns `401`. Store the secret only in Supabase secrets,
+the ignored local credential file and the `NIPTO_CRON_SECRET` GitHub Actions
+secret. The same `CRON_SECRET` protects the push dispatcher; no secret belongs
+in Flutter, Git, or a public cron URL. The `Worker scheduler` workflow invokes
+both workers every five minutes after it reaches the default branch.
 
 ## Verification checklist
 
@@ -107,7 +109,9 @@ the push dispatcher; no secret belongs in Flutter, Git, or a public cron URL.
 ## Current status
 
 Migrations, functions, grants, RLS and fail-closed probes are live and verified.
-No external scanner/processor is configured, no worker schedule is configured,
-and no end-to-end device/export/deletion run has been performed. Treat media
-approval automation and privacy request fulfillment as gated until the checklist
-passes with real operator credentials and test accounts.
+The privacy worker is invoked every five minutes by the `Worker scheduler`
+GitHub Actions workflow once that workflow reaches the default branch. No
+external scanner/processor is configured and no end-to-end device/export/deletion
+run has been performed. Treat media approval automation and privacy request
+fulfillment as gated until the checklist passes with real operator credentials
+and test accounts.

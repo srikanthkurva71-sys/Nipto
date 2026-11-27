@@ -90,8 +90,10 @@ curl -X POST \
 
 The endpoint also accepts `x-nipto-worker-secret: $CRON_SECRET`. It claims at
 most 50 due jobs per invocation. A missing secret returns `503`; a wrong secret
-returns `401`. Schedule it externally (for example with a trusted scheduler);
-do not embed the worker secret in client code or in a public cron definition.
+returns `401`. The repository's `Worker scheduler` workflow invokes this endpoint
+with the `NIPTO_CRON_SECRET` Actions secret every five minutes; after that
+workflow reaches the default branch, no public cron definition is required. Do
+not embed the worker secret in client code or in a public cron definition.
 
 ## Verification checklist
 

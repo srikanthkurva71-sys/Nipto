@@ -176,7 +176,8 @@ Once those exist:
 ## What still requires your private access
 
 This helper cannot create a Firebase project, download files from the Firebase
-console, create your DNS record, install your TLS certificate, or configure your
-scheduler. Those steps must be done by someone with access to those accounts.
-Everything after the files exist is handled by the script and the deployed
-backend.
+console, create your DNS record, or install your TLS certificate. Those steps
+must be done by someone with access to those accounts. The GitHub Actions worker
+scheduler is configured in this repository, but scheduled runs start only after
+the workflow reaches the default branch. Everything after the files exist is
+handled by the script and the deployed backend.
