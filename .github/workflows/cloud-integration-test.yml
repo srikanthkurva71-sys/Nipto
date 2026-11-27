@@ -1,4 +1,4 @@
-name: Cloud Nipto app integration test
+name: Cloud Android integration test
 
 on:
   workflow_dispatch:
@@ -67,15 +67,48 @@ jobs:
         run: flutter analyze --no-fatal-infos
         working-directory: mobile/app
 
-      # Android compilation is covered by android-ci.yml. This opt-in workflow
-      # exercises the real app, auth bridge, and data write in a browser host
-      # because the hosted Android emulator image is not reliably bootable.
-      - name: Verify Chrome is available
-        run: google-chrome --version
+      # The hosted Android image does not include the shared libraries loaded
+      # by the SDK emulator binary even when audio is disabled.
+      - name: Install Android emulator runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpulse0 libgl1 libxkbfile1
 
-      - name: Run live Nipto app integration test in Chrome
-        working-directory: mobile/app
-        run: flutter test integration_test/nipto_live_auth_and_data_test.dart -d chrome
+      - name: Install Android NDK with retry
+        shell: bash
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          printf 'y\n' | "$SDKMANAGER" --licenses >/dev/null
+          for attempt in 1 2 3; do
+            if "$SDKMANAGER" --install "ndk;28.2.13676358"; then
+              test -x "$ANDROID_HOME/ndk/28.2.13676358/ndk-build" && exit 0
+            fi
+            echo "NDK installation attempt $attempt failed; retrying after cleanup."
+            rm -rf "$ANDROID_HOME/ndk/28.2.13676358"
+            sleep $((attempt * 10))
+          done
+          echo "Unable to install the required Android NDK after three attempts."
+          exit 1
+
+      - name: Install Android emulator image
+        shell: bash
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          printf 'y\n' | "$SDKMANAGER" --licenses >/dev/null
+          "$SDKMANAGER" --install "system-images;android-36;google_apis;x86_64"
+
+      - name: Run live integration test on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          avd-name: nipto-cloud-integration
+          force-avd-creation: true
+          disable-animations: true
+          emulator-options: -no-snapshot -wipe-data -noaudio
+          working-directory: mobile/app
+          script: flutter test integration_test/nipto_live_auth_and_data_test.dart -d emulator-5554
 
       - name: Probe cleanup reminder
         if: always()

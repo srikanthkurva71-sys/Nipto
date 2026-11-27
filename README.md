@@ -109,7 +109,7 @@ All public application tables currently have Row Level Security enabled. Anonymo
 
 GitHub Actions generates the Android platform project, then runs Dart formatting, static analysis, tests and an Android debug APK build. The resulting `nipto-android-debug` APK is available as a workflow artifact. A passing CI run proves that the checked commit builds; it does not prove complete device-level or production readiness.
 
-A manual `Cloud Nipto app integration test` workflow is available to exercise the real Flutter registration → OIDC/PKCE → session → status-write flow against the configured Supabase project in a hosted browser. It was switched from the hosted Android emulator after that emulator repeatedly failed to boot before the app started; Android compilation remains covered by the standard CI. The probe account and status row printed in its log must be deleted after every run; this workflow is intentionally manual and is not part of the standard push CI. A passing Chrome-host probe validates app/backend integration, not Android plugin or device behavior.
+A manual `Cloud Android integration test` workflow is available to run the real Flutter registration → OIDC/PKCE → session → status-write probe against the configured Supabase project on a hosted Android emulator. The first attempt failed before app start because the hosted Ubuntu image lacked `libpulse.so.0`; the workflow now installs the emulator's shared-library dependencies. The probe account and status row printed in its log must be deleted after every run. This workflow is intentionally manual and is not part of standard push CI; a hosted emulator run still does not replace physical-device validation of plugins, media, calling and push.
 
 ## Backend operations
 
@@ -136,14 +136,15 @@ embedded in Flutter or committed to Git.
 
 - Verify the latest commit's full CI run and test critical flows on physical Android devices.
 - Verify the new `flutter_secure_storage` adapters for Supabase sessions and PKCE verifiers on supported Android versions, including OAuth callback restoration after app restart.
-- Verify the native Flutter forms end to end on Android: registration, login, authorization-code/PKCE exchange, no-email user provisioning, refresh, logout, account migration and recovery. Verify deep-link restoration after app restart before production cutover. The equivalent protocol-level checks and a Chrome-host app probe are used to catch app/backend defects early; see `docs/NIPTO_OIDC_DEPLOYMENT.md` for the exact sequence. Android device behavior is still a separate gate.
+- Verify the native Flutter forms end to end on Android: registration, login, authorization-code/PKCE exchange, no-email user provisioning, refresh, logout, account migration and recovery. Verify deep-link restoration after app restart before production cutover. The protocol-level probe and the manual hosted-emulator probe catch app/backend defects early; see `docs/NIPTO_OIDC_DEPLOYMENT.md` for the exact sequence. Physical-device behavior remains a separate gate.
 - Firebase/Android credentials and `CRON_SECRET` are configured, and the worker
   scheduler is active on the default branch. Rotate the service-account key
   that was exposed in chat, then verify real FCM delivery, tap routing,
   deep-link restoration and refresh/logout lifecycle on a physical Android
   device. The local emulator/AVD was removed at the owner's request; use a
-  physical Android device for device-level gates. The manual cloud app workflow
-  covers app/backend integration in Chrome only.
+  physical Android device for device-level gates. The manual cloud emulator
+  workflow covers app/backend integration on a hosted Android runtime, not
+  physical-device plugin, FCM or calling behavior.
 - Connect a real media scanner/processor or continue human review only; verify
   magic-byte rejection, thumbnails when present, staff overrides and cleanup
   scheduling. No synthetic verdict is acceptable.
