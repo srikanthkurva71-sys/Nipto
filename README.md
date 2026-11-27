@@ -99,13 +99,15 @@ The connected Supabase project has the social schema and the Nipto native-auth d
 
 The repository contains a Flutter Android app and a Supabase-backed social schema. Implemented app areas include profile editing and avatar uploads, photo posts, Nipto ID discovery and follow requests, direct/group conversations, text messages and basic media attachments, 24-hour statuses with viewer lists and Close Friends controls, Shorts upload/feed interactions, Home feed, in-app notifications, privacy controls, blocking/reporting, and private feedback intake/history. The Nipto identity branch now contains the Nipto ID/password UI, encrypted session manager, ES256 JWT issuer/JWKS, existing-session migration bridge, optional recovery Nipto account flow, one-time password reset grants, device-session management, and self-hosted TURN credential issuance. The authentication issuer and provider are deployed/configured and the protocol-level registration → PKCE → session flow is verified; the Flutter forms, calling, and recovery flows remain unverified end to end and are not production-validated. Other app areas still require deeper end-to-end, device, moderation, and performance validation.
 
-Push delivery is implemented with an outbox, service-role-only dispatch RPCs, a real FCM HTTP v1 dispatcher and a client service that registers/unregisters tokens around the genuine session lifecycle. Media uploads are validated server-side with magic-byte and size checks; unresolved images wait for human review and videos wait for processing, with no fabricated scanner verdict. Privacy export/deletion requests, cancellation, retention, attribution anonymization and hard auth-user deletion are implemented and their migrations/functions are live. As of 2026-11-27 the Android Firebase app, client config, FCM service-account secret and `CRON_SECRET` are configured, and the push worker returns `200` when authorized. Worker scheduling, scanner/processor integration, real-device FCM delivery and staff operations are still outstanding, so these areas are not production-validated. The service-account key pasted in chat must be revoked and replaced from a browser/owner session.
+Push delivery is implemented with an outbox, service-role-only dispatch RPCs, a real FCM HTTP v1 dispatcher and a client service that registers/unregisters tokens around the genuine session lifecycle. Media uploads are validated server-side with magic-byte and size checks; unresolved images wait for human review and videos wait for processing, with no fabricated scanner verdict. Privacy export/deletion requests, cancellation, retention, attribution anonymization and hard auth-user deletion are implemented and their migrations/functions are live. As of 2026-11-27 the Android Firebase app, client config, FCM service-account secret and `CRON_SECRET` are configured, and the push worker returns `200` when authorized. Worker scheduling is active on the default branch and a manual scheduler run completed successfully; scanner/processor integration, real-device FCM delivery and staff operations are still outstanding, so these areas are not production-validated. The service-account key pasted in chat must be revoked and replaced from a browser/owner session.
 
 The feedback subsystem is separate from abuse reports. Signed-in users can submit app-experience ratings, bug reports, feature ideas or support requests and view their own submission status. Feedback is protected by RLS and limited to five submissions per account per 24 hours. A trusted staff-role backend, moderation queues, audit logging and user response notifications are implemented. A role-gated staff console for feedback, reports and content review is implemented, including private signed media previews. Formatting, static analysis, unit/widget tests and Android debug APK CI have passed. Production staff-session acceptance testing remains an operational gate.
 
 All public application tables currently have Row Level Security enabled. Anonymous table privileges were revoked and client writes were narrowed. Authenticated application and moderation SECURITY DEFINER RPCs are explicitly granted to signed-in users and validate access server-side; private policy helpers and staff tables are not client-readable. The Supabase advisor continues to report these authenticated RPCs for manual review.
 
 GitHub Actions generates the Android platform project, then runs Dart formatting, static analysis, tests and an Android debug APK build. The resulting `nipto-android-debug` APK is available as a workflow artifact. A passing CI run proves that the checked commit builds; it does not prove complete device-level or production readiness.
+
+A manual `Cloud Android integration test` workflow is available for device-level verification without a local emulator. It boots a cloud Android emulator and runs the real Flutter registration → OIDC/PKCE → session → status-write flow against the configured Supabase project. The probe account and status row printed in its log must be deleted after every run; this workflow is intentionally manual and is not part of the standard push CI.
 
 ## Backend operations
 
@@ -123,21 +125,23 @@ Deployed workers and their setup are documented in:
 `CRON_SECRET` protects both the push dispatcher and the privacy worker. It is
 stored only in Supabase secrets, the ignored local credential file and the
 `NIPTO_CRON_SECRET` GitHub Actions secret. The `Worker scheduler` workflow
-invokes both workers every five minutes through `scripts/invoke_nipto_workers.py`;
-scheduled GitHub Actions run only from the default branch. No worker secret,
-service account or service-role key is ever embedded in Flutter or committed to
-Git.
+invokes both workers every five minutes through `scripts/invoke_nipto_workers.py`
+on the default branch; a manual default-branch run completed successfully on
+2026-11-27. No worker secret, service account or service-role key is ever
+embedded in Flutter or committed to Git.
 
 ## Remaining production gates
 
 - Verify the latest commit's full CI run and test critical flows on physical Android devices.
 - Verify the new `flutter_secure_storage` adapters for Supabase sessions and PKCE verifiers on supported Android versions, including OAuth callback restoration after app restart.
 - Verify the native Flutter forms end to end on Android: registration, login, authorization-code/PKCE exchange, no-email user provisioning, refresh, logout, account migration and recovery. Verify deep-link restoration after app restart before production cutover. The equivalent protocol-level checks already passed; see `docs/NIPTO_OIDC_DEPLOYMENT.md` for the exact sequence.
-- Firebase/Android credentials, `CRON_SECRET` and the scheduled worker workflow
-  are configured. Rotate the service-account key that was exposed in chat, move
-  the worker scheduler to the default branch, and verify real FCM delivery, tap
-  routing, deep-link restoration and refresh/logout lifecycle on a physical
-  Android device.
+- Firebase/Android credentials and `CRON_SECRET` are configured, and the worker
+  scheduler is active on the default branch. Rotate the service-account key
+  that was exposed in chat, then verify real FCM delivery, tap routing,
+  deep-link restoration and refresh/logout lifecycle on a physical Android
+  device. The local emulator/AVD was removed at the owner's request; use the
+  manual `Cloud Android integration test` workflow or a physical device for
+  device-level gates.
 - Connect a real media scanner/processor or continue human review only; verify
   magic-byte rejection, thumbnails when present, staff overrides and cleanup
   scheduling. No synthetic verdict is acceptable.
@@ -155,4 +159,4 @@ Do not describe Nipto as production-ready until these gates have passed.
 
 ### Supabase Advisor review — 2026-11-26
 
-The live project reports no health advisories, 16 unused indexes, and two permissive-policy warnings on `public.conversation_members` and `public.conversations`; these are performance triage items, not confirmed access defects. The 12 `RLS enabled, no policy` findings are all in `private.*` or the intentionally service-owned `public.account_recovery_contacts` table, where access is mediated by `SECURITY DEFINER` RPCs and Edge Functions rather than client-facing policies. The 32 `SECURITY DEFINER function executable by authenticated` findings are intentionally exposed app RPCs (messaging, calls, recovery, feed, search and staff actions) whose bodies enforce `auth.uid()`/role checks; they still require an independent line-by-line authorization audit and multi-user tests before release. The unused indexes are retained until representative production query patterns are measured.
+The live project reports no health advisories, 16 unused indexes, and two permissive-policy warnings on `public.conversation_members` and `public.conversations`; these are performance triage items, not confirmed access defects. The 12 `RLS enabled, no policy` findings are all in `private.*` or the intentionally service-owned `public.account_recovery_contacts` table, where access is mediated by `SECURITY DEFINER` RPCs and Edge Functions rather than client-facing policies. The 39 `SECURITY DEFINER function executable by authenticated` findings were reviewed: each pins an empty `search_path` and enforces `auth.uid()` or the private staff-role check. They are intentionally exposed app RPCs (messaging, calls, recovery, feed, search and staff actions) but still require an independent line-by-line authorization audit and multi-user tests before release. The unused indexes are retained until representative production query patterns are measured.

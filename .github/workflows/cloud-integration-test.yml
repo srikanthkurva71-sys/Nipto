@@ -1,0 +1,104 @@
+name: Cloud Android integration test
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type CREATE-PROBE to confirm a real probe account will be created
+        required: true
+        default: ''
+
+concurrency:
+  group: cloud-integration-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: Live Nipto auth and data probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Confirm live probe consent
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "CREATE-PROBE" ]; then
+            echo "Refusing to run: workflow_dispatch confirm must be CREATE-PROBE."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Android platform project
+        run: flutter create --platforms=android,web --org com.nipto --project-name nipto .
+        working-directory: mobile/app
+
+      - name: Configure Nipto Android platform
+        run: python3 scripts/configure_android_platform.py
+
+      - name: Resolve dependencies
+        run: flutter pub get
+        working-directory: mobile/app
+
+      - name: Generate Nipto launcher icons and native splash
+        run: |
+          dart run flutter_launcher_icons
+          dart run flutter_native_splash:create
+        working-directory: mobile/app
+
+      - name: Format Dart sources
+        run: dart format integration_test lib test
+        working-directory: mobile/app
+
+      - name: Static analysis
+        run: flutter analyze --no-fatal-infos
+        working-directory: mobile/app
+
+      - name: Install Android NDK with retry
+        shell: bash
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          printf 'y\n' | "$SDKMANAGER" --licenses >/dev/null
+          for attempt in 1 2 3; do
+            if "$SDKMANAGER" --install "ndk;28.2.13676358"; then
+              test -x "$ANDROID_HOME/ndk/28.2.13676358/ndk-build" && exit 0
+            fi
+            echo "NDK installation attempt $attempt failed; retrying after cleanup."
+            rm -rf "$ANDROID_HOME/ndk/28.2.13676358"
+            sleep $((attempt * 10))
+          done
+          echo "Unable to install the required Android NDK after three attempts."
+          exit 1
+
+      - name: Install Android emulator image
+        shell: bash
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          printf 'y\n' | "$SDKMANAGER" --licenses >/dev/null
+          "$SDKMANAGER" --install "system-images;android-36;google_apis;x86_64"
+
+      - name: Run live integration test on Android emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          avd-name: nipto-cloud-integration
+          force-avd-creation: true
+          disable-animations: true
+          emulator-options: -no-snapshot -wipe-data
+          working-directory: mobile/app
+          script: flutter test integration_test/nipto_live_auth_and_data_test.dart -d emulator-5554
+
+      - name: Probe cleanup reminder
+        if: always()
+        run: |
+          echo "Find NIPTO_E2E_ID in this run's integration-test log and delete that Supabase auth user/status row."
