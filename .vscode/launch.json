@@ -5,10 +5,16 @@
       "name": "Nipto (Android)",
       "request": "launch",
       "type": "dart",
-      "program": "lib/main.dart",
-      "args": [
-        "--dart-define-from-file=config/dev.json"
-      ]
+      "program": "${workspaceFolder}/mobile/app/lib/main.dart",
+      "cwd": "${workspaceFolder}/mobile/app"
+    },
+    {
+      "name": "Nipto (Chrome development)",
+      "request": "launch",
+      "type": "dart",
+      "program": "${workspaceFolder}/mobile/app/lib/main.dart",
+      "cwd": "${workspaceFolder}/mobile/app",
+      "deviceId": "chrome"
     }
   ]
 }

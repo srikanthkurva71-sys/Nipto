@@ -19,29 +19,42 @@ The app should feel familiar without copying another product's branding or visua
 ## 2. Account and identity
 
 ### Public identity
-- Unique @nipto_id, lowercase letters, digits and underscore, 3–24 characters.
+- Unique `@nipto_id`, lowercase letters/numbers with optional single underscores between parts, 3–24 characters.
 - Display name, biography, avatar and privacy state.
-- Email address and password are never stored in public.profiles.
+- Email and phone are not Nipto account identifiers and are not collected for Nipto authentication.
+- A recovery Nipto account is optional and must be explicitly accepted by the selected recovery account.
 
-### Registration
-1. User chooses a Nipto ID, display name, recovery email and password.
-2. Flutter calls Supabase Auth signUp using the recovery email and password and sends nipto_id/display_name as user metadata.
-3. A database trigger creates the profile in the same Auth transaction. A unique constraint reserves the Nipto ID.
-4. Supabase email verification completes before password sign-in is enabled.
-5. The user signs in with Nipto ID and password.
+### Registration and sign-in
+1. The user chooses a Nipto ID and display name. Availability is checked against both existing profiles and private Nipto credential identities.
+2. The registration screen offers alternative IDs when a name is unavailable and can generate a strong password locally on the device. The user confirms the password before submission.
+3. The Nipto identity Edge Function validates the request, applies rate limits, hashes the password with Argon2id, and stores the private Nipto identity record.
+4. The app redirects through Supabase Auth's configured Custom OIDC provider (`custom:nipto`). The Nipto issuer serves OIDC discovery/JWKS and authorization-code + PKCE endpoints.
+5. Supabase Auth validates the Nipto issuer and creates its normal Supabase session. The existing Supabase user UUID remains the canonical internal key for profiles, RLS, Storage, Realtime and RPC authorization.
+6. Android stores Supabase session and PKCE state in encrypted storage. Existing persisted sessions are migrated from the prior SDK storage key before the old copy is removed.
 
-### Nipto ID sign-in
-1. Flutter invokes nipto-login with Nipto ID and password over TLS.
-2. The Edge Function validates input and uses a digest-keyed database rate limiter.
-3. The server-only resolve_nipto_login function finds the private Auth email. It is executable only by service_role.
-4. The Edge Function sends the email/password pair to Supabase Auth's password-token endpoint.
-5. The Edge Function returns the Supabase session tokens. It never returns the recovery email.
-6. Flutter installs the refresh token using Supabase Auth session handling.
+Nipto owns the user-facing identity and password verification. Supabase Auth is the session broker, not the source of Nipto credentials. OIDC scopes are restricted to `openid` and optional `profile`; email and phone scopes are not accepted. No synthetic email is used.
 
-Supabase Auth remains the credential authority. Nipto owns the user-facing identifier and sign-in experience; it does not invent or store its own password hashing scheme.
+### Existing-account migration
+- Existing users authenticate through the currently deployed legacy path only to begin an explicit migration.
+- A short-lived migration ticket binds the existing authenticated Supabase UUID to the Nipto identity-link flow.
+- The Nipto identity is linked to that same UUID; existing profile and social records are preserved.
+- Only after the custom Nipto identity is confirmed on the Supabase user are legacy email/phone identities and the old password credential cleared.
+- Migration requires a tested backup and rollback plan in staging before production rollout.
 
-### Recovery
-Password recovery requires the verified recovery email associated with the account. A Nipto ID alone is not proof of account ownership. Configure the email template and an Android deep link before enabling the recovery UI for release.
+### Password and account recovery
+- Password change requires the current Nipto password.
+- The user may add one optional recovery Nipto account. The selected account must accept the relationship in-app.
+- Forgot-password starts an opaque, rate-limited request. The accepted recovery account receives an in-app notification and must explicitly approve it.
+- Approval creates a short-lived, single-use reset grant. Reset updates the Nipto password hash and revokes active Supabase sessions.
+- Recovery does not use email, SMS, or an email reset link. Requests are non-enumerating and approval is tied to the accepted recovery relationship.
+
+### Sessions and security
+- Supabase access/refresh tokens remain standard Supabase Auth sessions so existing `auth.uid()` checks and RLS policies continue to work.
+- Session management lists and revokes the user's sessions.
+- Password reset revokes all sessions; password change also invalidates existing sessions.
+- Password hashes use Argon2id; OIDC ID tokens are ES256-signed and published through JWKS.
+- Rate limits, short-lived authorization codes, PKCE S256, CSRF binding, one-time recovery grants and service-role-only RPCs protect identity operations.
+- Signing keys and OIDC client secrets are provisioned as backend secrets and never committed or embedded in the APK.
 
 ## 3. Navigation and screen architecture
 
@@ -70,12 +83,12 @@ Password recovery requires the verified recovery email associated with the accou
 
 ## 4. Backend services
 
-- **Supabase Auth:** credential verification, email confirmation, sessions and password reset.
+- **Supabase Auth:** session broker for the Nipto-owned `custom:nipto` OIDC provider; no email, phone or external identity provider in the native credential contract.
 - **PostgreSQL:** profiles, follows, blocks, conversations, messages, statuses, posts, Shorts, likes, comments, notifications and reports.
 - **RLS:** per-user and per-conversation authorization; the client cannot bypass it.
 - **Realtime:** message, membership and notification changes.
 - **Storage:** private buckets for avatars, chat media, statuses, posts and Shorts.
-- **Edge Functions:** Nipto ID login, moderation orchestration, notification dispatch and media-processing callbacks as those modules are implemented.
+- **Edge Functions:** Nipto custom OIDC identity, FCM push dispatch, media validation and privacy fulfillment. Each function is deployed and its configuration is recorded in `supabase/config.toml`.
 
 ## 5. Database entities
 

@@ -28,7 +28,8 @@ RLS rules:
 
 ## Trusted staff workflow
 
-The backend is implemented; the staff-facing review console is still pending.
+The backend and the role-gated staff console are implemented; staff-session
+acceptance testing and role provisioning remain operational gates.
 
 - Staff identities live in `private.staff_roles`, outside the exposed public schema.
 - Roles are `moderator` or `admin`; there are no staff accounts by default.
@@ -43,8 +44,8 @@ The backend is implemented; the staff-facing review console is still pending.
 Only trusted, appropriately assigned adult moderators should review safety reports and potentially distressing user-generated content. Do not assign a minor account to a moderation role.
 
 ## Remaining operations and release requirements
-1. Build the role-gated staff console for an appropriately staffed operations team.
-2. Define the staff identity verification and role-provisioning process, with separation of admin and moderator duties.
+1. Operate the role-gated staff console with an appropriately staffed adult operations team.
+2. Define and execute the staff identity verification and role-provisioning process, with separation of admin and moderator duties.
 3. Add retention/deletion policy and an appeal/escalation workflow.
 4. Test staff RPCs with no-role, moderator and admin sessions, and verify audit records.
 5. Configure push delivery for feedback and report updates.

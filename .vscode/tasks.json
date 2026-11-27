@@ -1,0 +1,37 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Nipto: Get Flutter packages",
+      "type": "process",
+      "command": "flutter",
+      "args": ["pub", "get"],
+      "options": { "cwd": "${workspaceFolder}/mobile/app" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Nipto: Analyze",
+      "type": "process",
+      "command": "flutter",
+      "args": ["analyze"],
+      "options": { "cwd": "${workspaceFolder}/mobile/app" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Nipto: Test",
+      "type": "process",
+      "command": "flutter",
+      "args": ["test"],
+      "options": { "cwd": "${workspaceFolder}/mobile/app" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Nipto: Build debug APK",
+      "type": "process",
+      "command": "flutter",
+      "args": ["build", "apk", "--debug", "--dart-define-from-file=config/dev.json"],
+      "options": { "cwd": "${workspaceFolder}/mobile/app" },
+      "problemMatcher": []
+    }
+  ]
+}

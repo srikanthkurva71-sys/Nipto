@@ -7,10 +7,15 @@ build/
 coverage/
 .flutter-plugins
 .flutter-plugins-dependencies
+__pycache__/
 
 # IDE
 .idea/
-.vscode/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
 *.iml
 
 # Local configuration and secrets
@@ -21,6 +26,13 @@ coverage/
 *.keystore
 key.properties
 android/local.properties
+mobile/app/android/local.properties
+supabase/.temp/
+/pubspec.lock
+
+# Generated Flutter platform hosts (recreated by CI and the Windows bootstrap script)
+mobile/app/android/
+mobile/app/web/
 
 # OS
 .DS_Store

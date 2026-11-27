@@ -2,7 +2,7 @@ name: Android CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'work/**']
   pull_request:
   workflow_dispatch:
 
@@ -29,73 +29,81 @@ jobs:
           cache: true
 
       - name: Generate Android platform project
-        run: flutter create --platforms=android --org com.nipto --project-name nipto .
+        run: flutter create --platforms=android,web --org com.nipto --project-name nipto .
+        working-directory: mobile/app
 
-      - name: Configure WebRTC media permissions
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path("android/app/src/main/AndroidManifest.xml")
-          manifest = path.read_text()
-          permissions = [
-              '    <uses-feature android:name="android.hardware.camera" android:required="false" />',
-              '    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />',
-              '    <uses-permission android:name="android.permission.INTERNET" />',
-              '    <uses-permission android:name="android.permission.RECORD_AUDIO" />',
-              '    <uses-permission android:name="android.permission.CAMERA" />',
-              '    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />',
-              '    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />',
-              '    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />',
-          ]
-          for permission in permissions:
-              name = permission.split('android:name="', 1)[1].split('"', 1)[0]
-              if name not in manifest:
-                  manifest = manifest.replace("<application", permission + "\n    <application", 1)
-          path.write_text(manifest)
-          PY
+      - name: Test Android manifest configuration
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
 
-      - name: Configure password recovery deep link
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          path = Path("android/app/src/main/AndroidManifest.xml")
-          manifest = path.read_text()
-          if "nipto://auth-callback" not in manifest:
-              activity_start = manifest.find('android:name=".MainActivity"')
-              if activity_start < 0:
-                  raise SystemExit("Generated MainActivity declaration was not found")
-              activity_end = manifest.find("</activity>", activity_start)
-              if activity_end < 0:
-                  raise SystemExit("Generated MainActivity closing tag was not found")
-              intent_filter = """            <intent-filter>
-                          <action android:name="android.intent.action.VIEW" />
-                          <category android:name="android.intent.category.DEFAULT" />
-                          <category android:name="android.intent.category.BROWSABLE" />
-                          <data android:scheme="nipto" android:host="auth-callback" />
-                      </intent-filter>
-              """
-              manifest = manifest[:activity_end] + intent_filter + manifest[activity_end:]
-              path.write_text(manifest)
-          PY
+      - name: Configure Nipto Android platform
+        run: python3 scripts/configure_android_platform.py
 
-      - name: Configure Android plugin repositories
-        run: |
-          python3 -c "from pathlib import Path; p=Path('android/settings.gradle.kts'); s=p.read_text(); s=s.replace('repositories {', 'repositories {\\n        google()\\n        mavenCentral()', 1); p.write_text(s)"
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Format Nipto identity TypeScript
+        run: deno fmt supabase/functions/nipto-identity scripts/generate_nipto_oidc_keys.ts
+
+      - name: Check Nipto identity Edge Function and key utility
+        run: deno check supabase/functions/nipto-identity/index.ts scripts/generate_nipto_oidc_keys.ts
+
+      - name: Test Nipto identity validation
+        run: deno test supabase/functions/nipto-identity/validation_test.ts
+
+      - name: Test bounded Nipto OIDC token form parsing
+        run: deno test supabase/functions/nipto-identity/form_body_test.ts
+
+      - name: Check formatting of worker Edge Functions
+        run: deno fmt --check supabase/functions/nipto-push-dispatch supabase/functions/nipto-media supabase/functions/nipto-privacy
+
+      - name: Check Nipto push dispatch Edge Function
+        run: deno check supabase/functions/nipto-push-dispatch/index.ts
+
+      - name: Test Nipto push dispatch payload guards
+        run: deno test supabase/functions/nipto-push-dispatch/push_helpers_test.ts
+
+      - name: Check Nipto media validation Edge Function
+        run: deno check supabase/functions/nipto-media/index.ts
+
+      - name: Test Nipto media validation guards
+        run: deno test supabase/functions/nipto-media/validation_test.ts
+
+      - name: Check Nipto privacy Edge Function
+        run: deno check supabase/functions/nipto-privacy/index.ts
+
+      - name: Test Nipto privacy validation
+        run: deno test supabase/functions/nipto-privacy/validation_test.ts
 
       - name: Resolve dependencies
+        working-directory: mobile/app
         run: flutter pub get
 
+      - name: Generate Nipto launcher icons and native splash
+        working-directory: mobile/app
+        run: |
+          dart run flutter_launcher_icons
+          dart run flutter_native_splash:create
+
       - name: Remove generated sample test
-        run: rm -f test/widget_test.dart
+        run: rm -f mobile/app/test/widget_test.dart
 
       - name: Format Dart sources
+        working-directory: mobile/app
         run: dart format lib test
 
       - name: Static analysis
+        working-directory: mobile/app
         run: flutter analyze --no-fatal-infos
 
       - name: Unit and widget tests
+        working-directory: mobile/app
         run: flutter test
+
+      - name: Build Chrome development preview
+        working-directory: mobile/app
+        run: flutter build web --release
 
       - name: Install Android NDK with retry
         shell: bash
@@ -114,15 +122,25 @@ jobs:
           exit 1
 
       - name: Build debug APK
-        run: |
-          flutter build apk --debug \
-            --dart-define=SUPABASE_URL=https://advmjribduqzyuwktkod.supabase.co \
-            --dart-define=SUPABASE_PUBLISHABLE_KEY=sb_publishable_zxqki-GLfT6zi-BXT1h6zw_nWq9Nhye
+        working-directory: mobile/app
+        run: flutter build apk --debug
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: nipto-android-debug
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          path: mobile/app/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Build debug app bundle
+        working-directory: mobile/app
+        run: flutter build appbundle --debug
+
+      - name: Upload debug AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nipto-android-debug-aab
+          path: mobile/app/build/app/outputs/bundle/debug/app-debug.aab
           if-no-files-found: error
           retention-days: 14

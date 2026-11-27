@@ -8,27 +8,33 @@ Nipto should look modern, welcoming and distinctive: a calm neutral canvas, deep
 
 | Token | Value | Use |
 |---|---|---|
-| Ink | #171827 | Primary text and dark surfaces |
-| Muted | #777A8C | Secondary labels |
-| Canvas | #F7F7FB | Main background |
+| Ink | #101C50 | Primary text and dark surfaces |
+| Muted | #737A94 | Secondary labels |
+| Canvas | #F7F8FF | Main background |
 | Surface | #FFFFFF | Cards and sheets |
-| Violet | #6657E8 | Primary actions and active navigation |
-| Violet soft | #ECEAFF | Selected navigation and chips |
-| Coral | #FF806B | Status accents and highlights |
+| Violet | #5528E8 | Primary actions and active navigation |
+| Violet soft | #EDE9FF | Selected navigation and chips |
+| Coral | #FF4D9B | Status accents and highlights |
+| Brand cyan | #08C9F4 | Start of the logo gradient |
+| Brand blue | #0876F8 | Logo gradient |
+| Brand magenta | #E516B8 | End of the logo gradient |
 | Border | #E9E9F1 | Dividers and input outlines |
 | Success | #239B74 | Positive confirmation |
 | Danger | #D94B5B | Destructive actions |
+
+These values are the canonical tokens in `mobile/app/lib/theme/nipto_theme.dart` and are locked by `mobile/app/test/nipto_theme_test.dart`.
 
 Typography: system sans-serif, strong page titles, comfortable 14–16sp body text, short labels and no dense paragraphs in core flows.
 
 ## Navigation model
 
-Three adjacent swipeable destinations:
-1. Chats
-2. Shorts
-3. You
+Four adjacent destinations in the authenticated shell:
+1. Home — approved feed with likes, comments and reports.
+2. Chats — inbox, discovery, status tray, direct and group conversations.
+3. Shorts — vertical approved video feed with upload and interactions.
+4. You — profile, posts, settings, privacy and security.
 
-Use a Material 3 bottom navigation bar as a second access path. A swipe changes the selected destination and the navigation bar follows it. Preserve scroll position when switching tabs.
+Use a Material 3 bottom navigation bar as the primary access path. Preserve scroll position when switching tabs.
 
 ## Chats screen
 
