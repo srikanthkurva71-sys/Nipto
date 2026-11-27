@@ -97,8 +97,12 @@ jobs:
           printf 'y\n' | "$SDKMANAGER" --licenses >/dev/null
           "$SDKMANAGER" --install "system-images;android-36;google_apis;x86_64"
 
+      # API 36 system images refuse software CPU emulation (-accel off) unless
+      # this opt-in is present. Hosted runners without /dev/kvm need TCG mode.
       - name: Run live integration test on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
+        env:
+          ANDROID_I_WANT_MY_TCG: "yes"
         with:
           api-level: 36
           target: google_apis
@@ -107,6 +111,7 @@ jobs:
           force-avd-creation: true
           disable-animations: true
           emulator-options: -no-snapshot -wipe-data -noaudio
+          emulator-boot-timeout: 1200
           working-directory: mobile/app
           script: flutter test integration_test/nipto_live_auth_and_data_test.dart -d emulator-5554
 

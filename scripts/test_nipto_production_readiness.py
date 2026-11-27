@@ -57,6 +57,8 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         self.assertIn("android-emulator-runner@v2", self.cloud_integration_workflow)
         self.assertIn("libpulse0", self.cloud_integration_workflow)
         self.assertIn("libgl1", self.cloud_integration_workflow)
+        self.assertIn('ANDROID_I_WANT_MY_TCG: "yes"', self.cloud_integration_workflow)
+        self.assertIn("emulator-boot-timeout: 1200", self.cloud_integration_workflow)
         self.assertIn(
             "flutter test integration_test/nipto_live_auth_and_data_test.dart -d emulator-5554",
             self.cloud_integration_workflow,
