@@ -58,10 +58,10 @@ Never place the service-role key in Flutter, CI logs, Git, or client-side script
 
 1. Confirm all migrations are applied and the native Nipto account tables/RPCs exist.
 2. Configure the required Edge Function secrets.
-3. Deploy `supabase/functions/nipto-identity/index.ts` with `validation.ts` and `form_body.ts`.
+3. Deploy `supabase/functions/nipto-identity/index.ts` with `validation.ts` and `form_body.ts`. The app uses `POST /authorize/prepare` so the Edge Function can resolve Supabase's manual authorize redirect; browser clients cannot read its `Location` header.
 4. **Verified:** the discovery document and JWKS endpoints both returned HTTP 200. The JWKS publishes an ES256 P-256 signing key.
 5. **Configured:** Supabase Dashboard → Authentication → Sign In / Providers → Custom Providers lists `Nipto` with identifier `custom:nipto`, type `oidc`, status Enabled. The provider uses auto-discovery, issuer `https://advmjribduqzyuwktkod.supabase.co/functions/v1/nipto-identity`, scopes `openid profile`, allows users without email, and allowlists the `nipto_id` and `display_name` claims. Client credentials were generated locally and uploaded as Edge Function secrets; the matching values were entered in the provider form. Supabase Auth callback: `https://advmjribduqzyuwktkod.supabase.co/auth/v1/callback`. Ensure `nipto://auth-callback` is allowed in Authentication → URL Configuration.
-6. **Verified at protocol level:** a real registration through `/authorize/native` produced a Supabase auth code, exchanged it for a Supabase access/refresh token pair with the client PKCE verifier, and `/auth/v1/user` returned a `custom:nipto` identity with an empty email. The test account and auth user were removed after verification.
+6. **Verified at protocol level:** server-side authorize preparation, a real registration through `/authorize/native`, the Supabase callback, a PKCE token exchange with the client verifier, and `/auth/v1/user` all succeeded. The returned identity used `custom:nipto` with an empty email. The test account and auth user were removed after verification.
 7. **Still required on device:** test the native Flutter forms, sign-out, refresh, duplicate-ID suggestions, password rejection, account recovery, session revocation, and legacy-account migration. Verify Flutter deep-link restoration after app restart on Android.
 8. Run two-device smoke tests and independent security review before release.
 
@@ -83,7 +83,7 @@ Never place service-role credentials, OIDC client secrets, or private signing ke
 
 ## Verified deployment snapshot — 2026-11-26
 
-- `nipto-identity` Edge Function: active version 8, entrypoint `index.ts`, files `index.ts`, `validation.ts`, `form_body.ts`, JWT verification disabled for its public protocol routes and protected routes with their own checks. It is the only deployed Edge Function; the retired `nipto-login` function was undeployed and its local source/config removed.
+- `nipto-identity` Edge Function: active version 16, entrypoint `index.ts`, files `index.ts`, `validation.ts`, `form_body.ts`, JWT verification disabled for its public protocol routes and protected routes with their own checks. It is the only deployed identity Edge Function; the retired `nipto-login` function was undeployed and its local source/config removed.
 - `custom:nipto`: OIDC provider enabled, `email_optional=true`, scopes `openid profile`, PKCE enabled, `custom_claims_allowlist=["nipto_id","display_name"]`.
 - Native authorization endpoint `POST /authorize/native`: validated action/screen, client, redirect URI, state, nonce, S256 challenge, credential fields, and rate limits before creating the OIDC transaction and code.
 - Full protocol probe: `GET /auth/v1/authorize` → native credential submission → Supabase callback → PKCE token exchange → authenticated `/auth/v1/user` succeeded. The returned identity had `provider=custom:nipto`, `email=""`, and `user_metadata.custom_claims.nipto_id` populated.
@@ -91,3 +91,11 @@ Never place service-role credentials, OIDC client secrets, or private signing ke
 - `auth.users` trigger now reads Nipto claims from `raw_user_meta_data->'custom_claims'` via migration `20261126122909_nipto_oidc_custom_claims_provisioning.sql`.
 - Migration history is reconciled with the remote project: local filenames use the recorded versions `20261126115641` and `20261126122909`. The remote hardening row retains the descriptive name `20261126160836_nipto_least_privilege_hardening`; its SQL is idempotent.
 - **Still unverified:** Flutter deep-link callback restoration, refresh/logout lifecycle on device, in-app recovery, legacy migration, two-device calling, push delivery, media, and release signing.
+
+## Verified deployment snapshot — 2026-11-27
+
+- `nipto-identity` Edge Function: active version 16, JWT verification disabled for protocol routes that self-verify their inputs and protected routes with their own checks.
+- `POST /authorize/prepare`: validates the SDK-generated Supabase authorize URL, server-side reads the manual redirect, validates the provider redirect, and returns the provider PKCE challenge needed by the native OIDC bridge. This removes the browser-hostile in-Dart redirect parse that stopped the app-level flow.
+- Full protocol probe: `/auth/v1/authorize` → `/authorize/prepare` → `/authorize/native` → Supabase callback → PKCE token exchange → authenticated user lookup succeeded. The account had no email and was deleted after verification.
+- The first hosted Android emulator E2E attempt failed before app start because `emulator-5554` never booted; the opt-in cloud probe now runs the same app flow in a hosted browser, while Android compilation remains covered by standard CI.
+- **Still unverified:** Android device/runtime behavior, deep-link restoration after restart, refresh/logout lifecycle on device, in-app recovery, legacy migration, two-device calling, push delivery on device, media, and release signing.

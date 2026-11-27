@@ -255,41 +255,29 @@ class NiptoSessionManager {
       throw const NiptoAuthException('Nipto is not initialized.');
     final redirectTo = kIsWeb ? Uri.base.origin : 'nipto://auth-callback';
 
-    final preflightClient = http.Client();
     try {
       // Generate and securely persist the client PKCE verifier through the
-      // Supabase SDK, then let Supabase create the provider state and the
-      // provider-facing PKCE challenge.
+      // Supabase SDK, then let Nipto's Edge Function resolve Supabase's
+      // authorize redirect on the server. Browser clients cannot read the
+      // Location header of a manual redirect, so this must not happen in Dart.
       final oauth = await _client.auth.getOAuthSignInUrl(
         provider: OAuthProvider('custom:nipto'),
         redirectTo: redirectTo,
         queryParams: {'screen': action},
       );
-      final preflightRequest = http.Request('GET', Uri.parse(oauth.url))
-        ..headers.addAll({'apikey': key, 'Accept': 'application/json'})
-        ..followRedirects = false;
-      final preflight = await preflightClient
-          .send(preflightRequest)
-          .timeout(const Duration(seconds: 15));
-      await preflight.stream.drain<void>();
-      final location = preflight.headers['location'];
-      final isRedirect =
-          preflight.statusCode >= 300 && preflight.statusCode < 400;
-      if (!isRedirect || location == null || location.isEmpty) {
-        throw const NiptoAuthException(
-          'Nipto could not start secure sign-in. Please try again.',
-        );
-      }
-      final providerRequest = Uri.parse(location);
-      final params = providerRequest.queryParameters;
-      final state = params['state'] ?? '';
-      final challenge = params['code_challenge'] ?? '';
-      final method = params['code_challenge_method'] ?? '';
+      final prepared = await _post('authorize/prepare', <String, dynamic>{
+        'authorize_url': oauth.url,
+      });
+      final state = (prepared['state'] as String?) ?? '';
+      final challenge = (prepared['code_challenge'] as String?) ?? '';
+      final method = (prepared['code_challenge_method'] as String?) ?? '';
+      final screen = (prepared['screen'] as String?) ?? action;
+      final nonce = prepared['nonce'];
       if (state.isEmpty ||
           state.length > 512 ||
           challenge.isEmpty ||
           method.toUpperCase() != 'S256' ||
-          params['response_type'] != 'code') {
+          prepared['response_type'] != 'code') {
         throw const NiptoAuthException(
           'Nipto received an invalid sign-in request. Please try again.',
         );
@@ -297,13 +285,13 @@ class NiptoSessionManager {
 
       final result = await _post('authorize/native', <String, dynamic>{
         'action': action,
-        'screen': params['screen'] ?? action,
-        'client_id': params['client_id'] ?? '',
-        'redirect_uri': params['redirect_uri'] ?? '',
-        'response_type': params['response_type'] ?? '',
-        'scope': params['scope'] ?? '',
+        'screen': screen,
+        'client_id': (prepared['client_id'] as String?) ?? '',
+        'redirect_uri': (prepared['redirect_uri'] as String?) ?? '',
+        'response_type': (prepared['response_type'] as String?) ?? '',
+        'scope': (prepared['scope'] as String?) ?? '',
         'state': state,
-        if (params['nonce'] != null) 'nonce': params['nonce']!,
+        if (nonce is String) 'nonce': nonce,
         'code_challenge': challenge,
         'code_challenge_method': 'S256',
         'nipto_id': niptoId,
@@ -340,8 +328,6 @@ class NiptoSessionManager {
       throw const NiptoAuthException(
         'Could not connect to Nipto. Check your internet connection.',
       );
-    } finally {
-      preflightClient.close();
     }
   }
 

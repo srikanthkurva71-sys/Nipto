@@ -24,6 +24,9 @@ SESSION_MANAGER = APP_ROOT / "lib/services/nipto_session_manager.dart"
 IDENTITY_FUNCTION = ROOT / "supabase/functions/nipto-identity/index.ts"
 PUSH_FUNCTION = ROOT / "supabase/functions/nipto-push-dispatch/index.ts"
 PUSH_HELPERS = ROOT / "supabase/functions/nipto-push-dispatch/push_helpers.ts"
+CLOUD_INTEGRATION_WORKFLOW = (
+    ROOT / ".github/workflows/cloud-integration-test.yml"
+)
 
 
 class NiptoProductionReadinessTests(unittest.TestCase):
@@ -45,6 +48,18 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         cls.identity_function = IDENTITY_FUNCTION.read_text(encoding="utf-8")
         cls.push_function = PUSH_FUNCTION.read_text(encoding="utf-8")
         cls.push_helpers = PUSH_HELPERS.read_text(encoding="utf-8")
+        cls.cloud_integration_workflow = CLOUD_INTEGRATION_WORKFLOW.read_text(
+            encoding="utf-8"
+        )
+
+    def test_cloud_probe_runs_the_app_without_hosted_emulator(self):
+        self.assertIn("CREATE-PROBE", self.cloud_integration_workflow)
+        self.assertIn(
+            "flutter test integration_test/nipto_live_auth_and_data_test.dart -d chrome",
+            self.cloud_integration_workflow,
+        )
+        self.assertNotIn("android-emulator-runner", self.cloud_integration_workflow)
+        self.assertNotIn("emulator-5554", self.cloud_integration_workflow)
 
     def test_least_privilege_migration_restores_column_scoped_inserts(self):
         protected_columns = {
@@ -107,14 +122,17 @@ class NiptoProductionReadinessTests(unittest.TestCase):
 
     def test_native_credentials_finish_real_supabase_pkce_session(self):
         self.assertIn("getOAuthSignInUrl", self.session_manager)
-        self.assertIn("..followRedirects = false", self.session_manager)
+        self.assertIn("authorize/prepare", self.session_manager)
         self.assertIn("authorize/native", self.session_manager)
         self.assertIn("getSessionFromUrl(callback)", self.session_manager)
+        self.assertNotIn("..followRedirects = false", self.session_manager)
         self.assertNotIn("signInWithPassword", self.session_manager)
         self.assertNotIn("signUp(email", self.session_manager)
 
     def test_identity_function_supports_native_oidc_bridge(self):
+        self.assertIn('path.endsWith("/authorize/prepare")', self.identity_function)
         self.assertIn('path.endsWith("/authorize/native")', self.identity_function)
+        self.assertIn("async function authorizePrepare", self.identity_function)
         self.assertIn("exchangeSupabaseAuthorizationCode", self.identity_function)
         self.assertIn('redirect: "manual"', self.identity_function)
         self.assertIn("nipto_oidc_create_transaction", self.identity_function)
