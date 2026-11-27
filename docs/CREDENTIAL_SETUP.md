@@ -178,6 +178,6 @@ Once those exist:
 This helper cannot create a Firebase project, download files from the Firebase
 console, create your DNS record, or install your TLS certificate. Those steps
 must be done by someone with access to those accounts. The GitHub Actions worker
-scheduler is configured in this repository, but scheduled runs start only after
-the workflow reaches the default branch. Everything after the files exist is
-handled by the script and the deployed backend.
+scheduler is active on the default branch and was verified with a manual run.
+Everything after the files exist is handled by the script and the deployed
+backend.

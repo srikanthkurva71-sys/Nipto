@@ -89,7 +89,8 @@ accounts, and purges expired export objects. A missing `CRON_SECRET` returns
 the ignored local credential file and the `NIPTO_CRON_SECRET` GitHub Actions
 secret. The same `CRON_SECRET` protects the push dispatcher; no secret belongs
 in Flutter, Git, or a public cron URL. The `Worker scheduler` workflow invokes
-both workers every five minutes after it reaches the default branch.
+both workers every five minutes on the default branch; a manual run completed
+successfully on 2026-11-27.
 
 ## Verification checklist
 
@@ -110,7 +111,8 @@ both workers every five minutes after it reaches the default branch.
 
 Migrations, functions, grants, RLS and fail-closed probes are live and verified.
 The privacy worker is invoked every five minutes by the `Worker scheduler`
-GitHub Actions workflow once that workflow reaches the default branch. No
+GitHub Actions workflow on the default branch; a manual run completed
+successfully on 2026-11-27. No
 external scanner/processor is configured and no end-to-end device/export/deletion
 run has been performed. Treat media approval automation and privacy request
 fulfillment as gated until the checklist passes with real operator credentials
