@@ -42,7 +42,9 @@ void main() {
       description: 'auth screen',
     );
 
-    await tester.tap(find.text('Create Nipto account'));
+    await tester.tap(
+      find.widgetWithText(OutlinedButton, 'Create Nipto account'),
+    );
     await pumpUntil(
       tester,
       find.text('Create your Nipto account'),
@@ -62,11 +64,15 @@ void main() {
       description: 'Nipto ID availability confirmation',
     );
 
-    await tester.ensureVisible(find.text('Create Nipto account'));
-    await tester.tap(find.text('Create Nipto account'));
+    final createAccountButton = find.widgetWithText(
+      FilledButton,
+      'Create Nipto account',
+    );
+    await tester.ensureVisible(createAccountButton);
+    await tester.tap(createAccountButton);
     await pumpUntil(
       tester,
-      find.text('Chats'),
+      find.byType(NavigationBar),
       timeout: const Duration(seconds: 60),
       description: 'signed-in main shell',
     );
@@ -76,7 +82,7 @@ void main() {
     // ignore: avoid_print
     print('NIPTO_E2E_STATUS=$statusText');
 
-    await tester.tap(find.text('Chats'));
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Chats'));
     await pumpUntil(
       tester,
       find.text('Your status'),
