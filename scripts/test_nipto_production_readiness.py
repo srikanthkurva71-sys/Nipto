@@ -260,6 +260,8 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         self.assertIn("registration_shell_timeout", self.live_auth_test)
         self.assertIn("signin_shell_timeout", self.live_auth_test)
         self.assertIn("persisted_status_timeout", self.live_auth_test)
+        self.assertIn("statusRows:$statusRows", self.live_auth_test)
+        self.assertIn("profileRows:$profileRows", self.live_auth_test)
 
     def test_text_status_dialog_owns_controller_and_avoids_overflow(self):
         self.assertIn(
@@ -275,6 +277,21 @@ class NiptoProductionReadinessTests(unittest.TestCase):
             self.status_screen,
         )
         self.assertNotIn("final controller = TextEditingController();", self.status_screen)
+
+    def test_status_tray_reloads_from_state_and_keeps_own_status_visible(self):
+        self.assertIn(
+            "List<_StatusGroup> _groups = const [];",
+            self.status_screen,
+        )
+        self.assertIn("bool _loadingGroups = true;", self.status_screen)
+        self.assertIn("_reloadGroups();", self.status_screen)
+        self.assertIn("Future<void> _reloadGroups() async {", self.status_screen)
+        self.assertIn("Future<void> _refresh() => _reloadGroups();", self.status_screen)
+        self.assertIn("profileById[ownId] = <String, dynamic>{", self.status_screen)
+        self.assertIn("session?.niptoId ?? ''", self.status_screen)
+        self.assertIn("_loadingGroups\n          ? const Center(", self.status_screen)
+        self.assertNotIn("late Future<List<_StatusGroup>> _groups;", self.status_screen)
+        self.assertNotIn("future: _groups,", self.status_screen)
 
     def test_identity_function_supports_native_oidc_bridge(self):
         self.assertIn('path.endsWith("/authorize/prepare")', self.identity_function)

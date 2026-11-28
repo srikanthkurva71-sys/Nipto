@@ -18,7 +18,8 @@ class StatusTray extends StatefulWidget {
 }
 
 class _StatusTrayState extends State<StatusTray> {
-  late Future<List<_StatusGroup>> _groups;
+  List<_StatusGroup> _groups = const [];
+  bool _loadingGroups = true;
   final _picker = ImagePicker();
   final _media = NiptoMediaService();
   bool _uploading = false;
@@ -29,7 +30,24 @@ class _StatusTrayState extends State<StatusTray> {
   @override
   void initState() {
     super.initState();
-    _groups = _loadGroups();
+    _reloadGroups();
+  }
+
+  Future<void> _reloadGroups() async {
+    try {
+      final groups = await _loadGroups();
+      if (!mounted) return;
+      setState(() {
+        _groups = groups;
+        _loadingGroups = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _groups = const [];
+        _loadingGroups = false;
+      });
+    }
   }
 
   Future<List<_StatusGroup>> _loadGroups() async {
@@ -60,6 +78,22 @@ class _StatusTrayState extends State<StatusTray> {
     for (final raw in profiles as List) {
       final profile = Map<String, dynamic>.from(raw);
       profileById[profile['id'] as String] = profile;
+    }
+
+    // A freshly created account can have a visible status before its public
+    // profile is readable through RLS. Keep the owner's own status visible by
+    // falling back to the signed-in session metadata.
+    final ownId = NiptoSessionManager.instance.userId;
+    if (ownId != null &&
+        byOwner.containsKey(ownId) &&
+        !profileById.containsKey(ownId)) {
+      final session = NiptoSessionManager.instance.currentSession;
+      profileById[ownId] = <String, dynamic>{
+        'id': ownId,
+        'nipto_id': session?.niptoId ?? '',
+        'display_name': session?.displayName ?? 'You',
+        'avatar_path': null,
+      };
     }
 
     return byOwner.entries
@@ -296,9 +330,7 @@ class _StatusTrayState extends State<StatusTray> {
     }
   }
 
-  Future<void> _refresh() async {
-    setState(() => _groups = _loadGroups());
-  }
+  Future<void> _refresh() => _reloadGroups();
 
   String _initials(String name) {
     final parts = name.trim().split(RegExp(r'\s+'));
@@ -312,45 +344,33 @@ class _StatusTrayState extends State<StatusTray> {
   Widget build(BuildContext context) {
     return SizedBox(
       height: 105,
-      child: FutureBuilder<List<_StatusGroup>>(
-        future: _groups,
-        builder: (context, snapshot) {
-          final groups = snapshot.data ?? [];
-          return ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            scrollDirection: Axis.horizontal,
-            children: [
-              _StatusAvatar(
-                label: _uploading ? 'Uploading…' : 'Your status',
-                initials: '+',
-                isOwn: true,
-                onTap: _showCreateOptions,
-              ),
-              ...groups.map(
-                (group) => _StatusAvatar(
-                  label: group.ownerId == NiptoSessionManager.instance.userId
-                      ? 'Your update'
-                      : group.name,
-                  initials: _initials(group.name),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => StatusViewerPage(group: group),
+      child: _loadingGroups
+          ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+          : ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              scrollDirection: Axis.horizontal,
+              children: [
+                _StatusAvatar(
+                  label: _uploading ? 'Uploading…' : 'Your status',
+                  initials: '+',
+                  isOwn: true,
+                  onTap: _showCreateOptions,
+                ),
+                ..._groups.map(
+                  (group) => _StatusAvatar(
+                    label: group.ownerId == NiptoSessionManager.instance.userId
+                        ? 'Your update'
+                        : group.name,
+                    initials: _initials(group.name),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => StatusViewerPage(group: group),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              if (snapshot.hasError)
-                const Padding(
-                  padding: EdgeInsets.only(left: 8, top: 20),
-                  child: Text(
-                    'Statuses unavailable',
-                    style: TextStyle(color: NiptoColors.muted, fontSize: 11),
-                  ),
-                ),
-            ],
-          );
-        },
-      ),
+              ],
+            ),
     );
   }
 }

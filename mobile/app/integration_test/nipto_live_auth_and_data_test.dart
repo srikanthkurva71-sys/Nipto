@@ -4,6 +4,7 @@ import 'package:integration_test/integration_test.dart';
 
 import 'package:nipto/main.dart' as app;
 import 'package:nipto/services/nipto_session_manager.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Creates a real Nipto account and status in the configured Supabase project.
 // Delete the probe using the printed NIPTO_E2E_ID after every run.
@@ -19,14 +20,36 @@ Future<void> dumpAuthState(WidgetTester tester, String phase) async {
       .map((widget) => widget.data ?? '')
       .where((text) => text.isNotEmpty)
       .toList();
+  final userId = sessions.userId;
+  var statusRows = -1;
+  var profileRows = -1;
+  if (userId != null) {
+    try {
+      final client = Supabase.instance.client;
+      final statuses = await client
+          .from('statuses')
+          .select('id')
+          .eq('owner_id', userId);
+      statusRows = (statuses as List).length;
+      final profiles = await client
+          .from('profiles')
+          .select('id')
+          .eq('id', userId);
+      profileRows = (profiles as List).length;
+    } catch (_) {
+      // Diagnostics only; the test failure below carries the real error.
+    }
+  }
   // ignore: avoid_print
   print(
     'NIPTO_E2E_DEBUG_$phase='
     'signedIn:${sessions.isSignedIn},'
     'legacy:${sessions.hasLegacySession},'
-    'userId:${sessions.userId},'
+    'userId:$userId,'
     'niptoId:${session?.niptoId},'
     'sessionId:${session?.sessionId},'
+    'statusRows:$statusRows,'
+    'profileRows:$profileRows,'
     'texts:${texts.join('|')}',
   );
 }
