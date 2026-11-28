@@ -15,15 +15,29 @@ PUSH_MIGRATION = ROOT / "supabase/migrations/20261126132328_nipto_push_delivery.
 MESSAGE_RPC_HARDENING = (
     ROOT / "supabase/migrations/20261126132330_nipto_message_rpc_search_path.sql"
 )
+MESSAGE_MUTATION_GATE = (
+    ROOT / "supabase/migrations/20261128000000_nipto_message_mutation_access_gate.sql"
+)
+POLICY_HELPER_GRANTS = (
+    ROOT / "supabase/migrations/20261128130000_nipto_restore_policy_helper_execute.sql"
+)
+MESSAGE_POLICY_INITPLAN = (
+    ROOT / "supabase/migrations/20261128131500_nipto_message_policy_initplan_fix.sql"
+)
 OIDC_DEPLOYMENT_DOC = ROOT / "docs/NIPTO_OIDC_DEPLOYMENT.md"
 NOTIFICATIONS_SCREEN = APP_ROOT / "lib/screens/notifications_screen.dart"
 LAUNCHER_CONFIG = APP_ROOT / "flutter_launcher_icons.yaml"
 SPLASH_CONFIG = APP_ROOT / "flutter_native_splash.yaml"
 AUTH_SCREEN = APP_ROOT / "lib/screens/auth_screen.dart"
 SESSION_MANAGER = APP_ROOT / "lib/services/nipto_session_manager.dart"
+STATUS_SCREEN = APP_ROOT / "lib/screens/status_screen.dart"
 IDENTITY_FUNCTION = ROOT / "supabase/functions/nipto-identity/index.ts"
 PUSH_FUNCTION = ROOT / "supabase/functions/nipto-push-dispatch/index.ts"
 PUSH_HELPERS = ROOT / "supabase/functions/nipto-push-dispatch/push_helpers.ts"
+CLOUD_INTEGRATION_WORKFLOW = (
+    ROOT / ".github/workflows/cloud-integration-test.yml"
+)
+LIVE_AUTH_TEST = APP_ROOT / "integration_test/nipto_live_auth_and_data_test.dart"
 
 
 class NiptoProductionReadinessTests(unittest.TestCase):
@@ -33,6 +47,11 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         cls.oidc_claims_sql = OIDC_CLAIMS_MIGRATION.read_text(encoding="utf-8")
         cls.push_sql = PUSH_MIGRATION.read_text(encoding="utf-8")
         cls.message_rpc_hardening_sql = MESSAGE_RPC_HARDENING.read_text(encoding="utf-8")
+        cls.message_mutation_gate_sql = MESSAGE_MUTATION_GATE.read_text(encoding="utf-8")
+        cls.policy_helper_grants_sql = POLICY_HELPER_GRANTS.read_text(encoding="utf-8")
+        cls.message_policy_initplan_sql = MESSAGE_POLICY_INITPLAN.read_text(
+            encoding="utf-8"
+        )
         cls.oidc_deployment_doc = OIDC_DEPLOYMENT_DOC.read_text(encoding="utf-8")
         cls.notifications_source = NOTIFICATIONS_SCREEN.read_text(encoding="utf-8")
         cls.lib_sources = {
@@ -42,9 +61,119 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         cls.config_toml = (ROOT / "supabase/config.toml").read_text(encoding="utf-8")
         cls.auth_screen = AUTH_SCREEN.read_text(encoding="utf-8")
         cls.session_manager = SESSION_MANAGER.read_text(encoding="utf-8")
+        cls.status_screen = STATUS_SCREEN.read_text(encoding="utf-8")
         cls.identity_function = IDENTITY_FUNCTION.read_text(encoding="utf-8")
         cls.push_function = PUSH_FUNCTION.read_text(encoding="utf-8")
         cls.push_helpers = PUSH_HELPERS.read_text(encoding="utf-8")
+        cls.cloud_integration_workflow = CLOUD_INTEGRATION_WORKFLOW.read_text(
+            encoding="utf-8"
+        )
+        cls.live_auth_test = LIVE_AUTH_TEST.read_text(encoding="utf-8")
+
+    def test_cloud_probe_installs_emulator_runtime_libraries(self):
+        self.assertIn("CREATE-PROBE", self.cloud_integration_workflow)
+        self.assertIn("android-emulator-runner@v2", self.cloud_integration_workflow)
+        self.assertIn("libpulse0", self.cloud_integration_workflow)
+        self.assertIn("libgl1", self.cloud_integration_workflow)
+        self.assertIn("libxcb-cursor0", self.cloud_integration_workflow)
+        self.assertIn("KERNEL==\"kvm\"", self.cloud_integration_workflow)
+        self.assertIn("disable-linux-hw-accel: false", self.cloud_integration_workflow)
+        self.assertIn(
+            "emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim",
+            self.cloud_integration_workflow,
+        )
+        self.assertIn('ANDROID_I_WANT_MY_TCG: "yes"', self.cloud_integration_workflow)
+        self.assertIn("emulator-boot-timeout: 1200", self.cloud_integration_workflow)
+        self.assertIn(
+            "flutter test integration_test/nipto_live_auth_and_data_test.dart -d emulator-5554",
+            self.cloud_integration_workflow,
+        )
+        self.assertNotIn("-d chrome", self.cloud_integration_workflow)
+
+    def test_cloud_probe_checks_registration_and_return_sign_in(self):
+        for fragment in (
+            "Create Nipto account",
+            "signed-in main shell",
+            "NIPTO_E2E_STATUS=",
+            "NiptoSessionManager.instance.signOut()",
+            "Sign in to Nipto",
+            "signed-in main shell after sign-in",
+            "status persisted after sign-in",
+            "NIPTO_E2E_SIGNIN=PASS",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.live_auth_test)
+
+    def test_message_mutations_recheck_connected_chat_access(self):
+        self.assertEqual(
+            self.message_mutation_gate_sql.count(
+                "and public.can_access_conversation_messages(m.conversation_id);"
+            ),
+            2,
+        )
+        self.assertIn(
+            "create or replace function public.edit_own_message(",
+            self.message_mutation_gate_sql,
+        )
+        self.assertIn(
+            "create or replace function public.delete_own_message(",
+            self.message_mutation_gate_sql,
+        )
+        self.assertEqual(self.message_mutation_gate_sql.count("set search_path = ''"), 2)
+        self.assertIn(
+            "grant execute on function public.edit_own_message(uuid, text) to authenticated;",
+            self.message_mutation_gate_sql,
+        )
+        self.assertIn(
+            "grant execute on function public.delete_own_message(uuid) to authenticated;",
+            self.message_mutation_gate_sql,
+        )
+        self.assertIn(
+            "drop policy if exists \"messages_edit_own_recent\" on public.messages;",
+            self.message_mutation_gate_sql,
+        )
+        self.assertEqual(
+            self.message_mutation_gate_sql.count(
+                "and public.can_access_conversation_messages(conversation_id)"
+            ),
+            2,
+        )
+
+    def test_policy_helper_execute_grants_are_restored(self):
+        for helper in (
+            "private.is_blocked_between(uuid, uuid)",
+            "private.has_accepted_follow(uuid, uuid)",
+            "private.can_view_profile(uuid)",
+            "private.is_conversation_member(uuid)",
+            "private.can_view_status(uuid)",
+            "private.can_view_short(uuid)",
+            "private.can_view_post(uuid)",
+        ):
+            with self.subTest(helper=helper):
+                self.assertIn(
+                    f"grant execute on function {helper} to authenticated;",
+                    self.policy_helper_grants_sql,
+                )
+                self.assertIn(
+                    f"revoke all on function {helper} from public, anon, authenticated;",
+                    self.policy_helper_grants_sql,
+                )
+        self.assertNotIn("to anon", self.policy_helper_grants_sql)
+        self.assertNotIn("to public", self.policy_helper_grants_sql)
+
+    def test_message_update_policy_uses_stable_auth_uid(self):
+        self.assertEqual(
+            self.message_policy_initplan_sql.count("sender_id = (select auth.uid())"),
+            2,
+        )
+        self.assertIn(
+            'drop policy if exists "messages_edit_own_recent" on public.messages;',
+            self.message_policy_initplan_sql,
+        )
+        self.assertIn(
+            "public.can_access_conversation_messages(conversation_id)",
+            self.message_policy_initplan_sql,
+        )
 
     def test_least_privilege_migration_restores_column_scoped_inserts(self):
         protected_columns = {
@@ -107,19 +236,83 @@ class NiptoProductionReadinessTests(unittest.TestCase):
 
     def test_native_credentials_finish_real_supabase_pkce_session(self):
         self.assertIn("getOAuthSignInUrl", self.session_manager)
-        self.assertIn("..followRedirects = false", self.session_manager)
+        self.assertIn("authorize/prepare", self.session_manager)
         self.assertIn("authorize/native", self.session_manager)
         self.assertIn("getSessionFromUrl(callback)", self.session_manager)
+        self.assertNotIn("..followRedirects = false", self.session_manager)
         self.assertNotIn("signInWithPassword", self.session_manager)
         self.assertNotIn("signUp(email", self.session_manager)
 
+    def test_native_sessions_treat_empty_email_as_no_email(self):
+        self.assertIn("email.trim().isNotEmpty", self.session_manager)
+        self.assertIn("return _hasEmail(user) || !_hasNiptoIdentity(user);", self.session_manager)
+        self.assertIn("!_hasEmail(refreshedUser)", self.session_manager)
+        self.assertNotIn("refreshedUser.email == null", self.session_manager)
+
+    def test_native_credential_routes_close_after_successful_auth(self):
+        self.assertIn("final navigator = Navigator.of(context);", self.auth_screen)
+        self.assertEqual(self.auth_screen.count("await navigator.push<bool>("), 2)
+        self.assertEqual(
+            self.auth_screen.count("if (navigator.canPop()) {"),
+            2,
+        )
+        self.assertEqual(self.auth_screen.count("navigator.pop(true);"), 2)
+        self.assertIn("registration_shell_timeout", self.live_auth_test)
+        self.assertIn("signin_shell_timeout", self.live_auth_test)
+        self.assertIn("persisted_status_timeout", self.live_auth_test)
+        self.assertIn("own_status_timeout", self.live_auth_test)
+        self.assertIn("status_persisted_timeout", self.live_auth_test)
+        self.assertIn("description: 'own status after sign-in'", self.live_auth_test)
+        self.assertIn("statusRows:$statusRows", self.live_auth_test)
+        self.assertIn("profileRows:$profileRows", self.live_auth_test)
+
+    def test_text_status_dialog_owns_controller_and_avoids_overflow(self):
+        self.assertIn(
+            "class _TextStatusDialog extends StatefulWidget",
+            self.status_screen,
+        )
+        self.assertIn("builder: (_) => const _TextStatusDialog()", self.status_screen)
+        self.assertIn("final _controller = TextEditingController();", self.status_screen)
+        self.assertIn("_controller.dispose();", self.status_screen)
+        self.assertIn("content: SingleChildScrollView(", self.status_screen)
+        self.assertIn(
+            "builder: (sheetContext) => SafeArea(\n        child: SingleChildScrollView(",
+            self.status_screen,
+        )
+        self.assertNotIn("final controller = TextEditingController();", self.status_screen)
+
+    def test_status_tray_reloads_from_state_and_keeps_own_status_visible(self):
+        self.assertIn(
+            "List<_StatusGroup> _groups = const [];",
+            self.status_screen,
+        )
+        self.assertIn("bool _loadingGroups = true;", self.status_screen)
+        self.assertIn("_reloadGroups();", self.status_screen)
+        self.assertIn("Future<void> _reloadGroups() async {", self.status_screen)
+        self.assertIn("Future<void> _refresh() => _reloadGroups();", self.status_screen)
+        self.assertIn("profileById[ownId] = <String, dynamic>{", self.status_screen)
+        self.assertIn("session?.niptoId ?? ''", self.status_screen)
+        self.assertIn("_loadingGroups\n          ? const Center(", self.status_screen)
+        self.assertNotIn("late Future<List<_StatusGroup>> _groups;", self.status_screen)
+        self.assertNotIn("future: _groups,", self.status_screen)
+
     def test_identity_function_supports_native_oidc_bridge(self):
+        self.assertIn('path.endsWith("/authorize/prepare")', self.identity_function)
         self.assertIn('path.endsWith("/authorize/native")', self.identity_function)
+        self.assertIn("async function authorizePrepare", self.identity_function)
         self.assertIn("exchangeSupabaseAuthorizationCode", self.identity_function)
         self.assertIn('redirect: "manual"', self.identity_function)
         self.assertIn("nipto_oidc_create_transaction", self.identity_function)
         self.assertIn("nipto_oidc_consume_transaction", self.identity_function)
         self.assertIn("resolveOidcIdentity", self.identity_function)
+        self.assertIn(
+            "Supabase Auth adds client_id when it redirects to the provider; the SDK's",
+            self.identity_function,
+        )
+        self.assertIn("returnedClient !== client", self.identity_function)
+        prepare_body = self.identity_function.split("async function authorizePrepare", 1)[1]
+        prepare_body = prepare_body.split("\nasync function ", 1)[0]
+        self.assertNotIn("client !== oidcClientId()", prepare_body)
 
     def test_custom_oidc_claims_are_provisioned_into_profiles(self):
         self.assertIn(
@@ -189,6 +382,36 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         self.assertIn("android: true", launcher)
         self.assertIn("assets/branding/nipto_logo.png", splash)
         self.assertIn("android: true", splash)
+
+
+class TwoUserProbeTests(unittest.TestCase):
+    def test_manual_two_user_workflow_requires_explicit_consent(self):
+        workflow = (
+            ROOT / ".github/workflows/two-user-rls-test.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("name: Two-user RLS and Storage test", workflow)
+        self.assertIn("workflow_dispatch", workflow)
+        self.assertIn("CREATE-TWO-USER-PROBE", workflow)
+        self.assertIn("python3 scripts/nipto_two_user_rls_probe.py", workflow)
+        self.assertIn("if: always()", workflow)
+
+    def test_two_user_probe_checks_real_rls_and_storage_boundaries(self):
+        probe = (
+            ROOT / "scripts/nipto_two_user_rls_probe.py"
+        ).read_text(encoding="utf-8")
+        for fragment in (
+            "create_or_get_direct_conversation",
+            "create_group_conversation",
+            "anonymous message read",
+            "chat-media",
+            "direct media read by member",
+            "group media read by invitee",
+            "TWO_USER_RLS_STORAGE_PASS",
+            "TWO_USER_CLEANUP_AUTH_USER_IDS",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, probe)
+        self.assertNotIn("service_role", probe)
 
 
 if __name__ == "__main__":

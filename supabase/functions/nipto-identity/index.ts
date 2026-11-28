@@ -748,6 +748,102 @@ async function exchangeSupabaseAuthorizationCode(
   throw new ApiError("Nipto could not finish secure sign-in. Please try again.", 502);
 }
 
+async function authorizePrepare(request: Request): Promise<Response> {
+  const input = await requestBody(request);
+  const rawUrl = String(input.authorize_url ?? "");
+  if (!rawUrl || rawUrl.length > 4096) {
+    throw new ApiError("Invalid Nipto authorization request.", 400);
+  }
+  let authorizeUrl: URL;
+  try {
+    authorizeUrl = new URL(rawUrl);
+  } catch {
+    throw new ApiError("Invalid Nipto authorization request.", 400);
+  }
+  const supabase = new URL(supabaseUrl());
+  const client = oidcClientId();
+  // Supabase Auth adds client_id when it redirects to the provider; the SDK's
+  // authorize URL does not include it. Validate our client on the returned
+  // provider URL below instead of rejecting the SDK's original request.
+  const challenge = authorizeUrl.searchParams.get("code_challenge") ?? "";
+  const method = authorizeUrl.searchParams.get("code_challenge_method") ?? "";
+  const redirectTo = authorizeUrl.searchParams.get("redirect_to") ?? "";
+  if (authorizeUrl.origin !== supabase.origin
+    || authorizeUrl.pathname !== "/auth/v1/authorize"
+    || authorizeUrl.searchParams.get("provider") !== "custom:nipto"
+    || !/^[A-Za-z0-9_-]{43,128}$/.test(challenge)
+    || method.toLowerCase() !== "s256"
+    || !redirectTo || redirectTo.length > 2048) {
+    throw new ApiError("Invalid Nipto authorization request.", 400);
+  }
+  await enforceRateLimit(request, "oidc-prepare:" + client);
+
+  let response: Response;
+  try {
+    // The server can read the manual redirect's Location header. Browser
+    // clients cannot, so the old in-Dart preflight silently stopped the flow.
+    response = await fetch(authorizeUrl, {
+      method: "GET",
+      redirect: "manual",
+      headers: { apikey: publishableKey(), Accept: "application/json" },
+    });
+  } catch {
+    throw new ApiError("Nipto could not reach secure sign-in. Please try again.", 502);
+  }
+  if (response.status < 300 || response.status >= 400) {
+    throw new ApiError("Nipto could not start secure sign-in. Please try again.", 502);
+  }
+  const location = response.headers.get("location");
+  if (!location) {
+    throw new ApiError("Nipto could not start secure sign-in. Please try again.", 502);
+  }
+  let provider: URL;
+  try {
+    provider = new URL(location);
+  } catch {
+    throw new ApiError("Nipto could not start secure sign-in. Please try again.", 502);
+  }
+  if (provider.origin !== supabase.origin
+    || provider.pathname !== "/functions/v1/nipto-identity/authorize") {
+    throw new ApiError("Nipto could not start secure sign-in. Please try again.", 502);
+  }
+  const params = provider.searchParams;
+  const state = params.get("state") ?? "";
+  const returnedClient = params.get("client_id") ?? "";
+  const returnedChallenge = params.get("code_challenge") ?? "";
+  const returnedMethod = params.get("code_challenge_method") ?? "";
+  const responseType = params.get("response_type") ?? "";
+  const scope = params.get("scope") ?? "";
+  const redirectUri = params.get("redirect_uri") ?? "";
+  const nonce = params.get("nonce");
+  const screen = params.get("screen") ?? "login";
+  if (!state || state.length > 512
+    || returnedClient !== client
+    || !/^[A-Za-z0-9_-]{43,128}$/.test(returnedChallenge)
+    || returnedMethod !== "S256"
+    || responseType !== "code"
+    || !isAllowedOidcScope(scope)
+    || redirectUri !== oidcRedirectUri()
+    || (nonce !== null && (nonce.length === 0 || nonce.length > 512))
+    || (screen !== "login" && screen !== "register")) {
+    throw new ApiError("Nipto could not start secure sign-in. Please try again.", 502);
+  }
+  return json({
+    client_id: returnedClient,
+    redirect_uri: redirectUri,
+    response_type: responseType,
+    scope,
+    state,
+    ...(nonce === null ? {} : { nonce }),
+    // Supabase generates a separate challenge for the provider leg. The OIDC
+    // code is redeemed with that provider verifier, while the client's own
+    // challenge remains in Supabase's flow state for the final app token.
+    code_challenge: returnedChallenge,
+    code_challenge_method: returnedMethod,
+    screen,
+  });
+}
+
 async function authorizeNative(request: Request): Promise<Response> {
   const input = await requestBody(request);
   const action = String(input.action ?? "");
@@ -1050,6 +1146,7 @@ async function handleRoute(request: Request): Promise<Response> {
   if (path.endsWith("/jwks") && method === "GET") return json({ keys: publicJwkSet() });
   if (path.endsWith("/authorize") && method === "GET") return await authorizeGet(request);
   if (path.endsWith("/authorize") && method === "POST") return await authorizePost(request);
+  if (path.endsWith("/authorize/prepare") && method === "POST") return await authorizePrepare(request);
   if (path.endsWith("/authorize/native") && method === "POST") return await authorizeNative(request);
   if (path.endsWith("/token") && method === "POST") return await tokenEndpoint(request);
   if (path.endsWith("/userinfo") && method === "GET") return await userInfo(request);

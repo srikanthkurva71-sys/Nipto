@@ -18,7 +18,8 @@ class StatusTray extends StatefulWidget {
 }
 
 class _StatusTrayState extends State<StatusTray> {
-  late Future<List<_StatusGroup>> _groups;
+  List<_StatusGroup> _groups = const [];
+  bool _loadingGroups = true;
   final _picker = ImagePicker();
   final _media = NiptoMediaService();
   bool _uploading = false;
@@ -29,7 +30,24 @@ class _StatusTrayState extends State<StatusTray> {
   @override
   void initState() {
     super.initState();
-    _groups = _loadGroups();
+    _reloadGroups();
+  }
+
+  Future<void> _reloadGroups() async {
+    try {
+      final groups = await _loadGroups();
+      if (!mounted) return;
+      setState(() {
+        _groups = groups;
+        _loadingGroups = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _groups = const [];
+        _loadingGroups = false;
+      });
+    }
   }
 
   Future<List<_StatusGroup>> _loadGroups() async {
@@ -62,6 +80,22 @@ class _StatusTrayState extends State<StatusTray> {
       profileById[profile['id'] as String] = profile;
     }
 
+    // A freshly created account can have a visible status before its public
+    // profile is readable through RLS. Keep the owner's own status visible by
+    // falling back to the signed-in session metadata.
+    final ownId = NiptoSessionManager.instance.userId;
+    if (ownId != null &&
+        byOwner.containsKey(ownId) &&
+        !profileById.containsKey(ownId)) {
+      final session = NiptoSessionManager.instance.currentSession;
+      profileById[ownId] = <String, dynamic>{
+        'id': ownId,
+        'nipto_id': session?.niptoId ?? '',
+        'display_name': session?.displayName ?? 'You',
+        'avatar_path': null,
+      };
+    }
+
     return byOwner.entries
         .where((entry) => profileById.containsKey(entry.key))
         .map((entry) {
@@ -83,90 +117,92 @@ class _StatusTrayState extends State<StatusTray> {
       context: context,
       showDragHandle: true,
       builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 22),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Share a status',
-                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'A status disappears after 24 hours.',
-                style: TextStyle(color: NiptoColors.muted),
-              ),
-              const SizedBox(height: 8),
-              StatefulBuilder(
-                builder: (context, setSheetState) => ListTile(
-                  contentPadding: EdgeInsets.zero,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Share a status',
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'A status disappears after 24 hours.',
+                  style: TextStyle(color: NiptoColors.muted),
+                ),
+                const SizedBox(height: 8),
+                StatefulBuilder(
+                  builder: (context, setSheetState) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(
+                      Icons.visibility_outlined,
+                      color: NiptoColors.violet,
+                    ),
+                    title: const Text('Audience'),
+                    subtitle: Text(
+                      _statusVisibility == 'close_friends'
+                          ? 'Close Friends'
+                          : 'Followers',
+                    ),
+                    trailing: DropdownButton<String>(
+                      value: _statusVisibility,
+                      underline: const SizedBox.shrink(),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'followers',
+                          child: Text('Followers'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'close_friends',
+                          child: Text('Close Friends'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setSheetState(() => _statusVisibility = value);
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ListTile(
                   leading: const Icon(
-                    Icons.visibility_outlined,
+                    Icons.text_fields_rounded,
                     color: NiptoColors.violet,
                   ),
-                  title: const Text('Audience'),
-                  subtitle: Text(
-                    _statusVisibility == 'close_friends'
-                        ? 'Close Friends'
-                        : 'Followers',
+                  title: const Text('Text status'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _createTextStatus();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(
+                    Icons.photo_outlined,
+                    color: NiptoColors.violet,
                   ),
-                  trailing: DropdownButton<String>(
-                    value: _statusVisibility,
-                    underline: const SizedBox.shrink(),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'followers',
-                        child: Text('Followers'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'close_friends',
-                        child: Text('Close Friends'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setSheetState(() => _statusVisibility = value);
-                    },
+                  title: const Text('Photo status'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _pickMediaStatus(isVideo: false);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(
+                    Icons.videocam_outlined,
+                    color: NiptoColors.violet,
                   ),
+                  title: const Text('Video status'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _pickMediaStatus(isVideo: true);
+                  },
                 ),
-              ),
-              const SizedBox(height: 8),
-              ListTile(
-                leading: const Icon(
-                  Icons.text_fields_rounded,
-                  color: NiptoColors.violet,
-                ),
-                title: const Text('Text status'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _createTextStatus();
-                },
-              ),
-              ListTile(
-                leading: const Icon(
-                  Icons.photo_outlined,
-                  color: NiptoColors.violet,
-                ),
-                title: const Text('Photo status'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _pickMediaStatus(isVideo: false);
-                },
-              ),
-              ListTile(
-                leading: const Icon(
-                  Icons.videocam_outlined,
-                  color: NiptoColors.violet,
-                ),
-                title: const Text('Video status'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _pickMediaStatus(isVideo: true);
-                },
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -174,32 +210,10 @@ class _StatusTrayState extends State<StatusTray> {
   }
 
   Future<void> _createTextStatus() async {
-    final controller = TextEditingController();
     final text = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Write a status'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 700,
-          maxLines: 4,
-          decoration: const InputDecoration(hintText: 'What’s on your mind?'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text('Share'),
-          ),
-        ],
-      ),
+      builder: (_) => const _TextStatusDialog(),
     );
-    controller.dispose();
     if (text == null || text.isEmpty || !mounted) return;
     try {
       final userId = NiptoSessionManager.instance.userId!;
@@ -316,9 +330,7 @@ class _StatusTrayState extends State<StatusTray> {
     }
   }
 
-  Future<void> _refresh() async {
-    setState(() => _groups = _loadGroups());
-  }
+  Future<void> _refresh() => _reloadGroups();
 
   String _initials(String name) {
     final parts = name.trim().split(RegExp(r'\s+'));
@@ -332,45 +344,33 @@ class _StatusTrayState extends State<StatusTray> {
   Widget build(BuildContext context) {
     return SizedBox(
       height: 105,
-      child: FutureBuilder<List<_StatusGroup>>(
-        future: _groups,
-        builder: (context, snapshot) {
-          final groups = snapshot.data ?? [];
-          return ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            scrollDirection: Axis.horizontal,
-            children: [
-              _StatusAvatar(
-                label: _uploading ? 'Uploading…' : 'Your status',
-                initials: '+',
-                isOwn: true,
-                onTap: _showCreateOptions,
-              ),
-              ...groups.map(
-                (group) => _StatusAvatar(
-                  label: group.ownerId == NiptoSessionManager.instance.userId
-                      ? 'Your update'
-                      : group.name,
-                  initials: _initials(group.name),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => StatusViewerPage(group: group),
+      child: _loadingGroups
+          ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+          : ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              scrollDirection: Axis.horizontal,
+              children: [
+                _StatusAvatar(
+                  label: _uploading ? 'Uploading…' : 'Your status',
+                  initials: '+',
+                  isOwn: true,
+                  onTap: _showCreateOptions,
+                ),
+                ..._groups.map(
+                  (group) => _StatusAvatar(
+                    label: group.ownerId == NiptoSessionManager.instance.userId
+                        ? 'Your update'
+                        : group.name,
+                    initials: _initials(group.name),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => StatusViewerPage(group: group),
+                      ),
                     ),
                   ),
                 ),
-              ),
-              if (snapshot.hasError)
-                const Padding(
-                  padding: EdgeInsets.only(left: 8, top: 20),
-                  child: Text(
-                    'Statuses unavailable',
-                    style: TextStyle(color: NiptoColors.muted, fontSize: 11),
-                  ),
-                ),
-            ],
-          );
-        },
-      ),
+              ],
+            ),
     );
   }
 }
@@ -830,6 +830,52 @@ class _StatusPageState extends State<_StatusPage> {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// Owns its editing controller for the full dialog lifecycle. Disposing the
+/// controller immediately after `showDialog` returns can race the route
+/// transition and leave a disposed controller attached to the TextField.
+class _TextStatusDialog extends StatefulWidget {
+  const _TextStatusDialog();
+
+  @override
+  State<_TextStatusDialog> createState() => _TextStatusDialogState();
+}
+
+class _TextStatusDialogState extends State<_TextStatusDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Write a status'),
+      content: SingleChildScrollView(
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          maxLength: 700,
+          maxLines: 3,
+          decoration: const InputDecoration(hintText: 'What’s on your mind?'),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text.trim()),
+          child: const Text('Share'),
+        ),
+      ],
     );
   }
 }

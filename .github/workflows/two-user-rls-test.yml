@@ -1,0 +1,44 @@
+name: Two-user RLS and Storage test
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type CREATE-TWO-USER-PROBE to confirm two real probe accounts will be created
+        required: true
+        default: ''
+
+concurrency:
+  group: two-user-rls-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  two-user-probe:
+    name: Live two-user RLS and Storage probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NIPTO_PROBE_BASE_URL: https://advmjribduqzyuwktkod.supabase.co
+      NIPTO_PROBE_PUBLISHABLE_KEY: sb_publishable_zxqki-GLfT6zi-BXT1h6zw_nWq9Nhye
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Confirm live two-user probe consent
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "CREATE-TWO-USER-PROBE" ]; then
+            echo "Refusing to run: workflow_dispatch confirm must be CREATE-TWO-USER-PROBE."
+            exit 1
+          fi
+
+      - name: Run two-user RLS and Storage probe
+        run: python3 scripts/nipto_two_user_rls_probe.py
+
+      - name: Probe cleanup reminder
+        if: always()
+        run: |
+          echo "Find TWO_USER_CLEANUP_AUTH_USER_IDS in this run's log and delete both Supabase auth users."
+          echo "Storage objects are deleted by the probe itself; auth-user deletion cascades profiles, follows, conversations and messages."

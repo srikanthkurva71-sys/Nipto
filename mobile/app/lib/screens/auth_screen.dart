@@ -50,16 +50,24 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _openSignIn() async {
-    await Navigator.of(context).push<bool>(
+    final navigator = Navigator.of(context);
+    await navigator.push<bool>(
       MaterialPageRoute(
         builder: (_) => NativeNiptoLoginScreen(
-          onSubmit: ({required niptoId, required password}) =>
-              NiptoSessionManager.instance.signInWithNiptoId(
-                niptoId: niptoId,
-                password: password,
-              ),
+          onSubmit: ({required niptoId, required password}) async {
+            await NiptoSessionManager.instance.signInWithNiptoId(
+              niptoId: niptoId,
+              password: password,
+            );
+            // AuthGate swaps the home widget on the signed-in auth event, but
+            // the credential route stays on top of the navigator unless it is
+            // explicitly closed.
+            if (navigator.canPop()) {
+              navigator.pop(true);
+            }
+          },
           onForgotPassword: () {
-            Navigator.of(context).pop();
+            navigator.pop();
             _openRecovery();
           },
         ),
@@ -68,7 +76,8 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 
   Future<void> _openRegistration() async {
-    await Navigator.of(context).push<bool>(
+    final navigator = Navigator.of(context);
+    await navigator.push<bool>(
       MaterialPageRoute(
         builder: (_) => NativeNiptoRegistrationScreen(
           onSubmit:
@@ -77,12 +86,17 @@ class _AuthScreenState extends State<AuthScreen> {
                 required niptoId,
                 required password,
                 required passwordConfirmation,
-              }) => NiptoSessionManager.instance.registerNiptoAccount(
-                displayName: displayName,
-                niptoId: niptoId,
-                password: password,
-                passwordConfirmation: passwordConfirmation,
-              ),
+              }) async {
+                await NiptoSessionManager.instance.registerNiptoAccount(
+                  displayName: displayName,
+                  niptoId: niptoId,
+                  password: password,
+                  passwordConfirmation: passwordConfirmation,
+                );
+                if (navigator.canPop()) {
+                  navigator.pop(true);
+                }
+              },
         ),
       ),
     );
