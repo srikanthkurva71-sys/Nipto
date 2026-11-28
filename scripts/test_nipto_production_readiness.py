@@ -21,6 +21,9 @@ MESSAGE_MUTATION_GATE = (
 POLICY_HELPER_GRANTS = (
     ROOT / "supabase/migrations/20261128130000_nipto_restore_policy_helper_execute.sql"
 )
+MESSAGE_POLICY_INITPLAN = (
+    ROOT / "supabase/migrations/20261128131500_nipto_message_policy_initplan_fix.sql"
+)
 OIDC_DEPLOYMENT_DOC = ROOT / "docs/NIPTO_OIDC_DEPLOYMENT.md"
 NOTIFICATIONS_SCREEN = APP_ROOT / "lib/screens/notifications_screen.dart"
 LAUNCHER_CONFIG = APP_ROOT / "flutter_launcher_icons.yaml"
@@ -46,6 +49,9 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         cls.message_rpc_hardening_sql = MESSAGE_RPC_HARDENING.read_text(encoding="utf-8")
         cls.message_mutation_gate_sql = MESSAGE_MUTATION_GATE.read_text(encoding="utf-8")
         cls.policy_helper_grants_sql = POLICY_HELPER_GRANTS.read_text(encoding="utf-8")
+        cls.message_policy_initplan_sql = MESSAGE_POLICY_INITPLAN.read_text(
+            encoding="utf-8"
+        )
         cls.oidc_deployment_doc = OIDC_DEPLOYMENT_DOC.read_text(encoding="utf-8")
         cls.notifications_source = NOTIFICATIONS_SCREEN.read_text(encoding="utf-8")
         cls.lib_sources = {
@@ -154,6 +160,20 @@ class NiptoProductionReadinessTests(unittest.TestCase):
                 )
         self.assertNotIn("to anon", self.policy_helper_grants_sql)
         self.assertNotIn("to public", self.policy_helper_grants_sql)
+
+    def test_message_update_policy_uses_stable_auth_uid(self):
+        self.assertEqual(
+            self.message_policy_initplan_sql.count("sender_id = (select auth.uid())"),
+            2,
+        )
+        self.assertIn(
+            'drop policy if exists "messages_edit_own_recent" on public.messages;',
+            self.message_policy_initplan_sql,
+        )
+        self.assertIn(
+            "public.can_access_conversation_messages(conversation_id)",
+            self.message_policy_initplan_sql,
+        )
 
     def test_least_privilege_migration_restores_column_scoped_inserts(self):
         protected_columns = {
