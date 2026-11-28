@@ -198,11 +198,14 @@ def main():
         print("TWO_USER_PROBE_A", id_a, a)
         print("TWO_USER_PROBE_B", id_b, b)
 
+        # The follow-state guard derives the initial status from the target
+        # profile's privacy. Clients only have INSERT on the two identity
+        # columns, so sending `status` here would be rejected as a 403.
         status, _ = rest(
             token_a,
             "POST",
             "follows",
-            {"follower_id": a, "following_id": b, "status": "pending"},
+            {"follower_id": a, "following_id": b},
         )
         expect_status("follow insert", status, (201,))
         status, _ = rest(

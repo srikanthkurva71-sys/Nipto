@@ -412,6 +412,8 @@ class TwoUserProbeTests(unittest.TestCase):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, probe)
         self.assertNotIn("service_role", probe)
+        self.assertIn('{"follower_id": a, "following_id": b}', probe)
+        self.assertNotIn('"status": "pending"', probe)
 
 
 if __name__ == "__main__":
