@@ -257,12 +257,31 @@ def main():
         )
         expect_status("anonymous message read", status, (401, 403))
 
+        # Group invitations honor the invitee's message-access preference,
+        # which defaults to mutual accepted follows. Direct chat only needs
+        # one accepted follow, so establish the reciprocal follow here.
+        status, _ = rest(
+            token_b,
+            "POST",
+            "follows",
+            {"follower_id": b, "following_id": a},
+        )
+        expect_status("reciprocal follow insert", status, (201,))
+        status, _ = rest(
+            token_a,
+            "PATCH",
+            "follows",
+            {"status": "accepted"},
+            params={"follower_id": "eq." + b, "following_id": "eq." + a},
+        )
+        expect_status("reciprocal follow accept", status, (200,))
+
         status, group = rpc(
             token_a,
             "create_group_conversation",
             {"p_title": "RLS probe group", "p_member_ids": [b]},
         )
-        expect_status("group conversation", status, (200,))
+        expect_status("group conversation", status, (200,), group)
         group_id = group if isinstance(group, str) else group["id"]
         status, _ = rest(
             token_a,

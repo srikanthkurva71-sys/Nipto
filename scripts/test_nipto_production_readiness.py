@@ -443,6 +443,8 @@ class TwoUserProbeTests(unittest.TestCase):
                 self.assertIn(fragment, probe)
         self.assertNotIn("service_role", probe)
         self.assertIn('{"follower_id": a, "following_id": b}', probe)
+        self.assertIn('{"follower_id": b, "following_id": a}', probe)
+        self.assertIn("reciprocal follow accept", probe)
         self.assertNotIn('"status": "pending"', probe)
 
 
