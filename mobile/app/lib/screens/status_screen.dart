@@ -174,32 +174,10 @@ class _StatusTrayState extends State<StatusTray> {
   }
 
   Future<void> _createTextStatus() async {
-    final controller = TextEditingController();
     final text = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Write a status'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLength: 700,
-          maxLines: 4,
-          decoration: const InputDecoration(hintText: 'What’s on your mind?'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () =>
-                Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text('Share'),
-          ),
-        ],
-      ),
+      builder: (_) => const _TextStatusDialog(),
     );
-    controller.dispose();
     if (text == null || text.isEmpty || !mounted) return;
     try {
       final userId = NiptoSessionManager.instance.userId!;
@@ -830,6 +808,52 @@ class _StatusPageState extends State<_StatusPage> {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// Owns its editing controller for the full dialog lifecycle. Disposing the
+/// controller immediately after `showDialog` returns can race the route
+/// transition and leave a disposed controller attached to the TextField.
+class _TextStatusDialog extends StatefulWidget {
+  const _TextStatusDialog({super.key});
+
+  @override
+  State<_TextStatusDialog> createState() => _TextStatusDialogState();
+}
+
+class _TextStatusDialogState extends State<_TextStatusDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Write a status'),
+      content: SingleChildScrollView(
+        child: TextField(
+          controller: _controller,
+          autofocus: true,
+          maxLength: 700,
+          maxLines: 3,
+          decoration: const InputDecoration(hintText: 'What’s on your mind?'),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _controller.text.trim()),
+          child: const Text('Share'),
+        ),
+      ],
     );
   }
 }

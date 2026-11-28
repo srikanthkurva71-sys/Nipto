@@ -24,6 +24,7 @@ LAUNCHER_CONFIG = APP_ROOT / "flutter_launcher_icons.yaml"
 SPLASH_CONFIG = APP_ROOT / "flutter_native_splash.yaml"
 AUTH_SCREEN = APP_ROOT / "lib/screens/auth_screen.dart"
 SESSION_MANAGER = APP_ROOT / "lib/services/nipto_session_manager.dart"
+STATUS_SCREEN = APP_ROOT / "lib/screens/status_screen.dart"
 IDENTITY_FUNCTION = ROOT / "supabase/functions/nipto-identity/index.ts"
 PUSH_FUNCTION = ROOT / "supabase/functions/nipto-push-dispatch/index.ts"
 PUSH_HELPERS = ROOT / "supabase/functions/nipto-push-dispatch/push_helpers.ts"
@@ -50,6 +51,7 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         cls.config_toml = (ROOT / "supabase/config.toml").read_text(encoding="utf-8")
         cls.auth_screen = AUTH_SCREEN.read_text(encoding="utf-8")
         cls.session_manager = SESSION_MANAGER.read_text(encoding="utf-8")
+        cls.status_screen = STATUS_SCREEN.read_text(encoding="utf-8")
         cls.identity_function = IDENTITY_FUNCTION.read_text(encoding="utf-8")
         cls.push_function = PUSH_FUNCTION.read_text(encoding="utf-8")
         cls.push_helpers = PUSH_HELPERS.read_text(encoding="utf-8")
@@ -211,6 +213,17 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         self.assertEqual(self.auth_screen.count("navigator.pop(true);"), 2)
         self.assertIn("registration_shell_timeout", self.live_auth_test)
         self.assertIn("signin_shell_timeout", self.live_auth_test)
+
+    def test_text_status_dialog_owns_controller_and_avoids_overflow(self):
+        self.assertIn(
+            "class _TextStatusDialog extends StatefulWidget",
+            self.status_screen,
+        )
+        self.assertIn("builder: (_) => const _TextStatusDialog()", self.status_screen)
+        self.assertIn("final _controller = TextEditingController();", self.status_screen)
+        self.assertIn("_controller.dispose();", self.status_screen)
+        self.assertIn("content: SingleChildScrollView(", self.status_screen)
+        self.assertNotIn("final controller = TextEditingController();", self.status_screen)
 
     def test_identity_function_supports_native_oidc_bridge(self):
         self.assertIn('path.endsWith("/authorize/prepare")', self.identity_function)
