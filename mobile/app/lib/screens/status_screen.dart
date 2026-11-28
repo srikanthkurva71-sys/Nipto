@@ -816,7 +816,7 @@ class _StatusPageState extends State<_StatusPage> {
 /// controller immediately after `showDialog` returns can race the route
 /// transition and leave a disposed controller attached to the TextField.
 class _TextStatusDialog extends StatefulWidget {
-  const _TextStatusDialog({super.key});
+  const _TextStatusDialog();
 
   @override
   State<_TextStatusDialog> createState() => _TextStatusDialogState();
