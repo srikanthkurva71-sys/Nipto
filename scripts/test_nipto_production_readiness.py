@@ -24,6 +24,9 @@ POLICY_HELPER_GRANTS = (
 MESSAGE_POLICY_INITPLAN = (
     ROOT / "supabase/migrations/20261128131500_nipto_message_policy_initplan_fix.sql"
 )
+FOLLOW_REQUEST_HELPER = (
+    ROOT / "supabase/migrations/20261128160000_nipto_follow_request_privacy_helper.sql"
+)
 OIDC_DEPLOYMENT_DOC = ROOT / "docs/NIPTO_OIDC_DEPLOYMENT.md"
 NOTIFICATIONS_SCREEN = APP_ROOT / "lib/screens/notifications_screen.dart"
 LAUNCHER_CONFIG = APP_ROOT / "flutter_launcher_icons.yaml"
@@ -50,6 +53,9 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         cls.message_mutation_gate_sql = MESSAGE_MUTATION_GATE.read_text(encoding="utf-8")
         cls.policy_helper_grants_sql = POLICY_HELPER_GRANTS.read_text(encoding="utf-8")
         cls.message_policy_initplan_sql = MESSAGE_POLICY_INITPLAN.read_text(
+            encoding="utf-8"
+        )
+        cls.follow_request_helper_sql = FOLLOW_REQUEST_HELPER.read_text(
             encoding="utf-8"
         )
         cls.oidc_deployment_doc = OIDC_DEPLOYMENT_DOC.read_text(encoding="utf-8")
@@ -174,6 +180,30 @@ class NiptoProductionReadinessTests(unittest.TestCase):
             "public.can_access_conversation_messages(conversation_id)",
             self.message_policy_initplan_sql,
         )
+
+    def test_follow_insert_policy_uses_privacy_helper_not_client_profile_read(self):
+        sql = self.follow_request_helper_sql
+        self.assertIn(
+            "create or replace function private.can_create_follow(",
+            sql,
+        )
+        self.assertIn("security definer", sql)
+        self.assertIn("set search_path = ''", sql)
+        self.assertIn("from public.profiles", sql)
+        self.assertIn("private.is_blocked_between(p_follower, p_following)", sql)
+        self.assertIn(
+            "grant execute on function private.can_create_follow(uuid, uuid, text) to authenticated;",
+            sql,
+        )
+        self.assertIn(
+            'create policy "follows_create_self" on public.follows for insert to authenticated',
+            sql,
+        )
+        self.assertIn(
+            "private.can_create_follow(follower_id, following_id, status)",
+            sql,
+        )
+        self.assertNotIn("to anon", sql)
 
     def test_least_privilege_migration_restores_column_scoped_inserts(self):
         protected_columns = {

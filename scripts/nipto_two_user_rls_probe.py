@@ -67,9 +67,10 @@ def json_http(url, method="GET", body=None, token=None, extra_headers=None, para
     return status, parsed
 
 
-def expect_status(label, actual, allowed):
+def expect_status(label, actual, allowed, detail=None):
     if actual not in allowed:
-        raise ProbeError(f"{label}: expected {allowed}, got {actual}")
+        suffix = f"; response={detail}" if detail is not None else ""
+        raise ProbeError(f"{label}: expected {allowed}, got {actual}{suffix}")
 
 
 def rest(token, method, table, body=None, token_override=None, params=None):
@@ -201,13 +202,13 @@ def main():
         # The follow-state guard derives the initial status from the target
         # profile's privacy. Clients only have INSERT on the two identity
         # columns, so sending `status` here would be rejected as a 403.
-        status, _ = rest(
+        status, follow_result = rest(
             token_a,
             "POST",
             "follows",
             {"follower_id": a, "following_id": b},
         )
-        expect_status("follow insert", status, (201,))
+        expect_status("follow insert", status, (201,), follow_result)
         status, _ = rest(
             token_b,
             "PATCH",
