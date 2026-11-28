@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
 import 'package:nipto/main.dart' as app;
+import 'package:nipto/services/nipto_session_manager.dart';
 
 // Creates a real Nipto account and status in the configured Supabase project.
 // Delete the probe using the printed NIPTO_E2E_ID after every run.
@@ -76,6 +77,7 @@ void main() {
       timeout: const Duration(seconds: 60),
       description: 'signed-in main shell',
     );
+    final registeredUserId = NiptoSessionManager.instance.userId;
 
     // ignore: avoid_print
     print('NIPTO_E2E_ID=$niptoId');
@@ -122,5 +124,55 @@ void main() {
     expect(find.text('Home'), findsWidgets);
     expect(find.text('Shorts'), findsWidgets);
     expect(find.text('You'), findsWidgets);
+
+    // A real sign-out/sign-in cycle must return to the same Nipto identity and
+    // the same signed-in shell, not the legacy-migration screen.
+    await NiptoSessionManager.instance.signOut();
+    await pumpUntil(
+      tester,
+      find.text('Your Nipto account. Your identity.'),
+      description: 'signed-out auth screen',
+    );
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Sign in with Nipto ID'),
+    );
+    await pumpUntil(
+      tester,
+      find.text('Sign in to Nipto'),
+      description: 'native sign-in screen',
+    );
+    await tester.enterText(findField('Nipto ID'), niptoId);
+    await tester.enterText(findField('Password'), password);
+    await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+    await pumpUntil(
+      tester,
+      find.byType(NavigationBar),
+      timeout: const Duration(seconds: 60),
+      description: 'signed-in main shell after sign-in',
+    );
+    expect(NiptoSessionManager.instance.userId, registeredUserId);
+    expect(find.text('Home'), findsWidgets);
+    expect(find.text('Shorts'), findsWidgets);
+    expect(find.text('You'), findsWidgets);
+
+    // The status written after registration must still be visible after the
+    // fresh session is established.
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Chats'));
+    await pumpUntil(
+      tester,
+      find.text('Your status'),
+      description: 'status tray after sign-in',
+    );
+    await tester.ensureVisible(find.text('Your status'));
+    await tester.tap(find.text('Your status'));
+    await pumpUntil(
+      tester,
+      find.text(statusText),
+      timeout: const Duration(seconds: 45),
+      description: 'status persisted after sign-in',
+    );
+
+    // ignore: avoid_print
+    print('NIPTO_E2E_SIGNIN=PASS');
   });
 }

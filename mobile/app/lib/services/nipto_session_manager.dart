@@ -72,11 +72,15 @@ class NiptoSessionManager {
   bool get hasLegacySession {
     final user = _client.auth.currentUser;
     if (user == null) return false;
-    final identities = user.identities ?? [];
-    final hasNiptoIdentity = identities.any(
-      (identity) => identity.provider == 'custom:nipto',
-    );
-    return user.email != null || !hasNiptoIdentity;
+    return _hasEmail(user) || !_hasNiptoIdentity(user);
+  }
+
+  /// Supabase Auth represents an absent email as either `null` or an empty
+  /// string. Native Nipto accounts use the empty-string form in token
+  /// responses, so both must be treated as "no email".
+  static bool _hasEmail(User user) {
+    final email = user.email;
+    return email != null && email.trim().isNotEmpty;
   }
 
   NiptoSession _fromSession(Session session) {
@@ -149,7 +153,12 @@ class NiptoSessionManager {
 
   bool _hasNiptoIdentity(User user) {
     final identities = user.identities ?? [];
-    return identities.any((identity) => identity.provider == 'custom:nipto');
+    if (identities.any((identity) => identity.provider == 'custom:nipto')) {
+      return true;
+    }
+    // Some token-refresh responses omit `identities`; provider metadata is a
+    // safe secondary signal because credentials are owned by this app.
+    return user.appMetadata['provider'] == 'custom:nipto';
   }
 
   Future<void> _completeIdentityLink(User user) async {
@@ -180,7 +189,7 @@ class NiptoSessionManager {
       final refreshedUser = _client.auth.currentUser;
       if (refreshedUser != null &&
           refreshedUser.id == user.id &&
-          refreshedUser.email == null &&
+          !_hasEmail(refreshedUser) &&
           _hasNiptoIdentity(refreshedUser)) {
         _linkedUserId = refreshedUser.id;
         await _storage.delete(key: _pendingLinkNiptoIdKey);

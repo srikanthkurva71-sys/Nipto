@@ -30,6 +30,7 @@ PUSH_HELPERS = ROOT / "supabase/functions/nipto-push-dispatch/push_helpers.ts"
 CLOUD_INTEGRATION_WORKFLOW = (
     ROOT / ".github/workflows/cloud-integration-test.yml"
 )
+LIVE_AUTH_TEST = APP_ROOT / "integration_test/nipto_live_auth_and_data_test.dart"
 
 
 class NiptoProductionReadinessTests(unittest.TestCase):
@@ -55,6 +56,7 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         cls.cloud_integration_workflow = CLOUD_INTEGRATION_WORKFLOW.read_text(
             encoding="utf-8"
         )
+        cls.live_auth_test = LIVE_AUTH_TEST.read_text(encoding="utf-8")
 
     def test_cloud_probe_installs_emulator_runtime_libraries(self):
         self.assertIn("CREATE-PROBE", self.cloud_integration_workflow)
@@ -75,6 +77,20 @@ class NiptoProductionReadinessTests(unittest.TestCase):
             self.cloud_integration_workflow,
         )
         self.assertNotIn("-d chrome", self.cloud_integration_workflow)
+
+    def test_cloud_probe_checks_registration_and_return_sign_in(self):
+        for fragment in (
+            "Create Nipto account",
+            "signed-in main shell",
+            "NIPTO_E2E_STATUS=",
+            "NiptoSessionManager.instance.signOut()",
+            "Sign in to Nipto",
+            "signed-in main shell after sign-in",
+            "status persisted after sign-in",
+            "NIPTO_E2E_SIGNIN=PASS",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, self.live_auth_test)
 
     def test_message_mutations_recheck_connected_chat_access(self):
         self.assertEqual(
@@ -179,6 +195,12 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         self.assertNotIn("signInWithPassword", self.session_manager)
         self.assertNotIn("signUp(email", self.session_manager)
 
+    def test_native_sessions_treat_empty_email_as_no_email(self):
+        self.assertIn("email.trim().isNotEmpty", self.session_manager)
+        self.assertIn("return _hasEmail(user) || !_hasNiptoIdentity(user);", self.session_manager)
+        self.assertIn("!_hasEmail(refreshedUser)", self.session_manager)
+        self.assertNotIn("refreshedUser.email == null", self.session_manager)
+
     def test_identity_function_supports_native_oidc_bridge(self):
         self.assertIn('path.endsWith("/authorize/prepare")', self.identity_function)
         self.assertIn('path.endsWith("/authorize/native")', self.identity_function)
@@ -265,6 +287,36 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         self.assertIn("android: true", launcher)
         self.assertIn("assets/branding/nipto_logo.png", splash)
         self.assertIn("android: true", splash)
+
+
+class TwoUserProbeTests(unittest.TestCase):
+    def test_manual_two_user_workflow_requires_explicit_consent(self):
+        workflow = (
+            ROOT / ".github/workflows/two-user-rls-test.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("name: Two-user RLS and Storage test", workflow)
+        self.assertIn("workflow_dispatch", workflow)
+        self.assertIn("CREATE-TWO-USER-PROBE", workflow)
+        self.assertIn("python3 scripts/nipto_two_user_rls_probe.py", workflow)
+        self.assertIn("if: always()", workflow)
+
+    def test_two_user_probe_checks_real_rls_and_storage_boundaries(self):
+        probe = (
+            ROOT / "scripts/nipto_two_user_rls_probe.py"
+        ).read_text(encoding="utf-8")
+        for fragment in (
+            "create_or_get_direct_conversation",
+            "create_group_conversation",
+            "anonymous message read",
+            "chat-media",
+            "direct media read by member",
+            "group media read by invitee",
+            "TWO_USER_RLS_STORAGE_PASS",
+            "TWO_USER_CLEANUP_AUTH_USER_IDS",
+        ):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, probe)
+        self.assertNotIn("service_role", probe)
 
 
 if __name__ == "__main__":
