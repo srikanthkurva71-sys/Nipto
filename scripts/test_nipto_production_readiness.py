@@ -260,6 +260,9 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         self.assertIn("registration_shell_timeout", self.live_auth_test)
         self.assertIn("signin_shell_timeout", self.live_auth_test)
         self.assertIn("persisted_status_timeout", self.live_auth_test)
+        self.assertIn("own_status_timeout", self.live_auth_test)
+        self.assertIn("status_persisted_timeout", self.live_auth_test)
+        self.assertIn("description: 'own status after sign-in'", self.live_auth_test)
         self.assertIn("statusRows:$statusRows", self.live_auth_test)
         self.assertIn("profileRows:$profileRows", self.live_auth_test)
 

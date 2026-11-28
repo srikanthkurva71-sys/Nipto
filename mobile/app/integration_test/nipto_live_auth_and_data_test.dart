@@ -204,20 +204,26 @@ void main() {
     expect(find.text('You'), findsWidgets);
 
     // The status written after registration must still be visible after the
-    // fresh session is established.
+    // fresh session is established. Tap the existing "Your update" avatar, not
+    // the "Your status" avatar, which opens the creation sheet.
     await tester.tap(find.widgetWithText(NavigationDestination, 'Chats'));
     await pumpUntil(
       tester,
-      find.text('Your status'),
-      description: 'status tray after sign-in',
+      find.text('Your update'),
+      timeout: const Duration(seconds: 45),
+      description: 'own status after sign-in',
+      onTimeout: () => dumpAuthState(tester, 'own_status_timeout'),
     );
-    await tester.ensureVisible(find.text('Your status'));
-    await tester.tap(find.text('Your status'));
+    final persistedStatusAvatar = find.text('Your update');
+    await tester.ensureVisible(persistedStatusAvatar);
+    await tester.pump();
+    await tester.tap(persistedStatusAvatar);
     await pumpUntil(
       tester,
       find.text(statusText),
       timeout: const Duration(seconds: 45),
       description: 'status persisted after sign-in',
+      onTimeout: () => dumpAuthState(tester, 'status_persisted_timeout'),
     );
 
     // ignore: avoid_print
