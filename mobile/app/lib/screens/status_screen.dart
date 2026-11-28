@@ -83,90 +83,92 @@ class _StatusTrayState extends State<StatusTray> {
       context: context,
       showDragHandle: true,
       builder: (sheetContext) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 22),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Share a status',
-                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'A status disappears after 24 hours.',
-                style: TextStyle(color: NiptoColors.muted),
-              ),
-              const SizedBox(height: 8),
-              StatefulBuilder(
-                builder: (context, setSheetState) => ListTile(
-                  contentPadding: EdgeInsets.zero,
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 22),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Share a status',
+                  style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'A status disappears after 24 hours.',
+                  style: TextStyle(color: NiptoColors.muted),
+                ),
+                const SizedBox(height: 8),
+                StatefulBuilder(
+                  builder: (context, setSheetState) => ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(
+                      Icons.visibility_outlined,
+                      color: NiptoColors.violet,
+                    ),
+                    title: const Text('Audience'),
+                    subtitle: Text(
+                      _statusVisibility == 'close_friends'
+                          ? 'Close Friends'
+                          : 'Followers',
+                    ),
+                    trailing: DropdownButton<String>(
+                      value: _statusVisibility,
+                      underline: const SizedBox.shrink(),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'followers',
+                          child: Text('Followers'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'close_friends',
+                          child: Text('Close Friends'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setSheetState(() => _statusVisibility = value);
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ListTile(
                   leading: const Icon(
-                    Icons.visibility_outlined,
+                    Icons.text_fields_rounded,
                     color: NiptoColors.violet,
                   ),
-                  title: const Text('Audience'),
-                  subtitle: Text(
-                    _statusVisibility == 'close_friends'
-                        ? 'Close Friends'
-                        : 'Followers',
+                  title: const Text('Text status'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _createTextStatus();
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(
+                    Icons.photo_outlined,
+                    color: NiptoColors.violet,
                   ),
-                  trailing: DropdownButton<String>(
-                    value: _statusVisibility,
-                    underline: const SizedBox.shrink(),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'followers',
-                        child: Text('Followers'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'close_friends',
-                        child: Text('Close Friends'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setSheetState(() => _statusVisibility = value);
-                    },
+                  title: const Text('Photo status'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _pickMediaStatus(isVideo: false);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(
+                    Icons.videocam_outlined,
+                    color: NiptoColors.violet,
                   ),
+                  title: const Text('Video status'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    _pickMediaStatus(isVideo: true);
+                  },
                 ),
-              ),
-              const SizedBox(height: 8),
-              ListTile(
-                leading: const Icon(
-                  Icons.text_fields_rounded,
-                  color: NiptoColors.violet,
-                ),
-                title: const Text('Text status'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _createTextStatus();
-                },
-              ),
-              ListTile(
-                leading: const Icon(
-                  Icons.photo_outlined,
-                  color: NiptoColors.violet,
-                ),
-                title: const Text('Photo status'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _pickMediaStatus(isVideo: false);
-                },
-              ),
-              ListTile(
-                leading: const Icon(
-                  Icons.videocam_outlined,
-                  color: NiptoColors.violet,
-                ),
-                title: const Text('Video status'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  _pickMediaStatus(isVideo: true);
-                },
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

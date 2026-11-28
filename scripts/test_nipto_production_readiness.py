@@ -18,6 +18,9 @@ MESSAGE_RPC_HARDENING = (
 MESSAGE_MUTATION_GATE = (
     ROOT / "supabase/migrations/20261128000000_nipto_message_mutation_access_gate.sql"
 )
+POLICY_HELPER_GRANTS = (
+    ROOT / "supabase/migrations/20261128130000_nipto_restore_policy_helper_execute.sql"
+)
 OIDC_DEPLOYMENT_DOC = ROOT / "docs/NIPTO_OIDC_DEPLOYMENT.md"
 NOTIFICATIONS_SCREEN = APP_ROOT / "lib/screens/notifications_screen.dart"
 LAUNCHER_CONFIG = APP_ROOT / "flutter_launcher_icons.yaml"
@@ -42,6 +45,7 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         cls.push_sql = PUSH_MIGRATION.read_text(encoding="utf-8")
         cls.message_rpc_hardening_sql = MESSAGE_RPC_HARDENING.read_text(encoding="utf-8")
         cls.message_mutation_gate_sql = MESSAGE_MUTATION_GATE.read_text(encoding="utf-8")
+        cls.policy_helper_grants_sql = POLICY_HELPER_GRANTS.read_text(encoding="utf-8")
         cls.oidc_deployment_doc = OIDC_DEPLOYMENT_DOC.read_text(encoding="utf-8")
         cls.notifications_source = NOTIFICATIONS_SCREEN.read_text(encoding="utf-8")
         cls.lib_sources = {
@@ -128,6 +132,28 @@ class NiptoProductionReadinessTests(unittest.TestCase):
             ),
             2,
         )
+
+    def test_policy_helper_execute_grants_are_restored(self):
+        for helper in (
+            "private.is_blocked_between(uuid, uuid)",
+            "private.has_accepted_follow(uuid, uuid)",
+            "private.can_view_profile(uuid)",
+            "private.is_conversation_member(uuid)",
+            "private.can_view_status(uuid)",
+            "private.can_view_short(uuid)",
+            "private.can_view_post(uuid)",
+        ):
+            with self.subTest(helper=helper):
+                self.assertIn(
+                    f"grant execute on function {helper} to authenticated;",
+                    self.policy_helper_grants_sql,
+                )
+                self.assertIn(
+                    f"revoke all on function {helper} from public, anon, authenticated;",
+                    self.policy_helper_grants_sql,
+                )
+        self.assertNotIn("to anon", self.policy_helper_grants_sql)
+        self.assertNotIn("to public", self.policy_helper_grants_sql)
 
     def test_least_privilege_migration_restores_column_scoped_inserts(self):
         protected_columns = {
@@ -223,6 +249,10 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         self.assertIn("final _controller = TextEditingController();", self.status_screen)
         self.assertIn("_controller.dispose();", self.status_screen)
         self.assertIn("content: SingleChildScrollView(", self.status_screen)
+        self.assertIn(
+            "builder: (sheetContext) => SafeArea(\n        child: SingleChildScrollView(",
+            self.status_screen,
+        )
         self.assertNotIn("final controller = TextEditingController();", self.status_screen)
 
     def test_identity_function_supports_native_oidc_bridge(self):
