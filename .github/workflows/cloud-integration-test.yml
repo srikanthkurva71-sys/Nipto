@@ -67,12 +67,20 @@ jobs:
         run: flutter analyze --no-fatal-infos
         working-directory: mobile/app
 
-      # The hosted Android image does not include the shared libraries loaded
-      # by the SDK emulator binary even when audio is disabled.
+      # The hosted Android image does not include every shared library loaded
+      # by the SDK emulator binary; Qt 6.5+ also needs libxcb-cursor0.
       - name: Install Android emulator runtime libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y libpulse0 libgl1 libxkbfile1
+          sudo apt-get install -y libpulse0 libgl1 libxkbfile1 libxcb-cursor0
+
+      # GitHub's Ubuntu runners expose /dev/kvm but the runner user is not in
+      # the kvm group by default. Follow the emulator action's documented setup.
+      - name: Enable KVM group perms
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
 
       - name: Install Android NDK with retry
         shell: bash
@@ -97,8 +105,9 @@ jobs:
           printf 'y\n' | "$SDKMANAGER" --licenses >/dev/null
           "$SDKMANAGER" --install "system-images;android-36;google_apis;x86_64"
 
-      # API 36 system images refuse software CPU emulation (-accel off) unless
-      # this opt-in is present. Hosted runners without /dev/kvm need TCG mode.
+      # Retain the TCG opt-in as a fallback, but prefer the KVM acceleration
+      # enabled above. The headless options are the action's recommended CI
+      # defaults and avoid the Qt xcb display dependency on hosted runners.
       - name: Run live integration test on Android emulator
         uses: reactivecircus/android-emulator-runner@v2
         env:
@@ -110,7 +119,8 @@ jobs:
           avd-name: nipto-cloud-integration
           force-avd-creation: true
           disable-animations: true
-          emulator-options: -no-snapshot -wipe-data -noaudio
+          disable-linux-hw-accel: false
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
           emulator-boot-timeout: 1200
           working-directory: mobile/app
           script: flutter test integration_test/nipto_live_auth_and_data_test.dart -d emulator-5554

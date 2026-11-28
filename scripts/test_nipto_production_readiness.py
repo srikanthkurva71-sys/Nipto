@@ -57,6 +57,13 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         self.assertIn("android-emulator-runner@v2", self.cloud_integration_workflow)
         self.assertIn("libpulse0", self.cloud_integration_workflow)
         self.assertIn("libgl1", self.cloud_integration_workflow)
+        self.assertIn("libxcb-cursor0", self.cloud_integration_workflow)
+        self.assertIn("KERNEL==\"kvm\"", self.cloud_integration_workflow)
+        self.assertIn("disable-linux-hw-accel: false", self.cloud_integration_workflow)
+        self.assertIn(
+            "emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim",
+            self.cloud_integration_workflow,
+        )
         self.assertIn('ANDROID_I_WANT_MY_TCG: "yes"', self.cloud_integration_workflow)
         self.assertIn("emulator-boot-timeout: 1200", self.cloud_integration_workflow)
         self.assertIn(
