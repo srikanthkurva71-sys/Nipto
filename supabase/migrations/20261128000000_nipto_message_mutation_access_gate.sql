@@ -79,3 +79,18 @@ revoke all on function public.edit_own_message(uuid, text) from public, anon;
 revoke all on function public.delete_own_message(uuid) from public, anon;
 grant execute on function public.edit_own_message(uuid, text) to authenticated;
 grant execute on function public.delete_own_message(uuid) to authenticated;
+
+-- Close the equivalent direct table-update path. Column privileges already
+-- limit clients to body/edited_at; the policy must also recheck that the
+-- conversation is still available to the sender.
+drop policy if exists "messages_edit_own_recent" on public.messages;
+create policy "messages_edit_own_recent" on public.messages for update to authenticated
+using (
+  sender_id = auth.uid()
+  and created_at > now() - interval '15 minutes'
+  and public.can_access_conversation_messages(conversation_id)
+)
+with check (
+  sender_id = auth.uid()
+  and public.can_access_conversation_messages(conversation_id)
+);

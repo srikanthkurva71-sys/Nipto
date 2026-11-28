@@ -100,6 +100,16 @@ class NiptoProductionReadinessTests(unittest.TestCase):
             "grant execute on function public.delete_own_message(uuid) to authenticated;",
             self.message_mutation_gate_sql,
         )
+        self.assertIn(
+            "drop policy if exists \"messages_edit_own_recent\" on public.messages;",
+            self.message_mutation_gate_sql,
+        )
+        self.assertEqual(
+            self.message_mutation_gate_sql.count(
+                "and public.can_access_conversation_messages(conversation_id)"
+            ),
+            2,
+        )
 
     def test_least_privilege_migration_restores_column_scoped_inserts(self):
         protected_columns = {
