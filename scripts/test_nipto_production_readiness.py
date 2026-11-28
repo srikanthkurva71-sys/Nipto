@@ -188,6 +188,14 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         self.assertIn("nipto_oidc_create_transaction", self.identity_function)
         self.assertIn("nipto_oidc_consume_transaction", self.identity_function)
         self.assertIn("resolveOidcIdentity", self.identity_function)
+        self.assertIn(
+            "Supabase Auth adds client_id when it redirects to the provider; the SDK's",
+            self.identity_function,
+        )
+        self.assertIn("returnedClient !== client", self.identity_function)
+        prepare_body = self.identity_function.split("async function authorizePrepare", 1)[1]
+        prepare_body = prepare_body.split("\nasync function ", 1)[0]
+        self.assertNotIn("client !== oidcClientId()", prepare_body)
 
     def test_custom_oidc_claims_are_provisioned_into_profiles(self):
         self.assertIn(

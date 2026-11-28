@@ -761,14 +761,16 @@ async function authorizePrepare(request: Request): Promise<Response> {
     throw new ApiError("Invalid Nipto authorization request.", 400);
   }
   const supabase = new URL(supabaseUrl());
-  const client = authorizeUrl.searchParams.get("client_id") ?? "";
+  const client = oidcClientId();
+  // Supabase Auth adds client_id when it redirects to the provider; the SDK's
+  // authorize URL does not include it. Validate our client on the returned
+  // provider URL below instead of rejecting the SDK's original request.
   const challenge = authorizeUrl.searchParams.get("code_challenge") ?? "";
   const method = authorizeUrl.searchParams.get("code_challenge_method") ?? "";
   const redirectTo = authorizeUrl.searchParams.get("redirect_to") ?? "";
   if (authorizeUrl.origin !== supabase.origin
     || authorizeUrl.pathname !== "/auth/v1/authorize"
     || authorizeUrl.searchParams.get("provider") !== "custom:nipto"
-    || client !== oidcClientId()
     || !/^[A-Za-z0-9_-]{43,128}$/.test(challenge)
     || method.toLowerCase() !== "s256"
     || !redirectTo || redirectTo.length > 2048) {
