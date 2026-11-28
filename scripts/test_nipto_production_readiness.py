@@ -27,6 +27,9 @@ MESSAGE_POLICY_INITPLAN = (
 FOLLOW_REQUEST_HELPER = (
     ROOT / "supabase/migrations/20261128160000_nipto_follow_request_privacy_helper.sql"
 )
+STORAGE_HELPER_GRANTS = (
+    ROOT / "supabase/migrations/20261128170000_nipto_restore_storage_policy_helper_execute.sql"
+)
 OIDC_DEPLOYMENT_DOC = ROOT / "docs/NIPTO_OIDC_DEPLOYMENT.md"
 NOTIFICATIONS_SCREEN = APP_ROOT / "lib/screens/notifications_screen.dart"
 LAUNCHER_CONFIG = APP_ROOT / "flutter_launcher_icons.yaml"
@@ -56,6 +59,9 @@ class NiptoProductionReadinessTests(unittest.TestCase):
             encoding="utf-8"
         )
         cls.follow_request_helper_sql = FOLLOW_REQUEST_HELPER.read_text(
+            encoding="utf-8"
+        )
+        cls.storage_helper_grants_sql = STORAGE_HELPER_GRANTS.read_text(
             encoding="utf-8"
         )
         cls.oidc_deployment_doc = OIDC_DEPLOYMENT_DOC.read_text(encoding="utf-8")
@@ -204,6 +210,23 @@ class NiptoProductionReadinessTests(unittest.TestCase):
             sql,
         )
         self.assertNotIn("to anon", sql)
+
+    def test_storage_policy_helpers_keep_authenticated_execute(self):
+        sql = self.storage_helper_grants_sql
+        for helper in (
+            "private.nipto_media_valid_owner_path(text, text, uuid)",
+            "private.can_read_avatar(text)",
+            "private.can_read_post_media(text)",
+            "private.can_read_short_media(text)",
+            "private.can_read_status_media(text)",
+        ):
+            with self.subTest(helper=helper):
+                self.assertIn(
+                    f"revoke all on function {helper} from public, anon, authenticated;",
+                    sql,
+                )
+                self.assertIn(f"grant execute on function {helper} to authenticated;", sql)
+        self.assertNotIn("to anon;\n", sql)
 
     def test_least_privilege_migration_restores_column_scoped_inserts(self):
         protected_columns = {
@@ -446,6 +469,9 @@ class TwoUserProbeTests(unittest.TestCase):
         self.assertIn('{"follower_id": b, "following_id": a}', probe)
         self.assertIn("reciprocal follow accept", probe)
         self.assertNotIn('"status": "pending"', probe)
+        self.assertIn("direct_media = storage_path(direct_id, a, suffix + \".png\")", probe)
+        self.assertIn("direct_url = CHAT_MEDIA_BUCKET + \"/\" + direct_media", probe)
+        self.assertIn('cleanup_errors.append(f"{object_path}: delete {status}")', probe)
 
 
 if __name__ == "__main__":

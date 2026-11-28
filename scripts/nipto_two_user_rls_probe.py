@@ -24,6 +24,7 @@ KEY = os.environ.get(
     "sb_publishable_zxqki-GLfT6zi-BXT1h6zw_nWq9Nhye",
 )
 PASSWORD = "NiptoE2E!2026"
+CHAT_MEDIA_BUCKET = "chat-media"
 PNG_1X1 = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII="
 )
@@ -103,6 +104,16 @@ def storage(token, method, path, data=None, content_type=None):
         headers={"Authorization": "Bearer " + token},
         data=data,
         content_type=content_type,
+    )
+
+
+def storage_remove(token, path):
+    bucket, _, name = path.partition("/")
+    return json_http(
+        BASE + "/storage/v1/object/" + bucket,
+        method="DELETE",
+        body={"prefixes": [name]},
+        token=token,
     )
 
 
@@ -191,6 +202,7 @@ def main():
     storage_objects = []
     user_ids = []
     token_a = None
+    cleanup_errors = []
     try:
         a, token_a = register("register", id_a, PASSWORD, "RLS Probe A")
         user_ids.append(a)
@@ -305,12 +317,17 @@ def main():
         if hidden:
             raise ProbeError("unaccepted group invitee could read group messages")
 
-        direct_media = storage_path("chat-media", direct_id, a, suffix + ".png")
-        status, _ = storage(
-            token_a, "POST", direct_media, data=PNG_1X1, content_type="image/png"
+        # messages.media_path stores the object name without the bucket
+        # prefix, matching mobile/app/lib/screens/conversation_screen.dart.
+        direct_media = storage_path(direct_id, a, suffix + ".png")
+        direct_url = CHAT_MEDIA_BUCKET + "/" + direct_media
+        status, upload_body = storage(
+            token_a, "POST", direct_url, data=PNG_1X1, content_type="image/png"
         )
-        expect_status("direct media upload", status, (200, 201))
-        storage_objects.append(direct_media)
+        expect_status(
+            "direct media upload", status, (200, 201), upload_body.decode("utf-8", "replace")
+        )
+        storage_objects.append(direct_url)
         status, _ = rest(
             token_a,
             "POST",
@@ -324,12 +341,13 @@ def main():
         )
         expect_status("direct media message insert", status, (201,))
 
-        group_media = storage_path("chat-media", group_id, a, str(int(suffix) + 1) + ".png")
+        group_media = storage_path(group_id, a, str(int(suffix) + 1) + ".png")
+        group_url = CHAT_MEDIA_BUCKET + "/" + group_media
         status, _ = storage(
-            token_a, "POST", group_media, data=PNG_1X1, content_type="image/png"
+            token_a, "POST", group_url, data=PNG_1X1, content_type="image/png"
         )
         expect_status("group media upload", status, (200, 201))
-        storage_objects.append(group_media)
+        storage_objects.append(group_url)
         status, _ = rest(
             token_a,
             "POST",
@@ -343,22 +361,41 @@ def main():
         )
         expect_status("group media message insert", status, (201,))
 
-        status, body = storage(token_b, "GET", direct_media)
-        expect_status("direct media read by member", status, (200,))
+        status, body = storage(token_b, "GET", direct_url)
+        expect_status(
+            "direct media read by member",
+            status,
+            (200,),
+            body.decode("utf-8", "replace"),
+        )
         if body != PNG_1X1:
             raise ProbeError("connected member read unexpected media bytes")
-        status, _ = storage(token_b, "GET", group_media)
-        expect_status("group media read by invitee", status, (403, 404))
-        status, _ = storage(token_a, "GET", group_media)
-        expect_status("group media read by owner", status, (200,))
+        status, group_body = storage(token_b, "GET", group_url)
+        # Storage maps an RLS-denied object lookup to 400 NoSuchKey, not 404.
+        expect_status(
+            "group media read by invitee",
+            status,
+            (400, 403, 404),
+            group_body.decode("utf-8", "replace"),
+        )
+        status, group_body = storage(token_a, "GET", group_url)
+        expect_status(
+            "group media read by owner",
+            status,
+            (200,),
+            group_body.decode("utf-8", "replace"),
+        )
         print("TWO_USER_RLS_STORAGE_PASS")
     finally:
         if token_a:
             for object_path in storage_objects:
-                status, _ = storage(token_a, "DELETE", object_path)
+                status, _ = storage_remove(token_a, object_path)
                 if status not in (200, 204):
+                    cleanup_errors.append(f"{object_path}: delete {status}")
                     print("TWO_USER_STORAGE_CLEANUP_FAILED", object_path, status)
         print("TWO_USER_CLEANUP_AUTH_USER_IDS", ",".join(user_ids))
+    if cleanup_errors:
+        raise ProbeError("storage cleanup failed: " + "; ".join(cleanup_errors))
 
 
 if __name__ == "__main__":
