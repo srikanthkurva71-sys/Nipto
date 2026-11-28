@@ -142,6 +142,7 @@ void main() {
       find.text('Your update'),
       timeout: const Duration(seconds: 45),
       description: 'persisted own status',
+      onTimeout: () => dumpAuthState(tester, 'persisted_status_timeout'),
     );
 
     expect(find.text('Home'), findsWidgets);

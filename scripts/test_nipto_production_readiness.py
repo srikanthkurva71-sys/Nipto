@@ -259,6 +259,7 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         self.assertEqual(self.auth_screen.count("navigator.pop(true);"), 2)
         self.assertIn("registration_shell_timeout", self.live_auth_test)
         self.assertIn("signin_shell_timeout", self.live_auth_test)
+        self.assertIn("persisted_status_timeout", self.live_auth_test)
 
     def test_text_status_dialog_owns_controller_and_avoids_overflow(self):
         self.assertIn(
