@@ -15,6 +15,9 @@ PUSH_MIGRATION = ROOT / "supabase/migrations/20261126132328_nipto_push_delivery.
 MESSAGE_RPC_HARDENING = (
     ROOT / "supabase/migrations/20261126132330_nipto_message_rpc_search_path.sql"
 )
+MESSAGE_MUTATION_GATE = (
+    ROOT / "supabase/migrations/20261128000000_nipto_message_mutation_access_gate.sql"
+)
 OIDC_DEPLOYMENT_DOC = ROOT / "docs/NIPTO_OIDC_DEPLOYMENT.md"
 NOTIFICATIONS_SCREEN = APP_ROOT / "lib/screens/notifications_screen.dart"
 LAUNCHER_CONFIG = APP_ROOT / "flutter_launcher_icons.yaml"
@@ -36,6 +39,7 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         cls.oidc_claims_sql = OIDC_CLAIMS_MIGRATION.read_text(encoding="utf-8")
         cls.push_sql = PUSH_MIGRATION.read_text(encoding="utf-8")
         cls.message_rpc_hardening_sql = MESSAGE_RPC_HARDENING.read_text(encoding="utf-8")
+        cls.message_mutation_gate_sql = MESSAGE_MUTATION_GATE.read_text(encoding="utf-8")
         cls.oidc_deployment_doc = OIDC_DEPLOYMENT_DOC.read_text(encoding="utf-8")
         cls.notifications_source = NOTIFICATIONS_SCREEN.read_text(encoding="utf-8")
         cls.lib_sources = {
@@ -71,6 +75,31 @@ class NiptoProductionReadinessTests(unittest.TestCase):
             self.cloud_integration_workflow,
         )
         self.assertNotIn("-d chrome", self.cloud_integration_workflow)
+
+    def test_message_mutations_recheck_connected_chat_access(self):
+        self.assertEqual(
+            self.message_mutation_gate_sql.count(
+                "and public.can_access_conversation_messages(m.conversation_id);"
+            ),
+            2,
+        )
+        self.assertIn(
+            "create or replace function public.edit_own_message(",
+            self.message_mutation_gate_sql,
+        )
+        self.assertIn(
+            "create or replace function public.delete_own_message(",
+            self.message_mutation_gate_sql,
+        )
+        self.assertEqual(self.message_mutation_gate_sql.count("set search_path = ''"), 2)
+        self.assertIn(
+            "grant execute on function public.edit_own_message(uuid, text) to authenticated;",
+            self.message_mutation_gate_sql,
+        )
+        self.assertIn(
+            "grant execute on function public.delete_own_message(uuid) to authenticated;",
+            self.message_mutation_gate_sql,
+        )
 
     def test_least_privilege_migration_restores_column_scoped_inserts(self):
         protected_columns = {
