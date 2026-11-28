@@ -11,17 +11,39 @@ Finder findField(String label) => find.byWidgetPredicate(
   (widget) => widget is InputDecorator && widget.decoration.labelText == label,
 );
 
+Future<void> dumpAuthState(WidgetTester tester, String phase) async {
+  final sessions = NiptoSessionManager.instance;
+  final session = sessions.currentSession;
+  final texts = tester
+      .widgetList<Text>(find.byType(Text))
+      .map((widget) => widget.data ?? '')
+      .where((text) => text.isNotEmpty)
+      .toList();
+  // ignore: avoid_print
+  print(
+    'NIPTO_E2E_DEBUG_$phase='
+    'signedIn:${sessions.isSignedIn},'
+    'legacy:${sessions.hasLegacySession},'
+    'userId:${sessions.userId},'
+    'niptoId:${session?.niptoId},'
+    'sessionId:${session?.sessionId},'
+    'texts:${texts.join('|')}',
+  );
+}
+
 Future<void> pumpUntil(
   WidgetTester tester,
   Finder finder, {
   Duration timeout = const Duration(seconds: 45),
   String? description,
+  Future<void> Function()? onTimeout,
 }) async {
   final deadline = DateTime.now().add(timeout);
   while (DateTime.now().isBefore(deadline)) {
     await tester.pump(const Duration(milliseconds: 250));
     if (tester.any(finder)) return;
   }
+  if (onTimeout != null) await onTimeout();
   fail('Timed out waiting for ${description ?? finder.toString()}');
 }
 
@@ -76,6 +98,7 @@ void main() {
       find.byType(NavigationBar),
       timeout: const Duration(seconds: 60),
       description: 'signed-in main shell',
+      onTimeout: () => dumpAuthState(tester, 'registration_shell_timeout'),
     );
     final registeredUserId = NiptoSessionManager.instance.userId;
 
@@ -149,6 +172,7 @@ void main() {
       find.byType(NavigationBar),
       timeout: const Duration(seconds: 60),
       description: 'signed-in main shell after sign-in',
+      onTimeout: () => dumpAuthState(tester, 'signin_shell_timeout'),
     );
     expect(NiptoSessionManager.instance.userId, registeredUserId);
     expect(find.text('Home'), findsWidgets);

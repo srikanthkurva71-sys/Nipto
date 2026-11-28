@@ -201,6 +201,17 @@ class NiptoProductionReadinessTests(unittest.TestCase):
         self.assertIn("!_hasEmail(refreshedUser)", self.session_manager)
         self.assertNotIn("refreshedUser.email == null", self.session_manager)
 
+    def test_native_credential_routes_close_after_successful_auth(self):
+        self.assertIn("final navigator = Navigator.of(context);", self.auth_screen)
+        self.assertEqual(self.auth_screen.count("await navigator.push<bool>("), 2)
+        self.assertEqual(
+            self.auth_screen.count("if (navigator.canPop()) {"),
+            2,
+        )
+        self.assertEqual(self.auth_screen.count("navigator.pop(true);"), 2)
+        self.assertIn("registration_shell_timeout", self.live_auth_test)
+        self.assertIn("signin_shell_timeout", self.live_auth_test)
+
     def test_identity_function_supports_native_oidc_bridge(self):
         self.assertIn('path.endsWith("/authorize/prepare")', self.identity_function)
         self.assertIn('path.endsWith("/authorize/native")', self.identity_function)
